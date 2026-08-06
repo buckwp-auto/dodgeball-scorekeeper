@@ -1,0 +1,210 @@
+import type { DatabaseDto, Guid } from './types';
+import {
+  DeflectionResult,
+  GameEventErrorOffense,
+  GameEventFinishResult,
+  ThrowResult,
+} from './statistics/constants';
+import {
+  buildThrowsDetail,
+  indexGameEventErrors,
+} from './statistics/databaseViews';
+import { getGamePlayerInfos, getGameEvents, type GamePlayerInfo } from './gameEvents';
+import { AUTO_SELECT_PLAYER_LIMIT } from './rosterAutoSelect';
+
+export { AUTO_SELECT_PLAYER_LIMIT };
+
+export type GameLiveState = {
+  eliminatedGamePlayerIds: ReadonlySet<Guid>;
+  activeHomeCount: number;
+  activeAwayCount: number;
+  isGameOver: boolean;
+  /** When all players on one side are out, the other side wins the live game. */
+  winningTeamHome: boolean | null;
+  hasFinishEvent: boolean;
+};
+
+/** Finish result implied by a live team-wipe winner. */
+export function finishResultForLiveWinner(
+  winningTeamHome: boolean | null,
+): GameEventFinishResult | null {
+  if (winningTeamHome === true) return GameEventFinishResult.WinHome;
+  if (winningTeamHome === false) return GameEventFinishResult.WinAway;
+  return null;
+}
+
+function throwIsCatch(
+  resultId: number,
+  deflections: { ResultId: number }[],
+): boolean {
+  if (resultId === ThrowResult.Catch) return true;
+  return deflections.some((row) => row.ResultId === DeflectionResult.Catch);
+}
+
+function throwTargetEliminated(resultId: number): boolean {
+  return (
+    resultId === ThrowResult.Hit ||
+    resultId === ThrowResult.BlockFailed ||
+    resultId === ThrowResult.CatchFailed
+  );
+}
+
+function deflectionEliminatesReceiver(resultId: number): boolean {
+  return (
+    resultId === DeflectionResult.Hit ||
+    resultId === DeflectionResult.BlockFailed ||
+    resultId === DeflectionResult.CatchFailed
+  );
+}
+
+function applyThrowEliminations(
+  eliminated: Set<Guid>,
+  throwRow: {
+    ThrowerId: Guid;
+    TargetId: Guid;
+    ResultId: number;
+    RecoveredId?: Guid | null;
+  },
+  deflections: { ReceiverId: Guid; ResultId: number }[],
+): void {
+  if (throwIsCatch(throwRow.ResultId, deflections)) {
+    eliminated.add(throwRow.ThrowerId);
+    if (throwRow.RecoveredId) {
+      eliminated.delete(throwRow.RecoveredId);
+    }
+    return;
+  }
+  if (throwTargetEliminated(throwRow.ResultId)) {
+    eliminated.add(throwRow.TargetId);
+  }
+  for (const deflection of deflections) {
+    if (deflection.ResultId === DeflectionResult.Catch) {
+      eliminated.add(throwRow.ThrowerId);
+    } else if (deflectionEliminatesReceiver(deflection.ResultId)) {
+      eliminated.add(deflection.ReceiverId);
+    }
+  }
+}
+
+export function computeGameLiveState(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+): GameLiveState {
+  const roster = getGamePlayerInfos(data, matchId, gameId);
+  const eliminated = new Set<Guid>();
+  const throwsByEvent = buildThrowsDetail(data);
+  const errorsByEvent = indexGameEventErrors(data);
+  const gameEvents = getGameEvents(data, gameId);
+
+  for (const event of gameEvents) {
+    const throws = throwsByEvent.get(event.Id) ?? [];
+    for (const detail of throws) {
+      applyThrowEliminations(eliminated, detail.throwRow, detail.deflections);
+    }
+    const error = errorsByEvent.get(event.Id);
+    if (error) {
+      if (
+        error.OffenseId === GameEventErrorOffense.LineOut ||
+        error.OffenseId === GameEventErrorOffense.BlockIllegal
+      ) {
+        eliminated.add(error.OffenderId);
+      }
+    }
+  }
+
+  const finishExists = (data.Tables.GameEventFinish as { GameEventId: Guid }[]).some(
+    (row) => gameEvents.some((event) => event.Id === row.GameEventId),
+  );
+
+  let activeHome = 0;
+  let activeAway = 0;
+  for (const player of roster) {
+    if (eliminated.has(player.gamePlayerId)) continue;
+    if (player.teamHome) activeHome++;
+    else activeAway++;
+  }
+
+  const homeRosterSize = roster.filter((row) => row.teamHome).length;
+  const awayRosterSize = roster.filter((row) => !row.teamHome).length;
+
+  let isGameOver = false;
+  let winningTeamHome: boolean | null = null;
+  if (homeRosterSize > 0 && activeHome === 0) {
+    isGameOver = true;
+    winningTeamHome = false;
+  } else if (awayRosterSize > 0 && activeAway === 0) {
+    isGameOver = true;
+    winningTeamHome = true;
+  }
+
+  return {
+    eliminatedGamePlayerIds: eliminated,
+    activeHomeCount: activeHome,
+    activeAwayCount: activeAway,
+    isGameOver,
+    winningTeamHome,
+    hasFinishEvent: finishExists,
+  };
+}
+
+export function isPlayerEliminatedInGame(live: GameLiveState, gamePlayerId: Guid): boolean {
+  return live.eliminatedGamePlayerIds.has(gamePlayerId);
+}
+
+export function gamePlayerIdForPlayerId(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  playerId: Guid,
+): Guid | null {
+  const info = getGamePlayerInfos(data, matchId, gameId).find(
+    (row) => row.playerId === playerId,
+  );
+  return info?.gamePlayerId ?? null;
+}
+
+export type RosterRow = {
+  player: { Id: string; Name: string };
+  selected: boolean;
+};
+
+export function sortRosterWithEliminations<T extends RosterRow>(
+  rows: T[],
+  eliminatedPlayerIds: ReadonlySet<string>,
+): T[] {
+  return [...rows].sort((a, b) => {
+    const aOut = eliminatedPlayerIds.has(a.player.Id);
+    const bOut = eliminatedPlayerIds.has(b.player.Id);
+    if (aOut !== bOut) return aOut ? 1 : -1;
+    return a.player.Name.localeCompare(b.player.Name);
+  });
+}
+
+export function eliminatedPlayerIdsFromLive(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  live: GameLiveState,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const gamePlayerId of live.eliminatedGamePlayerIds) {
+    const info = getGamePlayerInfos(data, matchId, gameId).find(
+      (row) => row.gamePlayerId === gamePlayerId,
+    );
+    if (info) ids.add(info.playerId);
+  }
+  return ids;
+}
+
+export function sortGamePlayerInfos(
+  players: GamePlayerInfo[],
+  eliminatedGamePlayerIds: ReadonlySet<Guid>,
+): GamePlayerInfo[] {
+  return [...players].sort((a, b) => {
+    const aOut = eliminatedGamePlayerIds.has(a.gamePlayerId);
+    const bOut = eliminatedGamePlayerIds.has(b.gamePlayerId);
+    if (aOut !== bOut) return aOut ? 1 : -1;
+    return a.playerName.localeCompare(b.playerName);
+  });
+}

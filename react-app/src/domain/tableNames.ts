@@ -1,0 +1,20 @@
+/** Entity table names in dodgeball scorekeeper `Data` (PascalCase keys). */
+export const ENTITY_TABLE_NAMES = [
+  'Deflection',
+  'Game',
+  'GameEvent',
+  'GameEventError',
+  'GameEventFinish',
+  'GameEventThrow',
+  'GamePlayer',
+  'Match',
+  'MatchEvent',
+  'MatchEventGame',
+  'MatchPlayer',
+  'Player',
+  'Team',
+  'TeamPlayer',
+  'Throw',
+] as const;
+
+export type EntityTableName = (typeof ENTITY_TABLE_NAMES)[number];

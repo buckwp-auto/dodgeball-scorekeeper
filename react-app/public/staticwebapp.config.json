@@ -1,0 +1,6 @@
+{
+  "navigationFallback": {
+    "rewrite": "/dodgeball-score/index.html",
+    "exclude": ["/dodgeball-score/assets/*"]
+  }
+}

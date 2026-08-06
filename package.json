@@ -1,0 +1,20 @@
+{
+  "name": "dodgeball-score",
+  "private": true,
+  "description": "Dodgeball scorekeeper — static React app with Playwright tests",
+  "scripts": {
+    "dev": "npm run dev --prefix react-app",
+    "build": "npm run build --prefix react-app",
+    "preview": "npm run build --prefix react-app && npm run preview --prefix react-app -- --host 127.0.0.1 --port 5180",
+    "build:gh-pages": "GITHUB_PAGES=true GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-willbuck/dodgeball-score} npm run build --prefix react-app",
+    "test": "npm run test --prefix react-app",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:interop": "npm run test --prefix react-app && playwright test tests/interop-fixtures.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}

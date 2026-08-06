@@ -1,0 +1,61 @@
+body {
+  margin: 0;
+}
+
+.sk-match,
+.sk-game {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-create .col {
+  flex: 1 1 12rem;
+}
+
+.bw-input-text-search {
+  position: relative;
+}
+
+.sk-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sk-grid td,
+.sk-grid th {
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.history .timestamp {
+  white-space: nowrap;
+}
+
+.bw-button--expand {
+  width: 100%;
+  text-align: left;
+}
+
+.form-one-line .col {
+  flex: 1 1 12rem;
+}
+
+.form-input-label {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.bw-results {
+  max-height: 12rem;
+  overflow: auto;
+}
+
