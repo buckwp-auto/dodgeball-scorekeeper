@@ -23,6 +23,8 @@ export type MatchRow = {
   TeamIdHome: Guid;
   TeamIdAway: Guid;
   Notes: string | null;
+  /** Optional YouTube watch/share URL for match VOD. */
+  YoutubeUrl?: string | null;
 };
 
 export type MatchPlayerRow = {

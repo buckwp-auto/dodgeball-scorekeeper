@@ -31,6 +31,7 @@ import {
   EditorGrid,
   EditorLabel,
   TeamBanner,
+  useEditorDensity,
 } from './EditorGrid';
 
 function resolveThrowingHome(
@@ -191,8 +192,11 @@ function SingleThrowEditor({
     return <Icon fontSize="small" />;
   };
 
+  const density = useEditorDensity();
+  const compact = density === 'compact';
+
   return (
-    <Box sx={{ mb: 3, position: 'relative' }}>
+    <Box sx={{ mb: compact ? 1 : 3, position: 'relative' }}>
       {canDelete && onDelete ? (
         <IconButton size="small" sx={{ position: 'absolute', right: 0, top: 0 }} onClick={onDelete}>
           <DeleteIcon fontSize="small" />

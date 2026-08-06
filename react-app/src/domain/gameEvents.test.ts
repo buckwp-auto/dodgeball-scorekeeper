@@ -83,6 +83,33 @@ describe('game event recording', () => {
     expect(csv).toContain('"1","1","0","0","0"');
     expect(csv).toContain('"1","0","0"');
   });
+
+  it('stores video offset seconds on game events', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const eventId = persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 125.4 },
+    );
+
+    const row = (data.Tables.GameEvent as { Id: string; VideoOffsetSeconds?: number }[]).find(
+      (entry) => entry.Id === eventId,
+    );
+    expect(row?.VideoOffsetSeconds).toBe(125.4);
+
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(entry.videoOffsetSeconds).toBe(125.4);
+  });
 });
 
 describe('buildTimelineEntries', () => {

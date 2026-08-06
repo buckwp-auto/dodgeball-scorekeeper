@@ -1,19 +1,41 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import {
   playerPillStyles,
   teamHeaderStyles,
 } from '../../domain/timelineColors';
 import { HotkeyBadge } from '../HotkeyBadge';
 
+export type EditorDensity = 'comfortable' | 'compact';
+
+const EditorDensityContext = createContext<EditorDensity>('comfortable');
+
+export function EditorDensityProvider({
+  density,
+  children,
+}: {
+  density: EditorDensity;
+  children: ReactNode;
+}) {
+  return (
+    <EditorDensityContext.Provider value={density}>{children}</EditorDensityContext.Provider>
+  );
+}
+
+export function useEditorDensity(): EditorDensity {
+  return useContext(EditorDensityContext);
+}
+
 export function EditorGrid({ children }: { children: ReactNode }) {
+  const density = useEditorDensity();
+  const compact = density === 'compact';
   return (
     <Box
       className="sk-editor-grid"
       sx={{
         display: 'grid',
         gridTemplateColumns: '35% 35% 1fr',
-        gap: 1,
+        gap: compact ? 0.25 : 0.5,
         alignItems: 'start',
       }}
     >
@@ -28,7 +50,7 @@ export function EditorGridFinish({ children }: { children: ReactNode }) {
       sx={{
         display: 'grid',
         gridTemplateColumns: '1fr',
-        gap: 1,
+        gap: 0.5,
         maxWidth: 480,
       }}
     >
@@ -44,8 +66,12 @@ export function EditorLabel({
   children: ReactNode;
   gridColumn?: string | number;
 }) {
+  const density = useEditorDensity();
   return (
-    <Typography variant="subtitle2" sx={{ fontWeight: 700, gridColumn }}>
+    <Typography
+      variant={density === 'compact' ? 'caption' : 'subtitle2'}
+      sx={{ fontWeight: 700, gridColumn, lineHeight: density === 'compact' ? 1.2 : undefined }}
+    >
       {children}
     </Typography>
   );
@@ -53,13 +79,14 @@ export function EditorLabel({
 
 export function TeamBanner({ name, teamHome }: { name: string; teamHome: boolean }) {
   const styles = teamHeaderStyles(teamHome, 'light');
+  const density = useEditorDensity();
   return (
     <Typography
-      variant="subtitle2"
+      variant={density === 'compact' ? 'caption' : 'subtitle2'}
       sx={{
         fontWeight: 700,
-        px: 1,
-        py: 0.5,
+        px: density === 'compact' ? 0.5 : 1,
+        py: density === 'compact' ? 0.15 : 0.35,
         borderRadius: 1,
         border: '1px solid',
         backgroundColor: styles.backgroundColor,
@@ -81,17 +108,18 @@ export function EditorChoiceStack({
   children: ReactNode;
   gridColumn?: string | number;
 }) {
+  const density = useEditorDensity();
   return (
     <Box
       sx={{
         gridColumn,
         display: 'flex',
         flexDirection: 'column',
-        gap: 0.5,
+        gap: density === 'compact' ? 0.25 : 0.5,
         borderLeft: pending ? '4px solid' : '4px solid transparent',
         borderColor: pending ? 'error.main' : 'transparent',
-        pl: pending ? 1 : 0,
-        minHeight: 40,
+        pl: pending ? (density === 'compact' ? 0.5 : 1) : 0,
+        minHeight: density === 'compact' ? 28 : 40,
       }}
     >
       {children}
@@ -118,6 +146,8 @@ export function EditorChoiceButton({
   teamHome?: boolean;
   onClick: () => void;
 }) {
+  const density = useEditorDensity();
+  const compact = density === 'compact';
   const pill =
     playerId !== undefined && teamHome !== undefined
       ? playerPillStyles(teamHome, playerId, 'light')
@@ -127,13 +157,16 @@ export function EditorChoiceButton({
     <Button
       type="button"
       variant={selected || pill ? 'contained' : 'outlined'}
-      size="large"
+      size={compact ? 'small' : 'medium'}
       fullWidth
       disabled={false}
       onClick={onClick}
       sx={{
         justifyContent: 'flex-start',
         textTransform: 'none',
+        py: compact ? 0.15 : 0.75,
+        minHeight: compact ? 26 : 36,
+        fontSize: compact ? '0.75rem' : undefined,
         opacity: eliminated ? 0.45 : 1,
         ...(pill
           ? {
@@ -155,7 +188,11 @@ export function EditorChoiceButton({
             }),
       }}
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
+      <Stack
+        direction="row"
+        spacing={compact ? 0.5 : 1}
+        sx={{ alignItems: 'center', width: '100%' }}
+      >
         {hotkey ? <HotkeyBadge hotkey={hotkey} /> : null}
         {startIcon}
         <span>{children}</span>
@@ -177,6 +214,8 @@ export function EditorChipButton({
   teamHome?: boolean;
   onClick: () => void;
 }) {
+  const density = useEditorDensity();
+  const compact = density === 'compact';
   const pill =
     playerId !== undefined && teamHome !== undefined
       ? playerPillStyles(teamHome, playerId, 'light')
@@ -187,12 +226,15 @@ export function EditorChipButton({
       type="button"
       variant="contained"
       color={pill ? undefined : 'secondary'}
-      size="large"
+      size={compact ? 'small' : 'medium'}
       fullWidth
       onClick={onClick}
       sx={{
         justifyContent: 'flex-start',
         textTransform: 'none',
+        py: compact ? 0.15 : 0.75,
+        minHeight: compact ? 26 : 36,
+        fontSize: compact ? '0.75rem' : undefined,
         ...(pill
           ? {
               bgcolor: pill.borderColor,
@@ -210,7 +252,7 @@ export function EditorChipButton({
           : null),
       }}
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Stack direction="row" spacing={compact ? 0.5 : 1} sx={{ alignItems: 'center' }}>
         {hotkey ? <HotkeyBadge hotkey={hotkey} /> : null}
         <span>{children}</span>
       </Stack>

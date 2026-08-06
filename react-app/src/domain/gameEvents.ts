@@ -23,7 +23,13 @@ function pushRow<T>(data: DatabaseDto, tableName: string, row: T): T {
   return row;
 }
 
-export type GameEventRow = { Id: Guid; GameId: Guid; Ordinal: number };
+export type GameEventRow = {
+  Id: Guid;
+  GameId: Guid;
+  Ordinal: number;
+  /** Seconds into the match YouTube video when this event was recorded. */
+  VideoOffsetSeconds?: number | null;
+};
 export type GameEventType = 'throw' | 'error' | 'finish';
 
 export type GamePlayerInfo = {
@@ -374,12 +380,29 @@ export function loadFinishDraftFromEvent(data: DatabaseDto, gameEventId: Guid): 
   return { resultId: row.ResultId as GameEventFinishResult };
 }
 
+export type PersistGameEventOptions = {
+  gameEventId?: Guid;
+  insertBeforeEventId?: Guid | null;
+  /** Current YouTube player time; null clears / leaves unset when unavailable. */
+  videoOffsetSeconds?: number | null;
+};
+
+function applyVideoOffsetToEvent(
+  data: DatabaseDto,
+  gameEventId: Guid,
+  videoOffsetSeconds: number | null | undefined,
+): void {
+  if (videoOffsetSeconds === undefined) return;
+  const row = table<GameEventRow>(data, 'GameEvent').find((entry) => entry.Id === gameEventId);
+  if (row) row.VideoOffsetSeconds = videoOffsetSeconds;
+}
+
 export function persistThrowGameEvent(
   data: DatabaseDto,
   gameId: Guid,
   matchId: Guid,
   throws: ThrowDraft[],
-  options?: { gameEventId?: Guid; insertBeforeEventId?: Guid | null },
+  options?: PersistGameEventOptions,
 ): Guid {
   const editing = options?.gameEventId;
   if (!editing && gameHasFinishEvent(data, gameId)) {
@@ -389,6 +412,7 @@ export function persistThrowGameEvent(
 
   if (editing) {
     writeThrowsToEvent(data, editing, throws);
+    applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
     return editing;
   }
 
@@ -397,6 +421,7 @@ export function persistThrowGameEvent(
     Id: gameEventId,
     GameId: gameId,
     Ordinal: allocateOrdinal(data, gameId, options?.insertBeforeEventId),
+    VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
   });
   writeThrowsToEvent(data, gameEventId, throws);
   return gameEventId;
@@ -407,7 +432,7 @@ export function persistErrorGameEvent(
   gameId: Guid,
   matchId: Guid,
   draft: ErrorDraft,
-  options?: { gameEventId?: Guid; insertBeforeEventId?: Guid | null },
+  options?: PersistGameEventOptions,
 ): Guid {
   if (!isErrorDraftComplete(draft)) throw new Error('Incomplete error event');
   const editing = options?.gameEventId;
@@ -429,6 +454,7 @@ export function persistErrorGameEvent(
       row.OffenderId = draft.offenderGamePlayerId;
       row.OffenseId = draft.offenseId!;
     }
+    applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
     return editing;
   }
 
@@ -437,6 +463,7 @@ export function persistErrorGameEvent(
     Id: gameEventId,
     GameId: gameId,
     Ordinal: allocateOrdinal(data, gameId, options?.insertBeforeEventId),
+    VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
   });
   pushRow(data, 'GameEventError', {
     GameEventId: gameEventId,
@@ -450,7 +477,7 @@ export function persistFinishGameEvent(
   data: DatabaseDto,
   gameId: Guid,
   draft: FinishDraft,
-  options?: { gameEventId?: Guid; insertBeforeEventId?: Guid | null },
+  options?: PersistGameEventOptions,
 ): Guid {
   if (!isFinishDraftComplete(draft)) throw new Error('Incomplete finish event');
   const editing = options?.gameEventId;
@@ -463,6 +490,7 @@ export function persistFinishGameEvent(
       (entry) => entry.GameEventId === editing,
     );
     if (row) row.ResultId = draft.resultId!;
+    applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
     return editing;
   }
 
@@ -471,6 +499,7 @@ export function persistFinishGameEvent(
     Id: gameEventId,
     GameId: gameId,
     Ordinal: allocateOrdinal(data, gameId, options?.insertBeforeEventId),
+    VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
   });
   pushRow(data, 'GameEventFinish', {
     GameEventId: gameEventId,
@@ -568,6 +597,7 @@ export type TimelineEntry = {
   id: Guid;
   type: GameEventType;
   rows: TimelineRow[];
+  videoOffsetSeconds?: number | null;
 };
 
 function playerRef(players: GamePlayerInfo[], id: Guid): TimelinePlayerRef {
@@ -654,6 +684,7 @@ export function buildTimelineEntries(
       return {
         id: event.Id,
         type,
+        videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
         rows: drafts.flatMap((draft) => buildThrowTimelineRows(draft, players)),
       };
     }
@@ -663,6 +694,7 @@ export function buildTimelineEntries(
       return {
         id: event.Id,
         type,
+        videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
         rows: [
           {
             role: 'error',
@@ -684,6 +716,7 @@ export function buildTimelineEntries(
     return {
       id: event.Id,
       type,
+      videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
       rows: [
         {
           role: 'finish',

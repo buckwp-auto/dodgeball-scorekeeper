@@ -11,8 +11,27 @@ import {
 import { ErrorEditor } from '../components/trackGame/ErrorEditor';
 import { FinishEditor } from '../components/trackGame/FinishEditor';
 import { GameEventsTimeline } from '../components/trackGame/GameEventsTimeline';
+import { EditorDensityProvider } from '../components/trackGame/EditorGrid';
+import {
+  YoutubePlayer,
+  type YoutubePlayerHandle,
+} from '../components/trackGame/YoutubePlayer';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { getTeam } from '../domain/database';
+import {
+  loadYoutubePlayerMode,
+  parseYoutubeVideoId,
+  saveYoutubePlayerMode,
+  YOUTUBE_FRAME_BACK_HOTKEY,
+  YOUTUBE_FRAME_FORWARD_HOTKEY,
+  YOUTUBE_LAYOUT_SMALL_HOTKEY,
+  YOUTUBE_LAYOUT_TALL_HOTKEY,
+  YOUTUBE_PLAY_PAUSE_HOTKEY,
+  YOUTUBE_SEEK_BACK_HOTKEY,
+  YOUTUBE_SEEK_FORWARD_HOTKEY,
+  YOUTUBE_SEEK_SECONDS,
+  type YoutubePlayerMode,
+} from '../domain/youtube';
 import {
   areThrowDraftsComplete,
   buildTimelineEntries,
@@ -87,6 +106,22 @@ export function GameEventsPage() {
 
   const autoCommittingRef = useRef(false);
   const autoFinishPromptedRef = useRef(false);
+  const youtubePlayerRef = useRef<YoutubePlayerHandle | null>(null);
+  const [youtubeMode, setYoutubeMode] = useState<YoutubePlayerMode>(() =>
+    loadYoutubePlayerMode(),
+  );
+
+  const youtubeUrl = match?.YoutubeUrl?.trim() || '';
+  const hasYoutube = Boolean(parseYoutubeVideoId(youtubeUrl));
+
+  const setYoutubeModeAndPersist = useCallback((mode: YoutubePlayerMode) => {
+    setYoutubeMode(mode);
+    saveYoutubePlayerMode(mode);
+  }, []);
+
+  const readVideoOffset = useCallback((): number | null => {
+    return youtubePlayerRef.current?.getCurrentTime() ?? null;
+  }, []);
 
   const timeline = useMemo(
     () => buildTimelineEntries(data, gameId, matchId),
@@ -174,8 +209,10 @@ export function GameEventsPage() {
 
   const confirmFinishEvent = useCallback(() => {
     if (!isFinishDraftComplete(finishDraft) || gameFinished) return;
+    const videoOffsetSeconds = readVideoOffset();
     mutate(
-      (draft) => persistFinishGameEvent(draft, gameId, finishDraft, {}),
+      (draft) =>
+        persistFinishGameEvent(draft, gameId, finishDraft, { videoOffsetSeconds }),
       (id) => `Saved finish event (${id}).`,
     );
     autoFinishPromptedRef.current = false;
@@ -184,7 +221,7 @@ export function GameEventsPage() {
     setInsertBeforeEventId(null);
     setActiveTab('throw');
     loadDraftsForSelection(null);
-  }, [finishDraft, gameFinished, mutate, gameId, loadDraftsForSelection]);
+  }, [finishDraft, gameFinished, mutate, gameId, loadDraftsForSelection, readVideoOffset]);
 
   const awaitingFinishConfirm =
     pendingWipeFinish &&
@@ -278,6 +315,13 @@ export function GameEventsPage() {
     const type = getGameEventType(data, eventId);
     if (type) setActiveTab(type);
     loadDraftsForSelection(eventId);
+    const entry = timeline.find((row) => row.id === eventId);
+    if (
+      entry?.videoOffsetSeconds !== null &&
+      entry?.videoOffsetSeconds !== undefined
+    ) {
+      youtubePlayerRef.current?.seekTo(entry.videoOffsetSeconds);
+    }
   };
 
   useEffect(() => {
@@ -288,11 +332,13 @@ export function GameEventsPage() {
 
     autoCommittingRef.current = true;
     try {
+      const videoOffsetSeconds = readVideoOffset();
       const eventId = mutate(
         (draft) => {
           const options = {
             gameEventId: effectiveSelectedId ?? undefined,
             insertBeforeEventId,
+            videoOffsetSeconds,
           };
           if (visibleTab === 'throw') {
             return persistThrowGameEvent(draft, gameId, matchId, throwDrafts, options);
@@ -330,6 +376,7 @@ export function GameEventsPage() {
     gameId,
     matchId,
     currentDraftPayload,
+    readVideoOffset,
   ]);
 
   const gameCompleteIdle =
@@ -342,8 +389,68 @@ export function GameEventsPage() {
 
   const showEndInsertMarker = !gameFinished && !insertBeforeEventId;
 
+  const handleYoutubeHotkey = useCallback(
+    (key: string, event: KeyboardEvent) => {
+      if (!hasYoutube || youtubeMode === 'hidden') return;
+
+      // If the embed somehow kept focus, pull it back so later keys stay on-page
+      const active = document.activeElement;
+      if (active instanceof HTMLIFrameElement) {
+        active.blur();
+      }
+
+      if (key === YOUTUBE_LAYOUT_SMALL_HOTKEY) {
+        event.preventDefault();
+        setYoutubeModeAndPersist('docked');
+        return;
+      }
+      if (key === YOUTUBE_LAYOUT_TALL_HOTKEY) {
+        event.preventDefault();
+        setYoutubeModeAndPersist('tall');
+        return;
+      }
+      if (key === YOUTUBE_PLAY_PAUSE_HOTKEY) {
+        event.preventDefault();
+        youtubePlayerRef.current?.togglePlayPause();
+        return;
+      }
+      if (key === YOUTUBE_SEEK_BACK_HOTKEY) {
+        event.preventDefault();
+        youtubePlayerRef.current?.seekBy(-YOUTUBE_SEEK_SECONDS);
+        return;
+      }
+      if (key === YOUTUBE_SEEK_FORWARD_HOTKEY) {
+        event.preventDefault();
+        youtubePlayerRef.current?.seekBy(YOUTUBE_SEEK_SECONDS);
+        return;
+      }
+      if (key === YOUTUBE_FRAME_BACK_HOTKEY || key === YOUTUBE_FRAME_FORWARD_HOTKEY) {
+        event.preventDefault();
+        if (youtubePlayerRef.current?.isPaused()) {
+          youtubePlayerRef.current.stepFrame(
+            key === YOUTUBE_FRAME_BACK_HOTKEY ? -1 : 1,
+          );
+        }
+      }
+    },
+    [hasYoutube, youtubeMode, setYoutubeModeAndPersist],
+  );
+
   const handleTrackGameHotkey = useCallback(
     (key: string, event: KeyboardEvent) => {
+      // Media / layout keys are handled by handleYoutubeHotkey (always active).
+      if (
+        key === YOUTUBE_LAYOUT_SMALL_HOTKEY ||
+        key === YOUTUBE_LAYOUT_TALL_HOTKEY ||
+        key === YOUTUBE_PLAY_PAUSE_HOTKEY ||
+        key === YOUTUBE_SEEK_BACK_HOTKEY ||
+        key === YOUTUBE_SEEK_FORWARD_HOTKEY ||
+        key === YOUTUBE_FRAME_BACK_HOTKEY ||
+        key === YOUTUBE_FRAME_FORWARD_HOTKEY
+      ) {
+        return;
+      }
+
       if (key === 'Enter') {
         if (
           (awaitingFinishConfirm ||
@@ -422,7 +529,14 @@ export function GameEventsPage() {
     ],
   );
 
-  useDocumentHotkeys(handleTrackGameHotkey, !gameCompleteIdle);
+  // Capture so keys work even when a button has focus; youtube always on while VOD present
+  useDocumentHotkeys(handleYoutubeHotkey, hasYoutube, { capture: true });
+  useDocumentHotkeys(handleTrackGameHotkey, !gameCompleteIdle, { capture: true });
+
+  const youtubeDocked = hasYoutube && youtubeMode === 'docked';
+  const youtubeTall = hasYoutube && youtubeMode === 'tall';
+  const youtubeTopBand = hasYoutube && youtubeMode !== 'docked';
+  const editorCompact = youtubeTall;
 
   return (
     <Box
@@ -430,7 +544,12 @@ export function GameEventsPage() {
       sx={{
         display: 'grid',
         gridTemplateColumns: '1fr 300px',
-        gap: 0,
+        // Tall: player fills leftover height; compact editor band below
+        gridTemplateRows: youtubeTall
+          ? 'minmax(0, 1fr) auto'
+          : hasYoutube
+            ? 'auto 1fr'
+            : '1fr',
         mx: -3,
         mt: -3,
         mb: -3,
@@ -438,19 +557,62 @@ export function GameEventsPage() {
         overflow: 'hidden',
       }}
     >
-      <Box sx={{ p: 3, overflow: 'auto', minHeight: 0, minWidth: 0 }}>
-        <PageHeader>Track Game</PageHeader>
-        <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-          {gameTitle}
-          {' · '}
-          Home {live.activeHomeCount} / Away {live.activeAwayCount} active
-          {isGameOver
-            ? ` · Eliminated! (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'} win)`
-            : ''}
-        </Typography>
+      {hasYoutube ? (
+        <Box
+          sx={{
+            gridColumn: youtubeDocked ? 1 : '1 / -1',
+            gridRow: 1,
+            minWidth: 0,
+            minHeight: 0,
+            height: youtubeTall ? '100%' : 'auto',
+            overflow: 'hidden',
+          }}
+        >
+          <YoutubePlayer
+            ref={youtubePlayerRef}
+            youtubeUrl={youtubeUrl}
+            mode={youtubeMode}
+            onModeChange={setYoutubeModeAndPersist}
+          />
+        </Box>
+      ) : null}
+
+      <Box
+        sx={{
+          gridColumn: 1,
+          gridRow: hasYoutube ? 2 : 1,
+          p: editorCompact ? 1 : 2,
+          overflow: editorCompact ? 'auto' : 'auto',
+          minHeight: 0,
+          minWidth: 0,
+          maxHeight: youtubeTall ? '42vh' : undefined,
+        }}
+      >
+        {editorCompact ? (
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            {gameTitle}
+            {' · '}
+            Home {live.activeHomeCount} / Away {live.activeAwayCount}
+            {isGameOver
+              ? ` · Out (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'})`
+              : ''}
+          </Typography>
+        ) : (
+          <>
+            <PageHeader>Track Game</PageHeader>
+            <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+              {gameTitle}
+              {' · '}
+              Home {live.activeHomeCount} / Away {live.activeAwayCount} active
+              {isGameOver
+                ? ` · Eliminated! (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'} win)`
+                : ''}
+            </Typography>
+          </>
+        )}
 
         {awaitingFinishConfirm ? (
-          <Typography color="warning.main" sx={{ mb: 2 }}>
+          <Typography color="warning.main" sx={{ mb: editorCompact ? 1 : 2 }}>
             All players on one team are out — confirm the winner with Enter.
           </Typography>
         ) : null}
@@ -460,12 +622,16 @@ export function GameEventsPage() {
             Game Complete!
           </Typography>
         ) : (
-          <>
+          <EditorDensityProvider density={editorCompact ? 'compact' : 'comfortable'}>
             <Stack
               direction="row"
               spacing={1}
               className="button-row"
-              sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 2 }}
+              sx={{
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                mb: editorCompact ? 1 : 2,
+              }}
             >
               {!lockedTab ? (
                 <>
@@ -474,6 +640,7 @@ export function GameEventsPage() {
                       <Button
                         type="button"
                         className="bw-button bw-button--text"
+                        size={editorCompact ? 'small' : 'medium'}
                         variant={visibleTab === tab ? 'contained' : 'text'}
                         onClick={() => {
                           setPendingWipeFinish(false);
@@ -487,7 +654,10 @@ export function GameEventsPage() {
                   ))}
                 </>
               ) : (
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, textTransform: 'capitalize' }}>
+                <Typography
+                  variant={editorCompact ? 'body2' : 'subtitle1'}
+                  sx={{ fontWeight: 700, textTransform: 'capitalize' }}
+                >
                   {lockedTab}
                 </Typography>
               )}
@@ -564,7 +734,7 @@ export function GameEventsPage() {
               />
             ) : null}
 
-            {!gameCompleteIdle ? (
+            {!editorCompact ? (
               <Stack
                 direction="row"
                 spacing={1}
@@ -577,20 +747,57 @@ export function GameEventsPage() {
                     <Typography variant="caption">{row.label}</Typography>
                   </Stack>
                 ))}
+                {hasYoutube ? (
+                  <>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                      <HotkeyBadge hotkey={YOUTUBE_LAYOUT_SMALL_HOTKEY} />
+                      <Typography variant="caption">Video small</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                      <HotkeyBadge hotkey={YOUTUBE_LAYOUT_TALL_HOTKEY} />
+                      <Typography variant="caption">Video tall</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                      <HotkeyBadge hotkey="Space" />
+                      <Typography variant="caption">Play/pause</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                      <HotkeyBadge hotkey="←" />
+                      <HotkeyBadge hotkey="→" />
+                      <Typography variant="caption">Seek 5s</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                      <HotkeyBadge hotkey={YOUTUBE_FRAME_BACK_HOTKEY} />
+                      <HotkeyBadge hotkey={YOUTUBE_FRAME_FORWARD_HOTKEY} />
+                      <Typography variant="caption">Frame step (paused)</Typography>
+                    </Stack>
+                  </>
+                ) : null}
               </Stack>
             ) : null}
-          </>
+          </EditorDensityProvider>
         )}
       </Box>
 
-      <GameEventsTimeline
-        entries={timeline}
-        selectedEventId={effectiveSelectedId}
-        insertBeforeEventId={insertBeforeEventId}
-        showEndInsertMarker={showEndInsertMarker}
-        onSelectEvent={handleSelectEvent}
-        onDeselectEvent={handleDone}
-      />
+      <Box
+        sx={{
+          gridColumn: 2,
+          gridRow: youtubeDocked ? '1 / -1' : youtubeTopBand || hasYoutube ? 2 : 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflow: 'hidden',
+          maxHeight: youtubeTall ? '42vh' : undefined,
+        }}
+      >
+        <GameEventsTimeline
+          entries={timeline}
+          selectedEventId={effectiveSelectedId}
+          insertBeforeEventId={insertBeforeEventId}
+          showEndInsertMarker={showEndInsertMarker}
+          onSelectEvent={handleSelectEvent}
+          onDeselectEvent={handleDone}
+        />
+      </Box>
     </Box>
   );
 }

@@ -1,5 +1,5 @@
-import { Button, Stack } from '@mui/material';
-import { useCallback, useEffect, useMemo } from 'react';
+import { Button, Stack, TextField } from '@mui/material';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { PlayerRoster } from '../components/MatchRoster';
 import { PageHeader } from '../components/Ui';
@@ -10,6 +10,7 @@ import {
   buildPermanentRosterHotkeys,
   findPlayerByHotkey,
 } from '../domain/hotkeys';
+import { parseYoutubeVideoId } from '../domain/youtube';
 import { autoSelectMatchRoster } from '../domain/rosterAutoSelect';
 import {
   canNavigateToMatchPage,
@@ -23,6 +24,7 @@ export function MatchPage() {
   const navigate = useNavigate();
   const { data, toggleMatchPlayer, mutate } = useDatabase();
   const match = getMatchById(data, matchId);
+  const [youtubeDraft, setYoutubeDraft] = useState('');
 
   useEffect(() => {
     if (!matchId) return;
@@ -31,6 +33,10 @@ export function MatchPage() {
       return null;
     }, '');
   }, [matchId, mutate]);
+
+  useEffect(() => {
+    setYoutubeDraft(match?.YoutubeUrl ?? '');
+  }, [match?.Id, match?.YoutubeUrl]);
 
   const homeRoster = match ? getMatchSidePlayersWithSelection(data, match, true) : [];
   const awayRoster = match ? getMatchSidePlayersWithSelection(data, match, false) : [];
@@ -67,6 +73,20 @@ export function MatchPage() {
   const homeTeam = getTeam(data, match.TeamIdHome);
   const awayTeam = getTeam(data, match.TeamIdAway);
   const canTrack = canNavigateToMatchPage(data, matchId);
+  const youtubeValid =
+    !youtubeDraft.trim() || Boolean(parseYoutubeVideoId(youtubeDraft));
+
+  const saveYoutubeUrl = () => {
+    const next = youtubeDraft.trim() || null;
+    if (next && !parseYoutubeVideoId(next)) return;
+    mutate((draft) => {
+      const row = draft.Tables.Match.find(
+        (entry) => (entry as { Id: string }).Id === matchId,
+      ) as { YoutubeUrl?: string | null } | undefined;
+      if (row) row.YoutubeUrl = next;
+      return null;
+    }, next ? 'Updated match YouTube URL.' : 'Cleared match YouTube URL.');
+  };
 
   const statisticsBytes = () => buildStatisticsCsvBytes(data, matchId);
 
@@ -125,6 +145,30 @@ export function MatchPage() {
         >
           Copy Match Statistics
         </Button>
+      </Stack>
+      <Stack spacing={1} sx={{ mb: 2, maxWidth: 720 }}>
+        <TextField
+          label="YouTube URL"
+          placeholder="https://www.youtube.com/watch?v=…"
+          value={youtubeDraft}
+          onChange={(event) => setYoutubeDraft(event.target.value)}
+          onBlur={saveYoutubeUrl}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              saveYoutubeUrl();
+              (event.target as HTMLInputElement).blur();
+            }
+          }}
+          error={!youtubeValid}
+          helperText={
+            youtubeValid
+              ? 'Used on Track Game to play the match VOD and stamp event times.'
+              : 'Enter a valid YouTube watch, share, or embed URL.'
+          }
+          size="small"
+          fullWidth
+        />
       </Stack>
       <div className="sk-match">
         <PlayerRoster

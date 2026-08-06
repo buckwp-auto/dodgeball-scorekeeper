@@ -8,6 +8,7 @@ import type {
   TimelineRow,
   TimelineSegment,
 } from '../../domain/gameEvents';
+import { formatVideoTime } from '../../domain/youtube';
 import { rowBackgroundForTone } from '../../domain/timelineColors';
 import { getTimelineActionIcon } from '../../domain/throwResultIcons';
 import { PlayerPill } from './PlayerPill';
@@ -123,10 +124,12 @@ function flattenTimeline(
 function TimelineEventRow({
   row,
   selected,
+  videoTimeLabel,
   onClick,
 }: {
   row: TimelineRow;
   selected: boolean;
+  videoTimeLabel?: string;
   onClick: () => void;
 }) {
   return (
@@ -173,6 +176,24 @@ function TimelineEventRow({
           flex: 1,
         }}
       >
+        {videoTimeLabel && row.role !== 'deflection' ? (
+          <Typography
+            component="span"
+            variant="caption"
+            sx={{
+              display: 'inline-block',
+              mr: 0.75,
+              px: 0.5,
+              py: 0.1,
+              borderRadius: 0.5,
+              bgcolor: 'rgba(255,255,255,0.12)',
+              fontVariantNumeric: 'tabular-nums',
+              color: 'grey.300',
+            }}
+          >
+            {videoTimeLabel}
+          </Typography>
+        ) : null}
         {renderSegments(row.segments)}
       </Box>
     </Button>
@@ -221,11 +242,16 @@ export function GameEventsTimeline({
         }
         const row = item.entry.rows[item.rowIndex];
         const selected = selectedEventId === item.entry.id;
+        const videoTimeLabel =
+          item.rowIndex === 0
+            ? formatVideoTime(item.entry.videoOffsetSeconds ?? null) || undefined
+            : undefined;
         return (
           <TimelineEventRow
             key={`${item.entry.id}-row-${item.rowIndex}`}
             row={row}
             selected={selected}
+            videoTimeLabel={videoTimeLabel}
             onClick={() =>
               selected ? onDeselectEvent() : onSelectEvent(item.entry.id)
             }

@@ -10,11 +10,21 @@ export type MatchPlayerRow = {
   PlayerId: Guid;
   TeamHome: boolean;
 };
-export type GameRow = { Id: Guid };
+export type GameRow = {
+  Id: Guid;
+  /** Optional seconds into the match VOD where this game begins. */
+  VideoStartSeconds?: number | null;
+};
 export type GamePlayerRow = { Id: Guid; GameId: Guid; MatchPlayerId: Guid };
 export type MatchEventRow = { Id: Guid; MatchId: Guid; Ordinal: number };
 export type MatchEventGameRow = { MatchEventId: Guid; GameId: Guid };
-export type GameEventRow = { Id: Guid; GameId: Guid; Ordinal: number };
+export type GameEventRow = {
+  Id: Guid;
+  GameId: Guid;
+  Ordinal: number;
+  /** Seconds into the YouTube video when this event was recorded. */
+  VideoOffsetSeconds?: number | null;
+};
 export type GameEventThrowRow = { GameEventId: Guid };
 export type GameEventErrorRow = {
   GameEventId: Guid;

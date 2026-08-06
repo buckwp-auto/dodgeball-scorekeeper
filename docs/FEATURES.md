@@ -19,7 +19,7 @@ Client-side dodgeball scorekeeper (React / Vite / MUI) with parity goals against
 
 ## Track Game
 
-Main scoring surface: center editor + dark **timeline sidebar**.
+Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar**.
 
 ### Event types
 
@@ -50,6 +50,17 @@ Derived from persisted events (not a separate toggle):
 - Outs sort to the bottom and show “(out)”
 - When one side has **zero active players**, the game is live-over
 
+### YouTube match VOD
+
+- Match page: optional **YouTube URL** field
+- Track Game layouts (session preference):
+  - **Tall** (`]`) — large fill-height 16:9 player; compact throw/error editor band below (all controls still visible)
+  - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
+  - **Hide** — scoring only (timestamps pause)
+- Playback hotkeys work without focusing the embed: `Space` play/pause, `←`/`→` ±5s, `,`/`.` frame step when paused
+- Saving an event stamps `VideoOffsetSeconds` from the player clock; timeline shows the time and seeks on select
+- GitHub Pages–safe iframe (`origin` + referrer policy); embed failures don’t block scoring
+
 ### Finish after team wipe
 
 - Automatically switches to the **Finish** tab with the surviving team pre-selected
@@ -68,6 +79,9 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` done, `C` add throw, `V` restore, `B` insert below, `N` delete |
 | Confirm wipe finish | `Enter` |
+| YouTube layout | `[` small/docked, `]` tall |
+| YouTube playback | `Space` play/pause, `←`/`→` ±5s |
+| YouTube frame (paused) | `,` back, `.` forward |
 
 Same permanent map is used on Match / Game roster screens and Track Game throw/error flows. Re-pressing a player/result key toggles the selection off where applicable.
 
