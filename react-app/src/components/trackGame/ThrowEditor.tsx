@@ -214,14 +214,20 @@ function SingleThrowEditor({
 
         {!showTarget ? (
           <>
-            <TeamBanner name={homeTeamName} />
-            <TeamBanner name={awayTeamName} />
+            <TeamBanner name={homeTeamName} teamHome />
+            <TeamBanner name={awayTeamName} teamHome={false} />
             <Box />
           </>
         ) : (
           <>
-            <TeamBanner name={throwingHome ? homeTeamName : awayTeamName} />
-            <TeamBanner name={defendingHome ? homeTeamName : awayTeamName} />
+            <TeamBanner
+              name={throwingHome ? homeTeamName : awayTeamName}
+              teamHome={throwingHome}
+            />
+            <TeamBanner
+              name={defendingHome ? homeTeamName : awayTeamName}
+              teamHome={defendingHome}
+            />
             <Box />
           </>
         )}
@@ -234,6 +240,8 @@ function SingleThrowEditor({
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                   eliminated={isOut(row.gamePlayerId)}
+                  playerId={row.playerId}
+                  teamHome={row.teamHome}
                   onClick={() =>
                     setThrower(
                       draft.throwerGamePlayerId === row.gamePlayerId ? '' : row.gamePlayerId,
@@ -250,6 +258,8 @@ function SingleThrowEditor({
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                   eliminated={isOut(row.gamePlayerId)}
+                  playerId={row.playerId}
+                  teamHome={row.teamHome}
                   onClick={() =>
                     setThrower(
                       draft.throwerGamePlayerId === row.gamePlayerId ? '' : row.gamePlayerId,
@@ -288,6 +298,11 @@ function SingleThrowEditor({
               {draft.throwerGamePlayerId ? (
                 <EditorChipButton
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.throwerGamePlayerId)}
+                  playerId={
+                    throwingPlayers.find((row) => row.gamePlayerId === draft.throwerGamePlayerId)
+                      ?.playerId
+                  }
+                  teamHome={throwingHome}
                   onClick={() => setThrower('')}
                 >
                   {throwingPlayers.find((row) => row.gamePlayerId === draft.throwerGamePlayerId)
@@ -299,6 +314,8 @@ function SingleThrowEditor({
                     key={row.gamePlayerId}
                     hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                     eliminated={isOut(row.gamePlayerId)}
+                    playerId={row.playerId}
+                    teamHome={row.teamHome}
                     onClick={() => setThrower(row.gamePlayerId)}
                   >
                     {playerLabel(row)}
@@ -310,6 +327,11 @@ function SingleThrowEditor({
               {draft.targetGamePlayerId ? (
                 <EditorChipButton
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.targetGamePlayerId)}
+                  playerId={
+                    defendingPlayers.find((row) => row.gamePlayerId === draft.targetGamePlayerId)
+                      ?.playerId
+                  }
+                  teamHome={defendingHome}
                   onClick={() => setTarget('')}
                 >
                   {defendingPlayers.find((row) => row.gamePlayerId === draft.targetGamePlayerId)
@@ -321,6 +343,8 @@ function SingleThrowEditor({
                     key={row.gamePlayerId}
                     hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                     eliminated={isOut(row.gamePlayerId)}
+                    playerId={row.playerId}
+                    teamHome={row.teamHome}
                     onClick={() => setTarget(row.gamePlayerId)}
                   >
                     {playerLabel(row)}
@@ -367,6 +391,12 @@ function SingleThrowEditor({
               <EditorChoiceStack pending={!deflection.receiverGamePlayerId}>
                 {deflection.receiverGamePlayerId ? (
                   <EditorChipButton
+                    playerId={
+                      defendingPlayers.find(
+                        (row) => row.gamePlayerId === deflection.receiverGamePlayerId,
+                      )?.playerId
+                    }
+                    teamHome={defendingHome}
                     onClick={() => updateDeflection(index, { receiverGamePlayerId: '' })}
                   >
                     {defendingPlayers.find((row) => row.gamePlayerId === deflection.receiverGamePlayerId)?.playerName ?? '?'}
@@ -377,6 +407,8 @@ function SingleThrowEditor({
                       key={row.gamePlayerId}
                       hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                       eliminated={isOut(row.gamePlayerId)}
+                      playerId={row.playerId}
+                      teamHome={row.teamHome}
                       onClick={() => updateDeflection(index, { receiverGamePlayerId: row.gamePlayerId })}
                     >
                       {playerLabel(row)}
@@ -441,6 +473,8 @@ function SingleThrowEditor({
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                   selected={draft.recoveredId === row.gamePlayerId}
+                  playerId={row.playerId}
+                  teamHome={row.teamHome}
                   onClick={() =>
                     onChange({
                       ...draft,

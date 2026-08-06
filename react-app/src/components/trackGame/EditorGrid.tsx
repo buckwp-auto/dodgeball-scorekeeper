@@ -1,5 +1,9 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
+import {
+  playerPillStyles,
+  teamHeaderStyles,
+} from '../../domain/timelineColors';
 import { HotkeyBadge } from '../HotkeyBadge';
 
 export function EditorGrid({ children }: { children: ReactNode }) {
@@ -47,17 +51,20 @@ export function EditorLabel({
   );
 }
 
-export function TeamBanner({ name }: { name: string }) {
+export function TeamBanner({ name, teamHome }: { name: string; teamHome: boolean }) {
+  const styles = teamHeaderStyles(teamHome, 'light');
   return (
     <Typography
       variant="subtitle2"
-      color="primary"
       sx={{
         fontWeight: 700,
         px: 1,
         py: 0.5,
-        bgcolor: 'action.hover',
         borderRadius: 1,
+        border: '1px solid',
+        backgroundColor: styles.backgroundColor,
+        color: styles.color,
+        borderColor: styles.borderColor,
       }}
     >
       {name}
@@ -98,6 +105,8 @@ export function EditorChoiceButton({
   hotkey,
   startIcon,
   eliminated,
+  playerId,
+  teamHome,
   onClick,
 }: {
   children: string;
@@ -105,12 +114,19 @@ export function EditorChoiceButton({
   hotkey?: string | null;
   startIcon?: ReactNode;
   eliminated?: boolean;
+  playerId?: string;
+  teamHome?: boolean;
   onClick: () => void;
 }) {
+  const pill =
+    playerId !== undefined && teamHome !== undefined
+      ? playerPillStyles(teamHome, playerId, 'light')
+      : null;
+
   return (
     <Button
       type="button"
-      variant={selected ? 'contained' : 'outlined'}
+      variant={selected || pill ? 'contained' : 'outlined'}
       size="large"
       fullWidth
       disabled={false}
@@ -119,8 +135,24 @@ export function EditorChoiceButton({
         justifyContent: 'flex-start',
         textTransform: 'none',
         opacity: eliminated ? 0.45 : 1,
-        bgcolor: eliminated ? 'action.disabledBackground' : undefined,
-        color: eliminated ? 'text.disabled' : undefined,
+        ...(pill
+          ? {
+              bgcolor: selected ? pill.borderColor : pill.backgroundColor,
+              color: pill.color,
+              border: '1px solid',
+              borderColor: pill.borderColor,
+              boxShadow: 'none',
+              '&:hover': {
+                bgcolor: pill.borderColor,
+                borderColor: pill.borderColor,
+                boxShadow: 'none',
+                color: pill.color,
+              },
+            }
+          : {
+              bgcolor: eliminated ? 'action.disabledBackground' : undefined,
+              color: eliminated ? 'text.disabled' : undefined,
+            }),
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
@@ -135,21 +167,48 @@ export function EditorChoiceButton({
 export function EditorChipButton({
   children,
   hotkey,
+  playerId,
+  teamHome,
   onClick,
 }: {
   children: string;
   hotkey?: string | null;
+  playerId?: string;
+  teamHome?: boolean;
   onClick: () => void;
 }) {
+  const pill =
+    playerId !== undefined && teamHome !== undefined
+      ? playerPillStyles(teamHome, playerId, 'light')
+      : null;
+
   return (
     <Button
       type="button"
       variant="contained"
-      color="secondary"
+      color={pill ? undefined : 'secondary'}
       size="large"
       fullWidth
       onClick={onClick}
-      sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+      sx={{
+        justifyContent: 'flex-start',
+        textTransform: 'none',
+        ...(pill
+          ? {
+              bgcolor: pill.borderColor,
+              color: pill.color,
+              border: '1px solid',
+              borderColor: pill.borderColor,
+              boxShadow: 'none',
+              '&:hover': {
+                bgcolor: pill.color,
+                color: pill.backgroundColor,
+                borderColor: pill.color,
+                boxShadow: 'none',
+              },
+            }
+          : null),
+      }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         {hotkey ? <HotkeyBadge hotkey={hotkey} /> : null}

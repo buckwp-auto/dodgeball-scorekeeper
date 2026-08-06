@@ -51,7 +51,7 @@ test.describe('Database JSON (.scrkpr)', () => {
     await expect(page.getByRole('button', { name: 'Big Dogs' })).toHaveCount(0);
 
     await navigateMenu(page, 'Overview');
-    await page.getByRole('button', { name: 'Load Database', exact: true }).click();
+    await page.getByRole('button', { name: 'Load from file', exact: true }).click();
     await fileInputForExtension(page, '.scrkpr').setInputFiles(filePath);
 
     await navigateMenu(page, 'Teams');

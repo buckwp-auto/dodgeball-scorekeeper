@@ -3,26 +3,32 @@ import { createEmptyDatabase } from './database';
 import { addMatch, addPlayer, addTeam } from './database';
 import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import {
+  DeflectionResult,
   GameEventFinishResult,
   ThrowResult,
 } from './statistics/constants';
 import { getStatisticsSummaryCsvText } from './statistics/statisticsFormatService';
 import {
+  buildTimelineEntries,
+  persistThrowGameEvent,
   saveFinishGameEvent,
   saveThrowGameEvent,
 } from './gameEvents';
 
-function setupOneGameMatch() {
+function setupOneGameMatch(extraHome = false) {
   const data = createEmptyDatabase();
   const home = addTeam(data, 'Home Hawks');
   const away = addTeam(data, 'Away Owls');
-  const h1 = addPlayer(data, home.Id, 'H1');
-  const a1 = addPlayer(data, away.Id, 'A1');
+  const h1 = addPlayer(data, home.Id, 'Alex');
+  const h2 = extraHome ? addPlayer(data, home.Id, 'Blake') : null;
+  const a1 = addPlayer(data, away.Id, 'Casey');
   const match = addMatch(data, home.Id, away.Id);
   toggleMatchPlayer(data, match.Id, h1.Id, true);
+  if (h2) toggleMatchPlayer(data, match.Id, h2.Id, true);
   toggleMatchPlayer(data, match.Id, a1.Id, false);
   const gameId = addGame(data, match.Id);
   toggleGamePlayer(data, match.Id, gameId, h1.Id);
+  if (h2) toggleGamePlayer(data, match.Id, gameId, h2.Id);
   toggleGamePlayer(data, match.Id, gameId, a1.Id);
 
   const gamePlayers = data.Tables.GamePlayer as {
@@ -34,16 +40,28 @@ function setupOneGameMatch() {
     PlayerId: string;
     TeamHome: boolean;
   }[];
-  const homeGp = gamePlayers.find(
-    (row) =>
-      matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === h1.Id,
-  )!;
-  const awayGp = gamePlayers.find(
-    (row) =>
-      matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === a1.Id,
-  )!;
+  const gpFor = (playerId: string) =>
+    gamePlayers.find(
+      (row) =>
+        matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === playerId,
+    )!;
 
-  return { data, match, gameId, homeGp, awayGp };
+  return {
+    data,
+    match,
+    gameId,
+    homeGp: gpFor(h1.Id),
+    homeGp2: h2 ? gpFor(h2.Id) : null,
+    awayGp: gpFor(a1.Id),
+  };
+}
+
+function flattenText(segments: { kind: string; text?: string; player?: { playerName: string } }[]) {
+  return segments
+    .map((segment) =>
+      segment.kind === 'player' ? segment.player!.playerName : segment.text,
+    )
+    .join('');
 }
 
 describe('game event recording', () => {
@@ -61,8 +79,78 @@ describe('game event recording', () => {
     saveFinishGameEvent(data, gameId, GameEventFinishResult.WinHome);
 
     const csv = getStatisticsSummaryCsvText(data, [match.Id]);
-    expect(csv).toContain('"Home Hawks","H1"');
+    expect(csv).toContain('"Home Hawks","Alex"');
     expect(csv).toContain('"1","1","0","0","0"');
     expect(csv).toContain('"1","0","0"');
+  });
+});
+
+describe('buildTimelineEntries', () => {
+  it('formats a throw as a single sentence row', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Dodge,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(entry.rows).toHaveLength(1);
+    expect(entry.rows[0].tone).toBe('dodge');
+    expect(entry.rows[0].actions).toEqual([{ kind: 'throw', resultId: ThrowResult.Dodge }]);
+    expect(flattenText(entry.rows[0].segments)).toBe(
+      'Alex threw at Casey, resulting in a Dodge',
+    );
+  });
+
+  it('keeps recovered inline and deflections on extra rows', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Catch,
+        deflections: [
+          {
+            receiverGamePlayerId: awayGp.Id,
+            resultId: DeflectionResult.Block,
+          },
+        ],
+        recoveredId: homeGp2!.Id,
+      },
+    ]);
+
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(entry.rows).toHaveLength(2);
+    expect(entry.rows[0].tone).toBe('catch');
+    expect(flattenText(entry.rows[0].segments)).toBe(
+      'Alex threw at Casey, resulting in a Catch · recovered Blake',
+    );
+    expect(entry.rows[1].role).toBe('deflection');
+    expect(entry.rows[1].tone).toBe('block');
+    expect(flattenText(entry.rows[1].segments)).toBe(
+      'Casey deflected, resulting in a Block',
+    );
+  });
+
+  it('uses hit tone for failed block/catch', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.BlockFailed,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(entry.rows[0].tone).toBe('hit');
+    expect(flattenText(entry.rows[0].segments)).toContain('a Failed Block');
   });
 });

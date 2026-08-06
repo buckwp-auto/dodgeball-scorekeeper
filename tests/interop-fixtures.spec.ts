@@ -32,7 +32,7 @@ test.describe('Interop fixtures (.scrkpr)', () => {
   test('loads reference fixture in app', async ({ page }) => {
     await gotoScorekeeper(page);
     await navigateMenu(page, 'Overview');
-    await page.getByRole('button', { name: 'Load Database', exact: true }).click();
+    await page.getByRole('button', { name: 'Load from file', exact: true }).click();
     await fileInputForExtension(page, '.scrkpr').setInputFiles(fixturePath('interop-basic.scrkpr'));
 
     await navigateMenu(page, 'Teams');
@@ -74,7 +74,7 @@ test.describe('Interop fixtures (.scrkpr)', () => {
   test('loads reference throw fixture', async ({ page }) => {
     await gotoScorekeeper(page);
     await navigateMenu(page, 'Overview');
-    await page.getByRole('button', { name: 'Load Database', exact: true }).click();
+    await page.getByRole('button', { name: 'Load from file', exact: true }).click();
     await fileInputForExtension(page, '.scrkpr').setInputFiles(
       fixturePath('interop-with-throw.scrkpr'),
     );

@@ -27,7 +27,7 @@ npm run test:e2e     # Playwright
 ## Data
 
 - Session storage key: `SCOREKEEPER_DATA`
-- Export/import: **Download Database** / **Load Database** on Overview (`.scrkpr` JSON)
+- Export/import: **Download Database** / **Load from file** on Overview (`.scrkpr` JSON); **Load sample league (demo)** for the six-team fixture
 
 ## GitHub Pages
 

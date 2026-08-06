@@ -4,7 +4,7 @@ Client-side dodgeball scorekeeper (React / Vite / MUI) with parity goals against
 
 ## App shell
 
-- **Overview** — create/load/download database (`.scrkpr`), with import feedback (spinner, success snackbar, errors)
+- **Overview** — download database, **Load from file** (`.scrkpr`), and **Load sample league (demo)** (six-team fixture), with import feedback (spinner, success snackbar, errors)
 - **Teams / Players** — manage teams and rosters
 - **Matches** — create matches, select players, download/copy match statistics CSV
 - **Track Match / Games** — add games, set on-court roster, open Track Game

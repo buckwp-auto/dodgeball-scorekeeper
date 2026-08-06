@@ -61,22 +61,22 @@ export function ErrorEditor({
 
       {showBothTeams ? (
         <>
-          <TeamBanner name={homeTeamName} />
-          <TeamBanner name={awayTeamName} />
+          <TeamBanner name={homeTeamName} teamHome />
+          <TeamBanner name={awayTeamName} teamHome={false} />
           <Box />
         </>
       ) : (
         <>
           {offender?.teamHome ? (
             <>
-              <TeamBanner name={homeTeamName} />
+              <TeamBanner name={homeTeamName} teamHome />
               <Box />
               <Box />
             </>
           ) : (
             <>
               <Box />
-              <TeamBanner name={awayTeamName} />
+              <TeamBanner name={awayTeamName} teamHome={false} />
               <Box />
             </>
           )}
@@ -91,6 +91,8 @@ export function ErrorEditor({
                 key={row.gamePlayerId}
                 hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                 eliminated={isOut(row.gamePlayerId)}
+                playerId={row.playerId}
+                teamHome={row.teamHome}
                 onClick={() =>
                   onChange({
                     ...draft,
@@ -109,6 +111,8 @@ export function ErrorEditor({
                 key={row.gamePlayerId}
                 hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
                 eliminated={isOut(row.gamePlayerId)}
+                playerId={row.playerId}
+                teamHome={row.teamHome}
                 onClick={() =>
                   onChange({
                     ...draft,
@@ -129,6 +133,8 @@ export function ErrorEditor({
               {draft.offenderGamePlayerId ? (
                 <EditorChipButton
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.offenderGamePlayerId)}
+                  playerId={offender.playerId}
+                  teamHome={offender.teamHome}
                   onClick={() => onChange({ offenderGamePlayerId: '', offenseId: draft.offenseId })}
                 >
                   {label(offender)}
@@ -143,6 +149,8 @@ export function ErrorEditor({
               {draft.offenderGamePlayerId ? (
                 <EditorChipButton
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.offenderGamePlayerId)}
+                  playerId={offender!.playerId}
+                  teamHome={offender!.teamHome}
                   onClick={() => onChange({ offenderGamePlayerId: '', offenseId: draft.offenseId })}
                 >
                   {label(offender!)}

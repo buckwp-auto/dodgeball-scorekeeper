@@ -1,10 +1,18 @@
 import AddIcon from '@mui/icons-material/Add';
 import { Box, Button, Typography } from '@mui/material';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { TimelineEntry } from '../../domain/gameEvents';
-import { getVirtualWindow } from '../../domain/virtualList';
+import { useMemo, type ReactNode } from 'react';
+import type {
+  TimelineAction,
+  TimelineEntry,
+  TimelinePlayerRef,
+  TimelineRow,
+  TimelineSegment,
+} from '../../domain/gameEvents';
+import { rowBackgroundForTone } from '../../domain/timelineColors';
+import { getTimelineActionIcon } from '../../domain/throwResultIcons';
+import { PlayerPill } from './PlayerPill';
 
-const ROW_HEIGHT = 32;
+const ROW_MIN_HEIGHT = 36;
 
 export function InsertMarker({ label }: { label?: string }) {
   return (
@@ -16,7 +24,7 @@ export function InsertMarker({ label }: { label?: string }) {
         gap: 1,
         py: 1,
         px: 1,
-        height: ROW_HEIGHT,
+        minHeight: ROW_MIN_HEIGHT,
         color: 'grey.300',
         borderBottom: '1px solid',
         borderColor: 'grey.800',
@@ -34,10 +42,68 @@ export function InsertMarker({ label }: { label?: string }) {
   );
 }
 
+function ActionBadges({ actions }: { actions: TimelineAction[] }) {
+  if (actions.length === 0) return null;
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 0.35,
+        flexShrink: 0,
+        pt: 0.15,
+      }}
+    >
+      {actions.map((action, index) => {
+        const Icon = getTimelineActionIcon(action);
+        return (
+          <Box
+            key={`${action.kind}-${index}`}
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 24,
+              height: 24,
+              borderRadius: 1,
+              bgcolor: 'rgba(255,255,255,0.12)',
+              color: 'grey.100',
+            }}
+          >
+            <Icon sx={{ fontSize: 16 }} />
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+function renderSegments(segments: TimelineSegment[]): ReactNode[] {
+  return segments.map((segment, index) => {
+    if (segment.kind === 'player') {
+      const player: TimelinePlayerRef = segment.player;
+      return (
+        <PlayerPill
+          key={`p-${index}-${player.gamePlayerId}`}
+          name={player.playerName}
+          teamHome={player.teamHome}
+          playerId={player.playerId}
+          surface="dark"
+        />
+      );
+    }
+    return (
+      <Box component="span" key={`t-${index}`}>
+        {segment.text}
+      </Box>
+    );
+  });
+}
+
 type FlatItem =
   | { kind: 'insert-end' }
-  | { kind: 'title'; entry: TimelineEntry }
-  | { kind: 'line'; entry: TimelineEntry; lineIndex: number }
+  | { kind: 'row'; entry: TimelineEntry; rowIndex: number }
   | { kind: 'insert-after'; entryId: string };
 
 function flattenTimeline(
@@ -48,11 +114,69 @@ function flattenTimeline(
   const items: FlatItem[] = [];
   if (showEndInsertMarker) items.push({ kind: 'insert-end' });
   for (const entry of entries) {
-    items.push({ kind: 'title', entry });
-    entry.lines.forEach((_, lineIndex) => items.push({ kind: 'line', entry, lineIndex }));
+    entry.rows.forEach((_, rowIndex) => items.push({ kind: 'row', entry, rowIndex }));
     if (insertBeforeEventId === entry.id) items.push({ kind: 'insert-after', entryId: entry.id });
   }
   return items;
+}
+
+function TimelineEventRow({
+  row,
+  selected,
+  onClick,
+}: {
+  row: TimelineRow;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      fullWidth
+      onClick={onClick}
+      sx={{
+        display: 'flex',
+        justifyContent: 'flex-start',
+        alignItems: 'flex-start',
+        textAlign: 'left',
+        textTransform: 'none',
+        fontWeight: 500,
+        borderRadius: 0,
+        minHeight: ROW_MIN_HEIGHT,
+        height: 'auto',
+        py: 0.75,
+        px: 1,
+        pl: row.role === 'deflection' ? 2.5 : 1,
+        gap: 1,
+        color: 'grey.100',
+        bgcolor: rowBackgroundForTone(row.tone, selected),
+        borderBottom: '1px solid',
+        borderColor: 'grey.800',
+        outline: selected ? '1px solid' : 'none',
+        outlineColor: 'secondary.light',
+        outlineOffset: -1,
+        whiteSpace: 'normal',
+        '&:hover': {
+          bgcolor: rowBackgroundForTone(row.tone, true),
+        },
+      }}
+    >
+      <ActionBadges actions={row.actions} />
+      <Box
+        sx={{
+          display: 'block',
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
+          wordBreak: 'break-word',
+          fontSize: '0.85rem',
+          lineHeight: 1.45,
+          minWidth: 0,
+          flex: 1,
+        }}
+      >
+        {renderSegments(row.segments)}
+      </Box>
+    </Button>
+  );
 }
 
 export function GameEventsTimeline({
@@ -70,40 +194,14 @@ export function GameEventsTimeline({
   onSelectEvent: (eventId: string) => void;
   onDeselectEvent: () => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(600);
-
   const flatItems = useMemo(
     () => flattenTimeline(entries, showEndInsertMarker, insertBeforeEventId),
     [entries, showEndInsertMarker, insertBeforeEventId],
   );
 
-  const { startIndex, endIndex, offsetY } = getVirtualWindow({
-    scrollTop,
-    viewportHeight,
-    itemHeight: ROW_HEIGHT,
-    itemCount: flatItems.length,
-    overscan: 4,
-  });
-
-  const visibleItems = flatItems.slice(startIndex, endIndex + 1);
-
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-    const update = () => setViewportHeight(element.clientHeight);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <Box
-      ref={scrollRef}
       className="sk-game-timeline"
-      onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
       sx={{
         bgcolor: 'grey.900',
         color: 'grey.100',
@@ -111,65 +209,29 @@ export function GameEventsTimeline({
         minHeight: 0,
         overflow: 'auto',
         minWidth: 280,
+        alignSelf: 'stretch',
       }}
     >
-      <Box sx={{ height: flatItems.length * ROW_HEIGHT, position: 'relative' }}>
-        <Box sx={{ transform: `translateY(${offsetY}px)` }}>
-          {visibleItems.map((item) => {
-            if (item.kind === 'insert-end') {
-              return <InsertMarker key="insert-end" label="Next event" />;
+      {flatItems.map((item) => {
+        if (item.kind === 'insert-end') {
+          return <InsertMarker key="insert-end" label="Next event" />;
+        }
+        if (item.kind === 'insert-after') {
+          return <InsertMarker key={`insert-${item.entryId}`} />;
+        }
+        const row = item.entry.rows[item.rowIndex];
+        const selected = selectedEventId === item.entry.id;
+        return (
+          <TimelineEventRow
+            key={`${item.entry.id}-row-${item.rowIndex}`}
+            row={row}
+            selected={selected}
+            onClick={() =>
+              selected ? onDeselectEvent() : onSelectEvent(item.entry.id)
             }
-            if (item.kind === 'insert-after') {
-              return <InsertMarker key={`insert-${item.entryId}`} />;
-            }
-            if (item.kind === 'title') {
-              return (
-                <Button
-                  key={`${item.entry.id}-title`}
-                  fullWidth
-                  onClick={() =>
-                    selectedEventId === item.entry.id
-                      ? onDeselectEvent()
-                      : onSelectEvent(item.entry.id)
-                  }
-                  sx={{
-                    justifyContent: 'flex-start',
-                    textTransform: 'uppercase',
-                    fontWeight: 800,
-                    borderRadius: 0,
-                    minHeight: ROW_HEIGHT,
-                    px: 1.5,
-                    bgcolor: selectedEventId === item.entry.id ? 'secondary.main' : 'primary.main',
-                    color: 'primary.contrastText',
-                    '&:hover': {
-                      bgcolor: selectedEventId === item.entry.id ? 'secondary.dark' : 'primary.dark',
-                    },
-                  }}
-                >
-                  {item.entry.title}
-                </Button>
-              );
-            }
-            const line = item.entry.lines[item.lineIndex];
-            return (
-              <Typography
-                key={`${item.entry.id}-line-${item.lineIndex}`}
-                variant="body2"
-                sx={{
-                  height: ROW_HEIGHT,
-                  lineHeight: `${ROW_HEIGHT}px`,
-                  pl: line.kind === 'thrower' ? 1.5 : 4.5,
-                  bgcolor: selectedEventId === item.entry.id ? 'secondary.light' : 'transparent',
-                  opacity: 0.95,
-                }}
-              >
-                {line.text}
-                {line.resultLabel ? ` — ${line.resultLabel}` : ''}
-              </Typography>
-            );
-          })}
-        </Box>
-      </Box>
+          />
+        );
+      })}
     </Box>
   );
 }

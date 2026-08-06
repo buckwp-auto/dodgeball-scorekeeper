@@ -434,11 +434,11 @@ export function GameEventsPage() {
         mx: -3,
         mt: -3,
         mb: -3,
-        height: 'calc(100vh - 64px)',
+        height: '100vh',
         overflow: 'hidden',
       }}
     >
-      <Box sx={{ p: 3, overflow: 'auto', minHeight: 0 }}>
+      <Box sx={{ p: 3, overflow: 'auto', minHeight: 0, minWidth: 0 }}>
         <PageHeader>Track Game</PageHeader>
         <Typography variant="subtitle1" color="text.secondary" gutterBottom>
           {gameTitle}
