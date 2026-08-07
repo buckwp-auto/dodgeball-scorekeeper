@@ -1,7 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
-import { HotkeyBadge } from '../components/HotkeyBadge';
 import { PageHeader } from '../components/Ui';
 import {
   addDeflectionToDrafts,
@@ -13,26 +12,14 @@ import { FinishEditor } from '../components/trackGame/FinishEditor';
 import { StartEventEditor } from '../components/trackGame/StartEventEditor';
 import { GameEventsTimeline } from '../components/trackGame/GameEventsTimeline';
 import { EditorDensityProvider } from '../components/trackGame/EditorGrid';
-import {
-  YoutubePlayer,
-  type YoutubePlayerHandle,
-} from '../components/trackGame/YoutubePlayer';
+import { TrackGameHotkeyHints } from '../components/trackGame/TrackGameHotkeyHints';
+import { YoutubePlayer } from '../components/trackGame/YoutubePlayer';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
-import { getTeam } from '../domain/database';
 import {
-  loadYoutubePlayerMode,
-  parseYoutubeVideoId,
-  saveYoutubePlayerMode,
-  YOUTUBE_FRAME_BACK_HOTKEY,
-  YOUTUBE_FRAME_FORWARD_HOTKEY,
-  YOUTUBE_LAYOUT_SMALL_HOTKEY,
-  YOUTUBE_LAYOUT_TALL_HOTKEY,
-  YOUTUBE_PLAY_PAUSE_HOTKEY,
-  YOUTUBE_SEEK_BACK_HOTKEY,
-  YOUTUBE_SEEK_FORWARD_HOTKEY,
-  YOUTUBE_SEEK_SECONDS,
-  type YoutubePlayerMode,
-} from '../domain/youtube';
+  isYoutubeControlHotkey,
+  useYoutubeControls,
+} from '../hooks/useYoutubeControls';
+import { getTeam } from '../domain/database';
 import {
   areThrowDraftsComplete,
   deleteGameEvent,
@@ -70,7 +57,6 @@ import {
 import {
   buildPermanentPlayerHotkeys,
   findGamePlayerIdByHotkey,
-  GAME_ACTION_HOTKEYS,
   getTrackGameActionForKey,
 } from '../domain/hotkeys';
 import { useDatabase } from '../state/DatabaseContext';
@@ -122,22 +108,16 @@ export function GameEventsPage() {
 
   const autoCommittingRef = useRef(false);
   const autoFinishPromptedRef = useRef(false);
-  const youtubePlayerRef = useRef<YoutubePlayerHandle | null>(null);
-  const [youtubeMode, setYoutubeMode] = useState<YoutubePlayerMode>(() =>
-    loadYoutubePlayerMode(),
-  );
 
   const youtubeUrl = match?.YoutubeUrl?.trim() || '';
-  const hasYoutube = Boolean(parseYoutubeVideoId(youtubeUrl));
-
-  const setYoutubeModeAndPersist = useCallback((mode: YoutubePlayerMode) => {
-    setYoutubeMode(mode);
-    saveYoutubePlayerMode(mode);
-  }, []);
-
-  const readVideoOffset = useCallback((): number | null => {
-    return youtubePlayerRef.current?.getCurrentTime() ?? null;
-  }, []);
+  const {
+    hasYoutube,
+    mode: youtubeMode,
+    playerRef: youtubePlayerRef,
+    readVideoOffset,
+    seekToVideoOffset,
+    setModeAndPersist: setYoutubeModeAndPersist,
+  } = useYoutubeControls(youtubeUrl);
 
   const timeline = useMemo(
     () => buildTimelineEntries(data, gameId, matchId),
@@ -368,7 +348,7 @@ export function GameEventsPage() {
       entry?.videoOffsetSeconds !== null &&
       entry?.videoOffsetSeconds !== undefined
     ) {
-      youtubePlayerRef.current?.seekTo(entry.videoOffsetSeconds);
+      seekToVideoOffset(entry.videoOffsetSeconds);
     }
   };
 
@@ -441,67 +421,9 @@ export function GameEventsPage() {
 
   const showEndInsertMarker = !gameFinished && !insertBeforeEventId;
 
-  const handleYoutubeHotkey = useCallback(
-    (key: string, event: KeyboardEvent) => {
-      if (!hasYoutube || youtubeMode === 'hidden') return;
-
-      // If the embed somehow kept focus, pull it back so later keys stay on-page
-      const active = document.activeElement;
-      if (active instanceof HTMLIFrameElement) {
-        active.blur();
-      }
-
-      if (key === YOUTUBE_LAYOUT_SMALL_HOTKEY) {
-        event.preventDefault();
-        setYoutubeModeAndPersist('docked');
-        return;
-      }
-      if (key === YOUTUBE_LAYOUT_TALL_HOTKEY) {
-        event.preventDefault();
-        setYoutubeModeAndPersist('tall');
-        return;
-      }
-      if (key === YOUTUBE_PLAY_PAUSE_HOTKEY) {
-        event.preventDefault();
-        youtubePlayerRef.current?.togglePlayPause();
-        return;
-      }
-      if (key === YOUTUBE_SEEK_BACK_HOTKEY) {
-        event.preventDefault();
-        youtubePlayerRef.current?.seekBy(-YOUTUBE_SEEK_SECONDS);
-        return;
-      }
-      if (key === YOUTUBE_SEEK_FORWARD_HOTKEY) {
-        event.preventDefault();
-        youtubePlayerRef.current?.seekBy(YOUTUBE_SEEK_SECONDS);
-        return;
-      }
-      if (key === YOUTUBE_FRAME_BACK_HOTKEY || key === YOUTUBE_FRAME_FORWARD_HOTKEY) {
-        event.preventDefault();
-        if (youtubePlayerRef.current?.isPaused()) {
-          youtubePlayerRef.current.stepFrame(
-            key === YOUTUBE_FRAME_BACK_HOTKEY ? -1 : 1,
-          );
-        }
-      }
-    },
-    [hasYoutube, youtubeMode, setYoutubeModeAndPersist],
-  );
-
   const handleTrackGameHotkey = useCallback(
     (key: string, event: KeyboardEvent) => {
-      // Media / layout keys are handled by handleYoutubeHotkey (always active).
-      if (
-        key === YOUTUBE_LAYOUT_SMALL_HOTKEY ||
-        key === YOUTUBE_LAYOUT_TALL_HOTKEY ||
-        key === YOUTUBE_PLAY_PAUSE_HOTKEY ||
-        key === YOUTUBE_SEEK_BACK_HOTKEY ||
-        key === YOUTUBE_SEEK_FORWARD_HOTKEY ||
-        key === YOUTUBE_FRAME_BACK_HOTKEY ||
-        key === YOUTUBE_FRAME_FORWARD_HOTKEY
-      ) {
-        return;
-      }
+      if (isYoutubeControlHotkey(key)) return;
 
       if (key === 'Enter') {
         if (
@@ -581,8 +503,6 @@ export function GameEventsPage() {
     ],
   );
 
-  // Capture so keys work even when a button has focus; youtube always on while VOD present
-  useDocumentHotkeys(handleYoutubeHotkey, hasYoutube, { capture: true });
   useDocumentHotkeys(handleTrackGameHotkey, !gameCompleteIdle, { capture: true });
 
   const youtubeDocked = hasYoutube && youtubeMode === 'docked';
@@ -805,45 +725,7 @@ export function GameEventsPage() {
             ) : null}
 
             {!editorCompact ? (
-              <Stack
-                direction="row"
-                spacing={1}
-                className="sk-action-hotkeys"
-                sx={{ flexWrap: 'wrap', mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}
-              >
-                {GAME_ACTION_HOTKEYS.map((row) => (
-                  <Stack key={row.key} direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <HotkeyBadge hotkey={row.key} />
-                    <Typography variant="caption">{row.label}</Typography>
-                  </Stack>
-                ))}
-                {hasYoutube ? (
-                  <>
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <HotkeyBadge hotkey={YOUTUBE_LAYOUT_SMALL_HOTKEY} />
-                      <Typography variant="caption">Video small</Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <HotkeyBadge hotkey={YOUTUBE_LAYOUT_TALL_HOTKEY} />
-                      <Typography variant="caption">Video tall</Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <HotkeyBadge hotkey="Space" />
-                      <Typography variant="caption">Play/pause</Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <HotkeyBadge hotkey="←" />
-                      <HotkeyBadge hotkey="→" />
-                      <Typography variant="caption">Seek 5s</Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                      <HotkeyBadge hotkey={YOUTUBE_FRAME_BACK_HOTKEY} />
-                      <HotkeyBadge hotkey={YOUTUBE_FRAME_FORWARD_HOTKEY} />
-                      <Typography variant="caption">Frame step (paused)</Typography>
-                    </Stack>
-                  </>
-                ) : null}
-              </Stack>
+              <TrackGameHotkeyHints hasYoutube={hasYoutube} />
             ) : null}
           </EditorDensityProvider>
         )}
