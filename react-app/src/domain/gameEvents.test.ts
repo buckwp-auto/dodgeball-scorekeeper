@@ -13,9 +13,8 @@ import {
   ensureGameStartEvent,
   getGameEventType,
   getGameStartEvent,
+  persistFinishGameEvent,
   persistThrowGameEvent,
-  saveFinishGameEvent,
-  saveThrowGameEvent,
   setGameEventVideoOffset,
 } from './gameEvents';
 
@@ -72,15 +71,18 @@ describe('game event recording', () => {
   it('records throw and finish for statistics', () => {
     const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
 
-    saveThrowGameEvent(data, gameId, match.Id, [
+    persistThrowGameEvent(data, gameId, match.Id, [
       {
         throwerGamePlayerId: homeGp.Id,
         targetGamePlayerId: awayGp.Id,
         resultId: ThrowResult.Hit,
+        recoveredId: undefined,
         deflections: [],
       },
     ]);
-    saveFinishGameEvent(data, gameId, GameEventFinishResult.WinHome);
+    persistFinishGameEvent(data, gameId, {
+      resultId: GameEventFinishResult.WinHome,
+    });
 
     const csv = getStatisticsSummaryCsvText(data, [match.Id]);
     expect(csv).toContain('"Home Hawks","Alex"');

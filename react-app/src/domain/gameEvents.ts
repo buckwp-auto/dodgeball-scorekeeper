@@ -560,30 +560,6 @@ export function persistFinishGameEvent(
   return gameEventId;
 }
 
-/** @deprecated use persistThrowGameEvent */
-export function saveThrowGameEvent(
-  data: DatabaseDto,
-  gameId: Guid,
-  matchId: Guid,
-  throws: Array<Omit<ThrowDraft, 'resultId' | 'recoveredId'> & { resultId: ThrowResult }>,
-): Guid {
-  return persistThrowGameEvent(
-    data,
-    gameId,
-    matchId,
-    throws.map((row) => ({ ...row, resultId: row.resultId, recoveredId: undefined })),
-  );
-}
-
-/** @deprecated use persistFinishGameEvent */
-export function saveFinishGameEvent(
-  data: DatabaseDto,
-  gameId: Guid,
-  resultId: GameEventFinishResult,
-): Guid {
-  return persistFinishGameEvent(data, gameId, { resultId });
-}
-
 export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {
   if (getGameEventType(data, gameEventId) === 'start') {
     throw new Error('Cannot delete the game start event');
