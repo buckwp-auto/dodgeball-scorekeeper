@@ -81,6 +81,14 @@ function loadStoredLeagueId(): string | null {
   }
 }
 
+function hasDirtyChanges(plan: FlushPlan): boolean {
+  return (
+    plan.roster ||
+    plan.matchIds.length > 0 ||
+    plan.removedMatchIds.length > 0
+  );
+}
+
 export function LeagueProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [leagues, setLeagues] = useState<LeagueMeta[]>([]);
@@ -220,11 +228,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       if (!fb || !user || !leagueId) return;
 
       const plan = dirtyRef.current;
-      if (
-        !plan.roster &&
-        plan.matchIds.length === 0 &&
-        plan.removedMatchIds.length === 0
-      ) {
+      if (!hasDirtyChanges(plan)) {
         setSyncStatus('saved');
         return;
       }
@@ -299,12 +303,9 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         ...new Set([...dirty.removedMatchIds, ...diff.removedMatchIds]),
       ];
       dirtyRef.current = dirty;
-      const hasDirty =
-        dirty.roster ||
-        dirty.matchIds.length > 0 ||
-        dirty.removedMatchIds.length > 0;
-      setIsDirty(hasDirty);
-      if (!hasDirty) return;
+      const dirtyChanges = hasDirtyChanges(dirty);
+      setIsDirty(dirtyChanges);
+      if (!dirtyChanges) return;
       setSyncStatus('unsaved');
       scheduleFlush(next, gainedGameFinish(prev, next));
     },
@@ -380,10 +381,8 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     latestDataRef.current = null;
     dirtyRef.current = { roster: false, matchIds: [], removedMatchIds: [] };
     setIsDirty(false);
-    setSyncStatus(user ? 'need-auth' : 'local');
-    // need-auth is wrong when signed in but local — use local
     setSyncStatus('local');
-  }, [flushNow, isDirty, user]);
+  }, [flushNow, isDirty]);
 
   // Poll remote while connected and clean
   useEffect(() => {
@@ -393,13 +392,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
     const tick = async () => {
       if (document.visibilityState !== 'visible') return;
-      if (
-        dirtyRef.current.roster ||
-        dirtyRef.current.matchIds.length > 0 ||
-        dirtyRef.current.removedMatchIds.length > 0
-      ) {
-        return;
-      }
+      if (hasDirtyChanges(dirtyRef.current)) return;
       try {
         const { data, revisions } = await loadLeagueDatabase(
           fb.db,
@@ -432,13 +425,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     const onHide = () => {
       const latest = latestDataRef.current;
       if (!latest || !activeLeagueId) return;
-      if (
-        !dirtyRef.current.roster &&
-        dirtyRef.current.matchIds.length === 0 &&
-        dirtyRef.current.removedMatchIds.length === 0
-      ) {
-        return;
-      }
+      if (!hasDirtyChanges(dirtyRef.current)) return;
       void flushNow(latest);
     };
     const onVisibility = () => {

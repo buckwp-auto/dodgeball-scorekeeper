@@ -61,15 +61,4 @@ export class CountsBuilder<TKey extends string | number> extends StatisticAggreg
   }
 }
 
-export class AmountsBuilder<TKey extends string | number> extends StatisticAggregatesBuilder<
-  TKey,
-  number
-> {
-  protected combine(left: number, right: number): number {
-    return left + right;
-  }
-
-  protected zero(): number {
-    return 0;
-  }
-}
+export { CountsBuilder as AmountsBuilder };

@@ -1,6 +1,6 @@
 import { newIdTimestamp } from './id';
 import type { DatabaseDto, Guid, MatchPlayerRow, MatchRow, PlayerRow } from './types';
-import { getMatchName, getPlayersForTeam } from './database';
+import { getPlayersForTeam } from './database';
 
 function table<T>(data: DatabaseDto, name: string): T[] {
   return data.Tables[name] as T[];
@@ -129,9 +129,7 @@ export function getGameName(data: DatabaseDto, matchId: Guid, gameId: Guid): str
 }
 
 export function addGame(data: DatabaseDto, matchId: Guid): Guid {
-  const match = getMatchById(data, matchId);
-  if (!match) throw new Error('Match not found');
-  const matchName = getMatchName(data, match);
+  if (!getMatchById(data, matchId)) throw new Error('Match not found');
   const existing = table<{ MatchId: Guid; Ordinal: number }>(data, 'MatchEvent').filter(
     (row) => row.MatchId === matchId,
   );
@@ -165,7 +163,6 @@ export function addGame(data: DatabaseDto, matchId: Guid): Guid {
   });
   pushRow(data, 'GameEventStart', { GameEventId: startEventId });
 
-  void matchName;
   return gameId;
 }
 
