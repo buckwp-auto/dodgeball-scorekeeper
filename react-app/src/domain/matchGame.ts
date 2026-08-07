@@ -155,6 +155,16 @@ export function addGame(data: DatabaseDto, matchId: Guid): Guid {
     GameId: gameId,
   });
 
+  // Seed immutable game-start event (ordinal 1) for video timestamping
+  const startEventId = newIdTimestamp();
+  pushRow(data, 'GameEvent', {
+    Id: startEventId,
+    GameId: gameId,
+    Ordinal: 1,
+    VideoOffsetSeconds: null,
+  });
+  pushRow(data, 'GameEventStart', { GameEventId: startEventId });
+
   void matchName;
   return gameId;
 }

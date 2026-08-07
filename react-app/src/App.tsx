@@ -18,6 +18,8 @@ import { OverviewPage } from './pages/OverviewPage';
 import { TeamPage } from './pages/TeamPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { DatabaseProvider } from './state/DatabaseContext';
+import { AuthProvider } from './state/AuthContext';
+import { LeagueProvider } from './state/LeagueContext';
 
 const drawerWidth = 200;
 
@@ -62,45 +64,49 @@ function AppNav() {
 
 export function App() {
   return (
-    <DatabaseProvider>
-      <Box className="sk-layout" sx={{ display: 'flex', minHeight: '100vh' }}>
-        <Drawer
-          variant="permanent"
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': {
-              width: drawerWidth,
-              boxSizing: 'border-box',
-            },
-          }}
-        >
-          <Toolbar>
-            <Typography variant="h6" color="primary" noWrap>
-              Scorekeeper
-            </Typography>
-          </Toolbar>
-          <Box className="sk-menu-content" sx={{ px: 1 }}>
-            <AppNav />
+    <AuthProvider>
+      <LeagueProvider>
+        <DatabaseProvider>
+          <Box className="sk-layout" sx={{ display: 'flex', minHeight: '100vh' }}>
+            <Drawer
+              variant="permanent"
+              sx={{
+                width: drawerWidth,
+                flexShrink: 0,
+                '& .MuiDrawer-paper': {
+                  width: drawerWidth,
+                  boxSizing: 'border-box',
+                },
+              }}
+            >
+              <Toolbar>
+                <Typography variant="h6" color="primary" noWrap>
+                  Scorekeeper
+                </Typography>
+              </Toolbar>
+              <Box className="sk-menu-content" sx={{ px: 1 }}>
+                <AppNav />
+              </Box>
+            </Drawer>
+            <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+              <Routes>
+                <Route path="/" element={<OverviewPage />} />
+                <Route path="/teams" element={<TeamsPage />} />
+                <Route path="/teams/:teamId" element={<TeamPage />} />
+                <Route path="/matches" element={<MatchesPage />} />
+                <Route path="/matches/:matchId" element={<MatchPage />} />
+                <Route path="/matches/:matchId/events" element={<MatchEventsPage />} />
+                <Route path="/matches/:matchId/games/:gameId" element={<GamePage />} />
+                <Route
+                  path="/matches/:matchId/games/:gameId/events"
+                  element={<GameEventsPage />}
+                />
+                <Route path="/history" element={<HistoryPage />} />
+              </Routes>
+            </Box>
           </Box>
-        </Drawer>
-        <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-          <Routes>
-            <Route path="/" element={<OverviewPage />} />
-            <Route path="/teams" element={<TeamsPage />} />
-            <Route path="/teams/:teamId" element={<TeamPage />} />
-            <Route path="/matches" element={<MatchesPage />} />
-            <Route path="/matches/:matchId" element={<MatchPage />} />
-            <Route path="/matches/:matchId/events" element={<MatchEventsPage />} />
-            <Route path="/matches/:matchId/games/:gameId" element={<GamePage />} />
-            <Route
-              path="/matches/:matchId/games/:gameId/events"
-              element={<GameEventsPage />}
-            />
-            <Route path="/history" element={<HistoryPage />} />
-          </Routes>
-        </Box>
-      </Box>
-    </DatabaseProvider>
+        </DatabaseProvider>
+      </LeagueProvider>
+    </AuthProvider>
   );
 }

@@ -30,7 +30,7 @@ export type GameEventRow = {
   /** Seconds into the match YouTube video when this event was recorded. */
   VideoOffsetSeconds?: number | null;
 };
-export type GameEventType = 'throw' | 'error' | 'finish';
+export type GameEventType = 'start' | 'throw' | 'error' | 'finish';
 
 export type GamePlayerInfo = {
   gamePlayerId: Guid;
@@ -145,6 +145,9 @@ export function gameHasFinishEvent(data: DatabaseDto, gameId: Guid): boolean {
 }
 
 export function getGameEventType(data: DatabaseDto, gameEventId: Guid): GameEventType | null {
+  if (table(data, 'GameEventStart').some((row) => (row as { GameEventId: Guid }).GameEventId === gameEventId)) {
+    return 'start';
+  }
   if (table(data, 'GameEventThrow').some((row) => (row as { GameEventId: Guid }).GameEventId === gameEventId)) {
     return 'throw';
   }
@@ -155,6 +158,50 @@ export function getGameEventType(data: DatabaseDto, gameEventId: Guid): GameEven
     return 'finish';
   }
   return null;
+}
+
+export function getGameStartEvent(data: DatabaseDto, gameId: Guid): GameEventRow | null {
+  return (
+    getGameEvents(data, gameId).find((event) => getGameEventType(data, event.Id) === 'start') ??
+    null
+  );
+}
+
+/**
+ * Ensure every game has a Game Start event at ordinal 1.
+ * Safe to call repeatedly (idempotent).
+ */
+export function ensureGameStartEvent(data: DatabaseDto, gameId: Guid): Guid {
+  const existing = getGameStartEvent(data, gameId);
+  if (existing) return existing.Id;
+
+  shiftOrdinalsFrom(data, gameId, 1, 1);
+  const gameEventId = newIdTimestamp();
+  pushRow(data, 'GameEvent', {
+    Id: gameEventId,
+    GameId: gameId,
+    Ordinal: 1,
+    VideoOffsetSeconds: null,
+  });
+  pushRow(data, 'GameEventStart', { GameEventId: gameEventId });
+  return gameEventId;
+}
+
+/** Set or clear an event's video timestamp. Syncs Game.VideoStartSeconds for start events. */
+export function setGameEventVideoOffset(
+  data: DatabaseDto,
+  gameEventId: Guid,
+  videoOffsetSeconds: number | null,
+): void {
+  const row = table<GameEventRow>(data, 'GameEvent').find((entry) => entry.Id === gameEventId);
+  if (!row) return;
+  row.VideoOffsetSeconds = videoOffsetSeconds;
+  if (getGameEventType(data, gameEventId) === 'start') {
+    const game = table<{ Id: Guid; VideoStartSeconds?: number | null }>(data, 'Game').find(
+      (entry) => entry.Id === row.GameId,
+    );
+    if (game) game.VideoStartSeconds = videoOffsetSeconds;
+  }
 }
 
 export function getGamePlayerInfos(
@@ -247,6 +294,11 @@ function allocateOrdinal(
   }
   const anchor = table<GameEventRow>(data, 'GameEvent').find((row) => row.Id === insertBeforeEventId);
   if (!anchor) throw new Error('Insert anchor not found');
+  // Never insert before game start — place immediately after it instead
+  if (getGameEventType(data, anchor.Id) === 'start') {
+    shiftOrdinalsFrom(data, gameId, anchor.Ordinal + 1, 1);
+    return anchor.Ordinal + 1;
+  }
   shiftOrdinalsFrom(data, gameId, anchor.Ordinal, 1);
   return anchor.Ordinal;
 }
@@ -533,6 +585,9 @@ export function saveFinishGameEvent(
 }
 
 export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {
+  if (getGameEventType(data, gameEventId) === 'start') {
+    throw new Error('Cannot delete the game start event');
+  }
   const gameEvent = table<GameEventRow>(data, 'GameEvent').find(
     (row) => row.Id === gameEventId,
   );
@@ -546,6 +601,9 @@ export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
   );
   data.Tables.GameEventFinish = table(data, 'GameEventFinish').filter(
+    (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
+  );
+  data.Tables.GameEventStart = table(data, 'GameEventStart').filter(
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
   );
   data.Tables.GameEvent = table<GameEventRow>(data, 'GameEvent').filter(
@@ -583,12 +641,13 @@ export type TimelineAction =
   | { kind: 'throw'; resultId: ThrowResult }
   | { kind: 'deflection'; resultId: DeflectionResult }
   | { kind: 'error' }
-  | { kind: 'finish' };
+  | { kind: 'finish' }
+  | { kind: 'start' };
 
 export type TimelineRow = {
   segments: TimelineSegment[];
   tone: TimelineRowTone;
-  role: 'throw' | 'deflection' | 'error' | 'finish';
+  role: 'throw' | 'deflection' | 'error' | 'finish' | 'start';
   /** Action badge(s) shown on the left of the row. */
   actions: TimelineAction[];
 };
@@ -679,6 +738,21 @@ export function buildTimelineEntries(
 
   return getGameEventsNewestFirst(data, gameId).map((event) => {
     const type = getGameEventType(data, event.Id)!;
+    if (type === 'start') {
+      return {
+        id: event.Id,
+        type,
+        videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
+        rows: [
+          {
+            role: 'start',
+            tone: 'neutral',
+            actions: [{ kind: 'start' }],
+            segments: [{ kind: 'text', text: 'Game start' }],
+          },
+        ],
+      };
+    }
     if (type === 'throw') {
       const drafts = loadThrowDraftsFromEvent(data, event.Id);
       return {

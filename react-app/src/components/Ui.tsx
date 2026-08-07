@@ -17,6 +17,7 @@ type FormOneLineProps = {
   onValueChange: (value: string) => void;
   onSubmit: () => void;
   canSubmit: boolean;
+  maxLength?: number;
 };
 
 export function FormOneLine({
@@ -26,6 +27,7 @@ export function FormOneLine({
   onValueChange,
   onSubmit,
   canSubmit,
+  maxLength,
 }: FormOneLineProps) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -54,6 +56,11 @@ export function FormOneLine({
           size="small"
           fullWidth
           value={value}
+          slotProps={
+            maxLength != null
+              ? { htmlInput: { maxLength } }
+              : undefined
+          }
           onChange={(event) => onValueChange(event.target.value)}
         />
       </Box>

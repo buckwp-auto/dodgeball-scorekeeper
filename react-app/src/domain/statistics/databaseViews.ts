@@ -32,6 +32,7 @@ export type GameEventErrorRow = {
   OffenseId: number;
 };
 export type GameEventFinishRow = { GameEventId: Guid; ResultId: number };
+export type GameEventStartRow = { GameEventId: Guid };
 export type ThrowRow = {
   Id: Guid;
   GameEventThrowId: Guid;

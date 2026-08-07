@@ -76,6 +76,30 @@ export function formatVideoTime(seconds: number | null | undefined): string {
 }
 
 /**
+ * Parse m:ss, h:mm:ss, or plain seconds into a non-negative number.
+ * Empty / invalid → null.
+ */
+export function parseVideoTime(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    const n = Number(trimmed);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  const parts = trimmed.split(':');
+  if (parts.length < 2 || parts.length > 3) return null;
+  if (!parts.every((part) => /^\d+$/.test(part))) return null;
+  const nums = parts.map((part) => Number(part));
+  let total = 0;
+  if (nums.length === 3) {
+    total = nums[0]! * 3600 + nums[1]! * 60 + nums[2]!;
+  } else {
+    total = nums[0]! * 60 + nums[1]!;
+  }
+  return Number.isFinite(total) && total >= 0 ? total : null;
+}
+
+/**
  * tall = full-width large player above editor+timeline
  * docked = player centered in editor column; timeline rises beside it
  * hidden = scoring only

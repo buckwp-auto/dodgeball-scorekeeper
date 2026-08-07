@@ -1,5 +1,12 @@
 import { ENTITY_TABLE_NAMES } from './tableNames';
 import { newIdTimestamp } from './id';
+import {
+  MAX_NOTES,
+  MAX_PLAYER_NAME,
+  MAX_TEAM_NAME,
+  assertMaxLength,
+  clampName,
+} from './limits';
 import type { DatabaseDto, Guid, MatchRow, PlayerRow, TeamPlayerRow, TeamRow } from './types';
 
 export const STORAGE_KEY = 'SCOREKEEPER_DATA';
@@ -85,8 +92,9 @@ export function getMatches(data: DatabaseDto): { match: MatchRow; matchName: str
 }
 
 export function addTeam(data: DatabaseDto, teamName: string): TeamRow {
-  const name = teamName.trim();
+  const name = clampName(teamName, MAX_TEAM_NAME);
   if (!name) throw new Error('Team name required');
+  assertMaxLength(name, MAX_TEAM_NAME, 'Team name');
   return pushRow(data, 'Team', {
     Id: newIdTimestamp(),
     Name: name,
@@ -99,8 +107,9 @@ export function addPlayer(
   teamId: Guid,
   playerName: string,
 ): PlayerRow {
-  const name = playerName.trim();
+  const name = clampName(playerName, MAX_PLAYER_NAME);
   if (!name) throw new Error('Player name required');
+  assertMaxLength(name, MAX_PLAYER_NAME, 'Player name');
   const team = getTeam(data, teamId);
   if (!team) throw new Error('Team not found');
   const player = pushRow(data, 'Player', {
@@ -114,6 +123,100 @@ export function addPlayer(
     PlayerId: player.Id,
   });
   return player;
+}
+
+export function renameTeam(
+  data: DatabaseDto,
+  teamId: Guid,
+  teamName: string,
+): TeamRow {
+  const team = getTeam(data, teamId);
+  if (!team) throw new Error('Team not found');
+  const name = clampName(teamName, MAX_TEAM_NAME);
+  if (!name) throw new Error('Team name required');
+  assertMaxLength(name, MAX_TEAM_NAME, 'Team name');
+  team.Name = name;
+  return team;
+}
+
+export function renamePlayer(
+  data: DatabaseDto,
+  playerId: Guid,
+  playerName: string,
+): PlayerRow {
+  const player = table<PlayerRow>(data, 'Player').find(
+    (row) => row.Id === playerId,
+  );
+  if (!player) throw new Error('Player not found');
+  const name = clampName(playerName, MAX_PLAYER_NAME);
+  if (!name) throw new Error('Player name required');
+  assertMaxLength(name, MAX_PLAYER_NAME, 'Player name');
+  player.Name = name;
+  return player;
+}
+
+export function teamIsUsedInMatches(data: DatabaseDto, teamId: Guid): boolean {
+  return table<MatchRow>(data, 'Match').some(
+    (match) => match.TeamIdHome === teamId || match.TeamIdAway === teamId,
+  );
+}
+
+export function playerIsUsedInMatches(
+  data: DatabaseDto,
+  playerId: Guid,
+): boolean {
+  return table<{ PlayerId: Guid }>(data, 'MatchPlayer').some(
+    (row) => row.PlayerId === playerId,
+  );
+}
+
+/** Removes a team and its roster links/players. Fails if the team is in a match. */
+export function deleteTeam(data: DatabaseDto, teamId: Guid): void {
+  const team = getTeam(data, teamId);
+  if (!team) throw new Error('Team not found');
+  if (teamIsUsedInMatches(data, teamId)) {
+    throw new Error('Cannot delete a team that is used in a match');
+  }
+
+  const teamPlayers = table<TeamPlayerRow>(data, 'TeamPlayer').filter(
+    (row) => row.TeamId === teamId,
+  );
+  const playerIds = new Set(teamPlayers.map((row) => row.PlayerId));
+
+  data.Tables.Team = table<TeamRow>(data, 'Team').filter(
+    (row) => row.Id !== teamId,
+  );
+  data.Tables.TeamPlayer = table<TeamPlayerRow>(data, 'TeamPlayer').filter(
+    (row) => row.TeamId !== teamId,
+  );
+  data.Tables.Player = table<PlayerRow>(data, 'Player').filter(
+    (row) => !playerIds.has(row.Id),
+  );
+}
+
+/** Removes a player and team link. Fails if the player is on a match roster. */
+export function deletePlayer(data: DatabaseDto, playerId: Guid): void {
+  const player = table<PlayerRow>(data, 'Player').find(
+    (row) => row.Id === playerId,
+  );
+  if (!player) throw new Error('Player not found');
+  if (playerIsUsedInMatches(data, playerId)) {
+    throw new Error('Cannot delete a player that is on a match roster');
+  }
+
+  data.Tables.Player = table<PlayerRow>(data, 'Player').filter(
+    (row) => row.Id !== playerId,
+  );
+  data.Tables.TeamPlayer = table<TeamPlayerRow>(data, 'TeamPlayer').filter(
+    (row) => row.PlayerId !== playerId,
+  );
+}
+
+export function clampNotes(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, MAX_NOTES);
 }
 
 export function addMatch(

@@ -10,9 +10,13 @@ import {
 import { getStatisticsSummaryCsvText } from './statistics/statisticsFormatService';
 import {
   buildTimelineEntries,
+  ensureGameStartEvent,
+  getGameEventType,
+  getGameStartEvent,
   persistThrowGameEvent,
   saveFinishGameEvent,
   saveThrowGameEvent,
+  setGameEventVideoOffset,
 } from './gameEvents';
 
 function setupOneGameMatch(extraHome = false) {
@@ -109,6 +113,63 @@ describe('game event recording', () => {
 
     const [entry] = buildTimelineEntries(data, gameId, match.Id);
     expect(entry.videoOffsetSeconds).toBe(125.4);
+  });
+
+  it('seeds a game start event on addGame and keeps it editable', () => {
+    const { data, gameId } = setupOneGameMatch();
+    const start = getGameStartEvent(data, gameId);
+    expect(start).not.toBeNull();
+    expect(start!.Ordinal).toBe(1);
+    expect(getGameEventType(data, start!.Id)).toBe('start');
+
+    setGameEventVideoOffset(data, start!.Id, 42);
+    expect(getGameStartEvent(data, gameId)?.VideoOffsetSeconds).toBe(42);
+    const game = (data.Tables.Game as { Id: string; VideoStartSeconds?: number }[]).find(
+      (row) => row.Id === gameId,
+    );
+    expect(game?.VideoStartSeconds).toBe(42);
+
+    // Idempotent ensure
+    const again = ensureGameStartEvent(data, gameId);
+    expect(again).toBe(start!.Id);
+  });
+
+  it('does not overwrite video offset on throw edit when omitted', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const eventId = persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 10 },
+    );
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Miss,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { gameEventId: eventId },
+    );
+    const row = (data.Tables.GameEvent as { Id: string; VideoOffsetSeconds?: number }[]).find(
+      (entry) => entry.Id === eventId,
+    );
+    expect(row?.VideoOffsetSeconds).toBe(10);
   });
 });
 

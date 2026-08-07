@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   formatVideoTime,
   loadYoutubePlayerMode,
+  parseVideoTime,
   parseYoutubeVideoId,
   saveYoutubePlayerMode,
   YOUTUBE_FRAME_SECONDS,
@@ -31,6 +32,16 @@ describe('formatVideoTime', () => {
     expect(formatVideoTime(0)).toBe('0:00');
     expect(formatVideoTime(62)).toBe('1:02');
     expect(formatVideoTime(3661)).toBe('1:01:01');
+  });
+});
+
+describe('parseVideoTime', () => {
+  it('parses m:ss, h:mm:ss, and plain seconds', () => {
+    expect(parseVideoTime('1:02')).toBe(62);
+    expect(parseVideoTime('1:01:01')).toBe(3661);
+    expect(parseVideoTime('90')).toBe(90);
+    expect(parseVideoTime('')).toBeNull();
+    expect(parseVideoTime('nope')).toBeNull();
   });
 });
 

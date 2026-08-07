@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -12,9 +13,13 @@ import {
   addPlayer as addPlayerOp,
   addTeam as addTeamOp,
   createEmptyDatabase,
+  deletePlayer as deletePlayerOp,
+  deleteTeam as deleteTeamOp,
   getMatchName,
   loadFromSession,
   normalizeDatabase,
+  renamePlayer as renamePlayerOp,
+  renameTeam as renameTeamOp,
   saveToSession,
   serializeDatabase,
 } from '../domain/database';
@@ -24,12 +29,17 @@ import {
 } from '../domain/matchGame';
 import { autoSelectMatchRoster } from '../domain/rosterAutoSelect';
 import type { DatabaseDto, Guid, HistoryCommit } from '../domain/types';
+import { useLeague } from './LeagueContext';
 
 type DatabaseContextValue = {
   data: DatabaseDto;
   commits: HistoryCommit[];
   addTeam: (name: string) => void;
   addPlayer: (teamId: Guid, name: string) => void;
+  renameTeam: (teamId: Guid, name: string) => void;
+  renamePlayer: (playerId: Guid, name: string) => void;
+  deleteTeam: (teamId: Guid) => void;
+  deletePlayer: (playerId: Guid) => void;
   addMatch: (teamIdHome: Guid, teamIdAway: Guid) => Guid;
   toggleMatchPlayer: (matchId: Guid, playerId: Guid, teamHome: boolean) => void;
   toggleGamePlayer: (matchId: Guid, gameId: Guid, playerId: Guid) => void;
@@ -55,6 +65,7 @@ function pushCommit(
 }
 
 export function DatabaseProvider({ children }: { children: ReactNode }) {
+  const { notifyLocalChange, activeLeagueId } = useLeague();
   const [data, setData] = useState<DatabaseDto>(initialData);
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -65,10 +76,35 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       : [{ message: 'Initialized data.', timestamp: new Date().toISOString() }],
   );
 
-  const persist = useCallback((next: DatabaseDto) => {
-    dataRef.current = next;
-    setData(next);
-    saveToSession(next);
+  const persist = useCallback(
+    (next: DatabaseDto, prev: DatabaseDto | null) => {
+      dataRef.current = next;
+      setData(next);
+      saveToSession(next);
+      if (prev) {
+        notifyLocalChange(prev, next);
+      }
+    },
+    [notifyLocalChange],
+  );
+
+  useEffect(() => {
+    const onRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<DatabaseDto>).detail;
+      if (!detail) return;
+      if (serializeDatabase(detail) === serializeDatabase(dataRef.current)) {
+        return;
+      }
+      dataRef.current = detail;
+      setData(detail);
+      saveToSession(detail);
+      setCommits((prevCommits) =>
+        pushCommit(prevCommits, 'Synced from cloud.'),
+      );
+    };
+    window.addEventListener('scorekeeper-cloud-refresh', onRefresh);
+    return () =>
+      window.removeEventListener('scorekeeper-cloud-refresh', onRefresh);
   }, []);
 
   const mutate = useCallback(
@@ -84,7 +120,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       if (serializeDatabase(prev) === serializeDatabase(next)) {
         return result;
       }
-      persist(next);
+      persist(next, prev);
       const message =
         typeof commitMessage === 'function'
           ? commitMessage(result)
@@ -119,6 +155,60 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         },
         ({ playerName, teamName }) =>
           `Added player (${playerName}) to team (${teamName}).`,
+      );
+    },
+    [mutate],
+  );
+
+  const renameTeam = useCallback(
+    (teamId: Guid, name: string) => {
+      mutate(
+        (draft) => renameTeamOp(draft, teamId, name).Name,
+        (teamName) => `Renamed team to (${teamName}).`,
+      );
+    },
+    [mutate],
+  );
+
+  const renamePlayer = useCallback(
+    (playerId: Guid, name: string) => {
+      mutate(
+        (draft) => renamePlayerOp(draft, playerId, name).Name,
+        (playerName) => `Renamed player to (${playerName}).`,
+      );
+    },
+    [mutate],
+  );
+
+  const deleteTeam = useCallback(
+    (teamId: Guid) => {
+      mutate(
+        (draft) => {
+          const team = draft.Tables.Team.find(
+            (row) => (row as { Id: Guid }).Id === teamId,
+          ) as { Name: string } | undefined;
+          const name = team?.Name ?? '?';
+          deleteTeamOp(draft, teamId);
+          return name;
+        },
+        (teamName) => `Deleted team (${teamName}).`,
+      );
+    },
+    [mutate],
+  );
+
+  const deletePlayer = useCallback(
+    (playerId: Guid) => {
+      mutate(
+        (draft) => {
+          const player = draft.Tables.Player.find(
+            (row) => (row as { Id: Guid }).Id === playerId,
+          ) as { Name: string } | undefined;
+          const name = player?.Name ?? '?';
+          deletePlayerOp(draft, playerId);
+          return name;
+        },
+        (playerName) => `Deleted player (${playerName}).`,
       );
     },
     [mutate],
@@ -159,11 +249,12 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
 
   const replaceDatabase = useCallback(
     (raw: unknown) => {
+      const prev = dataRef.current;
       const next = normalizeDatabase(raw);
-      persist(next);
-      setCommits((prev) => pushCommit(prev, 'Replaced data.'));
+      persist(next, activeLeagueId ? prev : null);
+      setCommits((prevCommits) => pushCommit(prevCommits, 'Replaced data.'));
     },
-    [persist],
+    [persist, activeLeagueId],
   );
 
   const exportBytes = useCallback(() => {
@@ -176,6 +267,10 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       commits,
       addTeam,
       addPlayer,
+      renameTeam,
+      renamePlayer,
+      deleteTeam,
+      deletePlayer,
       addMatch,
       toggleMatchPlayer,
       toggleGamePlayer,
@@ -188,6 +283,10 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       commits,
       addTeam,
       addPlayer,
+      renameTeam,
+      renamePlayer,
+      deleteTeam,
+      deletePlayer,
       addMatch,
       toggleMatchPlayer,
       toggleGamePlayer,

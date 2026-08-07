@@ -4,6 +4,7 @@ import DoNotTouchIcon from '@mui/icons-material/DoNotTouch';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import FrontHandIcon from '@mui/icons-material/FrontHand';
 import GppBadIcon from '@mui/icons-material/GppBad';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import ReportIcon from '@mui/icons-material/Report';
 import ShieldIcon from '@mui/icons-material/Shield';
@@ -52,5 +53,7 @@ export function getTimelineActionIcon(action: TimelineAction): SvgIconComponent 
       return ReportIcon;
     case 'finish':
       return EmojiEventsIcon;
+    case 'start':
+      return PlayArrowIcon;
   }
 }

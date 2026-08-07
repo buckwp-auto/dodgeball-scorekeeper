@@ -10,6 +10,7 @@ import {
 } from '../components/trackGame/ThrowEditor';
 import { ErrorEditor } from '../components/trackGame/ErrorEditor';
 import { FinishEditor } from '../components/trackGame/FinishEditor';
+import { StartEventEditor } from '../components/trackGame/StartEventEditor';
 import { GameEventsTimeline } from '../components/trackGame/GameEventsTimeline';
 import { EditorDensityProvider } from '../components/trackGame/EditorGrid';
 import {
@@ -40,6 +41,7 @@ import {
   emptyErrorDraft,
   emptyFinishDraft,
   emptyThrowDraft,
+  ensureGameStartEvent,
   gameHasFinishEvent,
   getGameEventType,
   getGameEvents,
@@ -54,6 +56,7 @@ import {
   persistErrorGameEvent,
   persistFinishGameEvent,
   persistThrowGameEvent,
+  setGameEventVideoOffset,
   type ErrorDraft,
   type FinishDraft,
   type GameEventType,
@@ -72,13 +75,26 @@ import {
 } from '../domain/hotkeys';
 import { useDatabase } from '../state/DatabaseContext';
 
-type TabKey = GameEventType;
+type TabKey = Exclude<GameEventType, 'start'>;
 
 const emptyThrowSnapshot = () => JSON.stringify([emptyThrowDraft()]);
 
 export function GameEventsPage() {
   const { matchId = '', gameId = '' } = useParams();
   const { data, mutate } = useDatabase();
+
+  // Backfill Game Start for older saves that predate the event type
+  useEffect(() => {
+    if (!gameId) return;
+    const hasStart = getGameEvents(data, gameId).some(
+      (event) => getGameEventType(data, event.Id) === 'start',
+    );
+    if (hasStart) return;
+    mutate((draft) => {
+      ensureGameStartEvent(draft, gameId);
+      return null;
+    }, 'Ensured game start event.');
+  }, [gameId, data, mutate]);
 
   const match = getMatchById(data, matchId);
   const homeTeam = match ? getTeam(data, match.TeamIdHome) : undefined;
@@ -145,25 +161,31 @@ export function GameEventsPage() {
   const lockedTab = effectiveSelectedId
     ? getGameEventType(data, effectiveSelectedId)
     : null;
-  const visibleTab = lockedTab ?? activeTab;
+  const visibleTab: GameEventType = lockedTab ?? activeTab;
 
   const currentDraftPayload = useMemo(() => {
     if (visibleTab === 'throw') return throwDrafts;
     if (visibleTab === 'error') return errorDraft;
-    return finishDraft;
+    if (visibleTab === 'finish') return finishDraft;
+    return null;
   }, [visibleTab, throwDrafts, errorDraft, finishDraft]);
 
   const isComplete =
-    visibleTab === 'throw'
-      ? areThrowDraftsComplete(throwDrafts)
-      : visibleTab === 'error'
-        ? isErrorDraftComplete(errorDraft)
-        : isFinishDraftComplete(finishDraft);
+    visibleTab === 'start'
+      ? false
+      : visibleTab === 'throw'
+        ? areThrowDraftsComplete(throwDrafts)
+        : visibleTab === 'error'
+          ? isErrorDraftComplete(errorDraft)
+          : isFinishDraftComplete(finishDraft);
 
-  const isDirty = !draftsEqual(
-    currentDraftPayload,
-    JSON.parse(savedSnapshot) as typeof currentDraftPayload,
-  );
+  const isDirty =
+    visibleTab === 'start' || currentDraftPayload === null
+      ? false
+      : !draftsEqual(
+          currentDraftPayload,
+          JSON.parse(savedSnapshot) as typeof currentDraftPayload,
+        );
 
   const loadDraftsForSelection = useCallback(
     (eventId: string | null) => {
@@ -188,6 +210,8 @@ export function GameEventsPage() {
         const draft = loadFinishDraftFromEvent(data, eventId);
         setFinishDraft(draft);
         setSavedSnapshot(JSON.stringify(draft));
+      } else if (type === 'start') {
+        setSavedSnapshot(JSON.stringify({ start: true }));
       } else {
         const freshThrows = [emptyThrowDraft()];
         setThrowDrafts(freshThrows);
@@ -281,6 +305,7 @@ export function GameEventsPage() {
 
   const handleDelete = useCallback(() => {
     if (!effectiveSelectedId) return;
+    if (getGameEventType(data, effectiveSelectedId) === 'start') return;
     mutate(
       (draft) => {
         deleteGameEvent(draft, effectiveSelectedId);
@@ -289,15 +314,38 @@ export function GameEventsPage() {
       'Deleted game event.',
     );
     resetNewEventMode();
-  }, [effectiveSelectedId, mutate, resetNewEventMode]);
+  }, [effectiveSelectedId, mutate, resetNewEventMode, data]);
+
+  const handleCommitVideoOffset = useCallback(
+    (eventId: string, seconds: number | null) => {
+      mutate(
+        (draft) => {
+          setGameEventVideoOffset(draft, eventId, seconds);
+          return null;
+        },
+        'Updated event timestamp.',
+      );
+    },
+    [mutate],
+  );
+
+  const handleSetVideoOffsetFromPlayer = useCallback(
+    (eventId: string) => {
+      const seconds = readVideoOffset();
+      if (seconds === null) return;
+      handleCommitVideoOffset(eventId, seconds);
+    },
+    [readVideoOffset, handleCommitVideoOffset],
+  );
 
   const handleInsertBelow = useCallback(() => {
     if (!effectiveSelectedId) return;
     const target = getInsertBelowTargetEventId(eventsNewestFirst, effectiveSelectedId);
     setInsertBeforeEventId(target);
     setSelectedEventId(null);
-    const type = lockedTab ?? activeTab;
-    setActiveTab(type ?? 'throw');
+    const type =
+      lockedTab && lockedTab !== 'start' ? lockedTab : activeTab;
+    setActiveTab(type);
     setPendingWipeFinish(false);
     loadDraftsForSelection(null);
   }, [
@@ -313,7 +361,7 @@ export function GameEventsPage() {
     setPendingWipeFinish(false);
     setSelectedEventId(eventId);
     const type = getGameEventType(data, eventId);
-    if (type) setActiveTab(type);
+    if (type && type !== 'start') setActiveTab(type);
     loadDraftsForSelection(eventId);
     const entry = timeline.find((row) => row.id === eventId);
     if (
@@ -338,7 +386,8 @@ export function GameEventsPage() {
           const options = {
             gameEventId: effectiveSelectedId ?? undefined,
             insertBeforeEventId,
-            videoOffsetSeconds,
+            // Stamp player time only on create — edits keep existing timestamps
+            ...(effectiveSelectedId ? {} : { videoOffsetSeconds }),
           };
           if (visibleTab === 'throw') {
             return persistThrowGameEvent(draft, gameId, matchId, throwDrafts, options);
@@ -346,7 +395,10 @@ export function GameEventsPage() {
           if (visibleTab === 'error') {
             return persistErrorGameEvent(draft, gameId, matchId, errorDraft, options);
           }
-          return persistFinishGameEvent(draft, gameId, finishDraft, options);
+          if (visibleTab === 'finish') {
+            return persistFinishGameEvent(draft, gameId, finishDraft, options);
+          }
+          return effectiveSelectedId ?? null;
         },
         (id) =>
           effectiveSelectedId
@@ -658,7 +710,7 @@ export function GameEventsPage() {
                   variant={editorCompact ? 'body2' : 'subtitle1'}
                   sx={{ fontWeight: 700, textTransform: 'capitalize' }}
                 >
-                  {lockedTab}
+                  {lockedTab === 'start' ? 'Game start' : lockedTab}
                 </Typography>
               )}
 
@@ -667,30 +719,34 @@ export function GameEventsPage() {
                   <Button size="small" onClick={handleDone}>
                     Done
                   </Button>
-                  {isDirty ? (
+                  {lockedTab !== 'start' && isDirty ? (
                     <Button size="small" onClick={handleRestore}>
                       Restore
                     </Button>
                   ) : null}
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      px: 1,
-                      py: 0.5,
-                      borderRadius: 1,
-                      bgcolor: isDirty ? 'warning.light' : 'success.light',
-                    }}
-                  >
-                    {isDirty ? 'Not Saved' : 'Saved'}
-                  </Typography>
-                  {!gameFinished ? (
+                  {lockedTab !== 'start' ? (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
+                        bgcolor: isDirty ? 'warning.light' : 'success.light',
+                      }}
+                    >
+                      {isDirty ? 'Not Saved' : 'Saved'}
+                    </Typography>
+                  ) : null}
+                  {lockedTab !== 'start' && !gameFinished ? (
                     <Button size="small" onClick={handleInsertBelow}>
                       Insert below
                     </Button>
                   ) : null}
-                  <Button size="small" color="error" onClick={handleDelete}>
-                    Delete
-                  </Button>
+                  {lockedTab !== 'start' ? (
+                    <Button size="small" color="error" onClick={handleDelete}>
+                      Delete
+                    </Button>
+                  ) : null}
                 </>
               ) : null}
 
@@ -701,6 +757,20 @@ export function GameEventsPage() {
               ) : null}
             </Stack>
 
+            {visibleTab === 'start' && effectiveSelectedId ? (
+              <StartEventEditor
+                videoOffsetSeconds={
+                  timeline.find((row) => row.id === effectiveSelectedId)?.videoOffsetSeconds
+                }
+                onCommitOffset={(seconds) =>
+                  handleCommitVideoOffset(effectiveSelectedId, seconds)
+                }
+                onSetFromPlayer={() =>
+                  handleSetVideoOffsetFromPlayer(effectiveSelectedId)
+                }
+                canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
+              />
+            ) : null}
             {visibleTab === 'throw' ? (
               <ThrowEditor
                 drafts={throwDrafts}
@@ -794,8 +864,11 @@ export function GameEventsPage() {
           selectedEventId={effectiveSelectedId}
           insertBeforeEventId={insertBeforeEventId}
           showEndInsertMarker={showEndInsertMarker}
+          canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
           onSelectEvent={handleSelectEvent}
           onDeselectEvent={handleDone}
+          onCommitVideoOffset={handleCommitVideoOffset}
+          onSetVideoOffsetFromPlayer={handleSetVideoOffsetFromPlayer}
         />
       </Box>
     </Box>

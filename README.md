@@ -28,6 +28,7 @@ npm run test:e2e     # Playwright
 
 - Session storage key: `SCOREKEEPER_DATA`
 - Export/import: **Download Database** / **Load from file** on Overview (`.scrkpr` JSON); **Load sample league (demo)** for the six-team fixture
+- Optional **Firebase** shared leagues (Google sign-in, per-match sync): see [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) and `react-app/.env.example`
 
 ## GitHub Pages
 

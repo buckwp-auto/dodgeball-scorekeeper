@@ -12,6 +12,7 @@ import { formatVideoTime } from '../../domain/youtube';
 import { rowBackgroundForTone } from '../../domain/timelineColors';
 import { getTimelineActionIcon } from '../../domain/throwResultIcons';
 import { PlayerPill } from './PlayerPill';
+import { VideoTimestampEditor } from './VideoTimestampEditor';
 
 const ROW_MIN_HEIGHT = 36;
 
@@ -125,78 +126,126 @@ function TimelineEventRow({
   row,
   selected,
   videoTimeLabel,
+  editingTimestamp,
+  videoOffsetSeconds,
+  canSetFromPlayer,
   onClick,
+  onCommitOffset,
+  onSetFromPlayer,
 }: {
   row: TimelineRow;
   selected: boolean;
   videoTimeLabel?: string;
+  editingTimestamp?: boolean;
+  videoOffsetSeconds?: number | null;
+  canSetFromPlayer?: boolean;
   onClick: () => void;
+  onCommitOffset?: (seconds: number | null) => void;
+  onSetFromPlayer?: () => void;
 }) {
   return (
-    <Button
-      fullWidth
-      onClick={onClick}
+    <Box
       sx={{
-        display: 'flex',
-        justifyContent: 'flex-start',
-        alignItems: 'flex-start',
-        textAlign: 'left',
-        textTransform: 'none',
-        fontWeight: 500,
-        borderRadius: 0,
-        minHeight: ROW_MIN_HEIGHT,
-        height: 'auto',
-        py: 0.75,
-        px: 1,
-        pl: row.role === 'deflection' ? 2.5 : 1,
-        gap: 1,
-        color: 'grey.100',
-        bgcolor: rowBackgroundForTone(row.tone, selected),
         borderBottom: '1px solid',
         borderColor: 'grey.800',
+        bgcolor: rowBackgroundForTone(row.tone, selected),
         outline: selected ? '1px solid' : 'none',
         outlineColor: 'secondary.light',
         outlineOffset: -1,
-        whiteSpace: 'normal',
-        '&:hover': {
-          bgcolor: rowBackgroundForTone(row.tone, true),
-        },
       }}
     >
-      <ActionBadges actions={row.actions} />
-      <Box
+      <Button
+        fullWidth
+        onClick={onClick}
         sx={{
-          display: 'block',
+          display: 'flex',
+          justifyContent: 'flex-start',
+          alignItems: 'flex-start',
+          textAlign: 'left',
+          textTransform: 'none',
+          fontWeight: 500,
+          borderRadius: 0,
+          minHeight: ROW_MIN_HEIGHT,
+          height: 'auto',
+          py: 0.75,
+          px: 1,
+          pl: row.role === 'deflection' ? 2.5 : 1,
+          gap: 1,
+          color: 'grey.100',
+          bgcolor: 'transparent',
           whiteSpace: 'normal',
-          overflowWrap: 'anywhere',
-          wordBreak: 'break-word',
-          fontSize: '0.85rem',
-          lineHeight: 1.45,
-          minWidth: 0,
-          flex: 1,
+          '&:hover': {
+            bgcolor: rowBackgroundForTone(row.tone, true),
+          },
         }}
       >
-        {videoTimeLabel && row.role !== 'deflection' ? (
-          <Typography
-            component="span"
-            variant="caption"
-            sx={{
-              display: 'inline-block',
-              mr: 0.75,
-              px: 0.5,
-              py: 0.1,
-              borderRadius: 0.5,
-              bgcolor: 'rgba(255,255,255,0.12)',
-              fontVariantNumeric: 'tabular-nums',
-              color: 'grey.300',
-            }}
-          >
-            {videoTimeLabel}
-          </Typography>
-        ) : null}
-        {renderSegments(row.segments)}
-      </Box>
-    </Button>
+        <ActionBadges actions={row.actions} />
+        <Box
+          sx={{
+            display: 'block',
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
+            wordBreak: 'break-word',
+            fontSize: '0.85rem',
+            lineHeight: 1.45,
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
+          {videoTimeLabel && row.role !== 'deflection' && !editingTimestamp ? (
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{
+                display: 'inline-block',
+                mr: 0.75,
+                px: 0.5,
+                py: 0.1,
+                borderRadius: 0.5,
+                bgcolor: 'rgba(255,255,255,0.12)',
+                fontVariantNumeric: 'tabular-nums',
+                color: 'grey.300',
+              }}
+            >
+              {videoTimeLabel}
+            </Typography>
+          ) : null}
+          {!videoTimeLabel && row.role !== 'deflection' && !editingTimestamp ? (
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{
+                display: 'inline-block',
+                mr: 0.75,
+                px: 0.5,
+                py: 0.1,
+                borderRadius: 0.5,
+                bgcolor: 'rgba(255,255,255,0.06)',
+                color: 'grey.500',
+              }}
+            >
+              —:—
+            </Typography>
+          ) : null}
+          {renderSegments(row.segments)}
+        </Box>
+      </Button>
+      {editingTimestamp && onCommitOffset ? (
+        <Box
+          sx={{ px: 1, pb: 1, pl: row.role === 'deflection' ? 2.5 : 1 }}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <VideoTimestampEditor
+            dense
+            valueSeconds={videoOffsetSeconds}
+            onCommit={onCommitOffset}
+            onSetFromPlayer={onSetFromPlayer}
+            canSetFromPlayer={canSetFromPlayer}
+          />
+        </Box>
+      ) : null}
+    </Box>
   );
 }
 
@@ -205,15 +254,21 @@ export function GameEventsTimeline({
   selectedEventId,
   insertBeforeEventId,
   showEndInsertMarker,
+  canSetFromPlayer,
   onSelectEvent,
   onDeselectEvent,
+  onCommitVideoOffset,
+  onSetVideoOffsetFromPlayer,
 }: {
   entries: TimelineEntry[];
   selectedEventId: string | null;
   insertBeforeEventId: string | null;
   showEndInsertMarker: boolean;
+  canSetFromPlayer?: boolean;
   onSelectEvent: (eventId: string) => void;
   onDeselectEvent: () => void;
+  onCommitVideoOffset: (eventId: string, seconds: number | null) => void;
+  onSetVideoOffsetFromPlayer?: (eventId: string) => void;
 }) {
   const flatItems = useMemo(
     () => flattenTimeline(entries, showEndInsertMarker, insertBeforeEventId),
@@ -252,8 +307,17 @@ export function GameEventsTimeline({
             row={row}
             selected={selected}
             videoTimeLabel={videoTimeLabel}
+            editingTimestamp={selected && item.rowIndex === 0}
+            videoOffsetSeconds={item.entry.videoOffsetSeconds}
+            canSetFromPlayer={canSetFromPlayer}
             onClick={() =>
               selected ? onDeselectEvent() : onSelectEvent(item.entry.id)
+            }
+            onCommitOffset={(seconds) => onCommitVideoOffset(item.entry.id, seconds)}
+            onSetFromPlayer={
+              onSetVideoOffsetFromPlayer
+                ? () => onSetVideoOffsetFromPlayer(item.entry.id)
+                : undefined
             }
           />
         );

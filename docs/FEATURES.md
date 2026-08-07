@@ -1,11 +1,14 @@
 # Feature summary
 
-Client-side dodgeball scorekeeper (React / Vite / MUI) with parity goals against the legacy Blazor Scorekeeper2 / `.scrkpr` format. Data lives in the browser (session storage); import/export uses `.scrkpr` JSON and match statistics CSV.
+## Data & sync
+
+- Browser **session storage** for the working `.scrkpr` database; Overview import/export unchanged
+- Optional **Firebase** shared leagues (Google sign-in): directory on Overview, join requests, admin approve, per-match cloud docs, 30s idle / game-complete flush — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md)
 
 ## App shell
 
-- **Overview** — download database, **Load from file** (`.scrkpr`), and **Load sample league (demo)** (six-team fixture), with import feedback (spinner, success snackbar, errors)
-- **Teams / Players** — manage teams and rosters
+- **Overview** — Google sign-in / league directory (when Firebase configured), download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip
+- **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
 - **Matches** — create matches, select players, download/copy match statistics CSV
 - **Track Match / Games** — add games, set on-court roster, open Track Game
 - **History** — commit log for local mutations
@@ -58,7 +61,8 @@ Derived from persisted events (not a separate toggle):
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
   - **Hide** — scoring only (timestamps pause)
 - Playback hotkeys work without focusing the embed: `Space` play/pause, `←`/`→` ±5s, `,`/`.` frame step when paused
-- Saving an event stamps `VideoOffsetSeconds` from the player clock; timeline shows the time and seeks on select
+- Saving an event stamps `VideoOffsetSeconds` from the player clock on **create** (edits keep the existing time); timeline times are editable (type m:ss or **From video**); select seeks
+- Every game has a **Game start** event (ordinal 1) with an editable timestamp; cannot be deleted
 - GitHub Pages–safe iframe (`origin` + referrer policy); embed failures don’t block scoring
 
 ### Finish after team wipe
