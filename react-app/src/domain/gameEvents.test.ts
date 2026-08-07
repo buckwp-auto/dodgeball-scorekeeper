@@ -8,8 +8,8 @@ import {
   ThrowResult,
 } from './statistics/constants';
 import { getStatisticsSummaryCsvText } from './statistics/statisticsFormatService';
+import { buildTimelineEntries } from './gameEventTimeline';
 import {
-  buildTimelineEntries,
   ensureGameStartEvent,
   getGameEventType,
   getGameStartEvent,

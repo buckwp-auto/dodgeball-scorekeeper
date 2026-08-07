@@ -12,7 +12,7 @@ import SquareFootIcon from '@mui/icons-material/SquareFoot';
 import TrackChangesIcon from '@mui/icons-material/TrackChanges';
 import { DeflectionResult, ThrowResult } from './statistics/constants';
 import { throwResultUiOrder as gameEventsOrder } from './gameEvents';
-import type { TimelineAction } from './gameEvents';
+import type { TimelineAction } from './gameEventTimeline';
 
 export const throwResultUiOrder = gameEventsOrder;
 

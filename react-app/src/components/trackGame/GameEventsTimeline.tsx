@@ -7,7 +7,7 @@ import type {
   TimelinePlayerRef,
   TimelineRow,
   TimelineSegment,
-} from '../../domain/gameEvents';
+} from '../../domain/gameEventTimeline';
 import { formatVideoTime } from '../../domain/youtube';
 import { rowBackgroundForTone } from '../../domain/timelineColors';
 import { getTimelineActionIcon } from '../../domain/throwResultIcons';

@@ -35,7 +35,6 @@ import {
 } from '../domain/youtube';
 import {
   areThrowDraftsComplete,
-  buildTimelineEntries,
   deleteGameEvent,
   draftsEqual,
   emptyErrorDraft,
@@ -62,6 +61,7 @@ import {
   type GameEventType,
   type ThrowDraft,
 } from '../domain/gameEvents';
+import { buildTimelineEntries } from '../domain/gameEventTimeline';
 import { getGameName, getMatchById } from '../domain/matchGame';
 import {
   computeGameLiveState,
