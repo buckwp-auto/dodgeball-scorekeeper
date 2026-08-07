@@ -61,6 +61,66 @@ function isRecoveredCandidate(
   return true;
 }
 
+function withThrower(draft: ThrowDraft, gamePlayerId: string): ThrowDraft {
+  return {
+    ...draft,
+    throwerGamePlayerId: gamePlayerId,
+    targetGamePlayerId: '',
+    deflections: throwResultAllowsDeflections(draft.resultId)
+      ? draft.deflections
+      : [],
+    recoveredId:
+      draft.resultId === ThrowResult.Catch ||
+      draft.deflections.some((row) => row.resultId === DeflectionResult.Catch)
+        ? draft.recoveredId
+        : undefined,
+  };
+}
+
+function withTarget(draft: ThrowDraft, gamePlayerId: string): ThrowDraft {
+  return {
+    ...draft,
+    targetGamePlayerId: gamePlayerId,
+    deflections: throwResultAllowsDeflections(draft.resultId)
+      ? draft.deflections
+      : [],
+  };
+}
+
+function withResult(
+  draft: ThrowDraft,
+  resultId: ThrowResult | null,
+): ThrowDraft {
+  if (resultId === null) {
+    return {
+      ...draft,
+      resultId: null,
+      deflections: [],
+      recoveredId: undefined,
+    };
+  }
+  return {
+    ...draft,
+    resultId,
+    deflections: throwResultAllowsDeflections(resultId)
+      ? draft.deflections
+      : [],
+    recoveredId:
+      resultId === ThrowResult.Catch ? draft.recoveredId : undefined,
+  };
+}
+
+function withToggledRecovery(
+  draft: ThrowDraft,
+  recoveredId: string | null,
+): ThrowDraft {
+  return {
+    ...draft,
+    recoveredId:
+      draft.recoveredId === recoveredId ? undefined : recoveredId,
+  };
+}
+
 function SingleThrowEditor({
   draft,
   players,
@@ -122,42 +182,16 @@ function SingleThrowEditor({
 
   const setThrower = (gamePlayerId: string) => {
     if (gamePlayerId && isOut(gamePlayerId)) return;
-    // Toggle off when clearing via empty id or same player handled by callers.
-    onChange({
-      ...draft,
-      throwerGamePlayerId: gamePlayerId,
-      targetGamePlayerId: '',
-      // Keep result so result can be chosen before thrower.
-      deflections: throwResultAllowsDeflections(draft.resultId) ? draft.deflections : [],
-      recoveredId:
-        draft.resultId === ThrowResult.Catch ||
-        draft.deflections.some((row) => row.resultId === DeflectionResult.Catch)
-          ? draft.recoveredId
-          : undefined,
-    });
+    onChange(withThrower(draft, gamePlayerId));
   };
 
   const setTarget = (gamePlayerId: string) => {
     if (gamePlayerId && isOut(gamePlayerId)) return;
-    onChange({
-      ...draft,
-      targetGamePlayerId: gamePlayerId,
-      deflections: throwResultAllowsDeflections(draft.resultId) ? draft.deflections : [],
-    });
+    onChange(withTarget(draft, gamePlayerId));
   };
 
   const setResult = (resultId: ThrowResult | null) => {
-    if (resultId === null) {
-      onChange({ ...draft, resultId: null, deflections: [], recoveredId: undefined });
-      return;
-    }
-    const allowsDeflection = throwResultAllowsDeflections(resultId);
-    onChange({
-      ...draft,
-      resultId,
-      deflections: allowsDeflection ? draft.deflections : [],
-      recoveredId: resultId === ThrowResult.Catch ? draft.recoveredId : undefined,
-    });
+    onChange(withResult(draft, resultId));
   };
 
   const addDeflection = () => {
@@ -463,12 +497,7 @@ function SingleThrowEditor({
               <EditorChoiceButton
                 hotkey={RECOVERED_NONE_HOTKEY}
                 selected={draft.recoveredId === null}
-                onClick={() =>
-                  onChange({
-                    ...draft,
-                    recoveredId: draft.recoveredId === null ? undefined : null,
-                  })
-                }
+                onClick={() => onChange(withToggledRecovery(draft, null))}
               >
                 None
               </EditorChoiceButton>
@@ -480,11 +509,7 @@ function SingleThrowEditor({
                   playerId={row.playerId}
                   teamHome={row.teamHome}
                   onClick={() =>
-                    onChange({
-                      ...draft,
-                      recoveredId:
-                        draft.recoveredId === row.gamePlayerId ? undefined : row.gamePlayerId,
-                    })
+                    onChange(withToggledRecovery(draft, row.gamePlayerId))
                   }
                 >
                   {playerLabel(row)}
@@ -585,25 +610,13 @@ export function applyPlayerHotkeyToThrowDrafts(
 
   const resultId = getThrowResultForKey(key);
   if (resultId !== null) {
-    if (draft.resultId === resultId) {
-      return patch({ ...draft, resultId: null, deflections: [], recoveredId: undefined });
-    }
-    const allowsDeflection = throwResultAllowsDeflections(resultId);
-    return patch({
-      ...draft,
-      resultId,
-      deflections: allowsDeflection ? draft.deflections : [],
-      recoveredId: resultId === ThrowResult.Catch ? draft.recoveredId : undefined,
-    });
+    return patch(withResult(draft, draft.resultId === resultId ? null : resultId));
   }
 
   const throwingHome = resolveThrowingHome(draft, players);
 
   if (throwDraftNeedsRecovered(draft) && key.toLowerCase() === RECOVERED_NONE_HOTKEY) {
-    if (draft.recoveredId === null) {
-      return patch({ ...draft, recoveredId: undefined });
-    }
-    return patch({ ...draft, recoveredId: null });
+    return patch(withToggledRecovery(draft, null));
   }
 
   const hotkeys = buildPermanentPlayerHotkeys(players);
@@ -614,10 +627,7 @@ export function applyPlayerHotkeyToThrowDrafts(
 
   // Catch recovery: defending teammates (including out) are selectable
   if (throwDraftNeedsRecovered(draft) && isRecoveredCandidate(draft, hit, throwingHome)) {
-    if (draft.recoveredId === hit.gamePlayerId) {
-      return patch({ ...draft, recoveredId: undefined });
-    }
-    return patch({ ...draft, recoveredId: hit.gamePlayerId });
+    return patch(withToggledRecovery(draft, hit.gamePlayerId));
   }
 
   if (eliminatedGamePlayerIds.has(hit.gamePlayerId)) {
@@ -629,29 +639,21 @@ export function applyPlayerHotkeyToThrowDrafts(
   // Phase 1: any player key picks/toggles thrower
   if (!showTarget) {
     if (draft.throwerGamePlayerId === hit.gamePlayerId) {
-      return patch({ ...draft, throwerGamePlayerId: '', targetGamePlayerId: '' });
+      return patch(withThrower(draft, ''));
     }
-    return patch({
-      ...draft,
-      throwerGamePlayerId: hit.gamePlayerId,
-      targetGamePlayerId: '',
-    });
+    return patch(withThrower(draft, hit.gamePlayerId));
   }
 
   // Phase 2: throwing side = thrower, defending side = target (by person, not display column)
   if (hit.teamHome === throwingHome) {
     if (draft.throwerGamePlayerId === hit.gamePlayerId) {
-      return patch({ ...draft, throwerGamePlayerId: '', targetGamePlayerId: '' });
+      return patch(withThrower(draft, ''));
     }
-    return patch({
-      ...draft,
-      throwerGamePlayerId: hit.gamePlayerId,
-      targetGamePlayerId: '',
-    });
+    return patch(withThrower(draft, hit.gamePlayerId));
   }
 
   if (draft.targetGamePlayerId === hit.gamePlayerId) {
-    return patch({ ...draft, targetGamePlayerId: '' });
+    return patch(withTarget(draft, ''));
   }
-  return patch({ ...draft, targetGamePlayerId: hit.gamePlayerId });
+  return patch(withTarget(draft, hit.gamePlayerId));
 }
