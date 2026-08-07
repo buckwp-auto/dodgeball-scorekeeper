@@ -24,6 +24,7 @@ import { getFirebase } from '../cloud/firebase';
 import {
   diffDirty,
   gainedGameFinish,
+  listMatchIds,
 } from '../cloud/leagueSplitMerge';
 import type {
   CloudRevisions,
@@ -45,6 +46,8 @@ type LeagueContextValue = {
   memberships: Record<string, LeagueMember | null>;
   membersByLeague: Record<string, LeagueMember[]>;
   activeLeagueId: string | null;
+  /** True when the signed-in user may replace the open cloud league from a file. */
+  canOverrideActiveLeague: boolean;
   syncStatus: SyncStatus;
   lastSavedAt: string | null;
   syncError: string | null;
@@ -58,6 +61,11 @@ type LeagueContextValue = {
   leaveLeague: () => Promise<void>;
   /** Called by DatabaseProvider after local mutations. */
   notifyLocalChange: (prev: DatabaseDto, next: DatabaseDto) => void;
+  /**
+   * After an admin file/sample import into the open league: mark full replace dirty
+   * and flush to cloud immediately.
+   */
+  queueImportOverrideFlush: (prev: DatabaseDto, next: DatabaseDto) => void;
   /** Flush pending cloud writes if connected. */
   flushNow: (data: DatabaseDto) => Promise<void>;
   isDirty: boolean;
@@ -303,6 +311,38 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     [activeLeagueId, user, scheduleFlush],
   );
 
+  const queueImportOverrideFlush = useCallback(
+    (prev: DatabaseDto, next: DatabaseDto) => {
+      if (!activeLeagueId || !user) {
+        throw new Error('Open a cloud league before overriding it');
+      }
+      const base = syncedDataRef.current ?? prev;
+      const nextIds = listMatchIds(next);
+      const baseIds = listMatchIds(base);
+      const nextIdSet = new Set(nextIds);
+      dirtyRef.current = {
+        roster: true,
+        matchIds: nextIds,
+        removedMatchIds: baseIds.filter((id) => !nextIdSet.has(id)),
+      };
+      latestDataRef.current = next;
+      setIsDirty(true);
+      setSyncStatus('unsaved');
+      scheduleFlush(next, true);
+    },
+    [activeLeagueId, user, scheduleFlush],
+  );
+
+  const canOverrideActiveLeague = useMemo(() => {
+    if (!user || !activeLeagueId) return false;
+    const league = leagues.find((row) => row.id === activeLeagueId);
+    const membership = memberships[activeLeagueId];
+    return (
+      league?.adminUid === user.uid ||
+      (membership?.status === 'active' && membership.role === 'admin')
+    );
+  }, [user, activeLeagueId, leagues, memberships]);
+
   const openLeague = useCallback(
     async (leagueId: string) => {
       const fb = getFirebase();
@@ -353,7 +393,11 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
     const tick = async () => {
       if (document.visibilityState !== 'visible') return;
-      if (dirtyRef.current.roster || dirtyRef.current.matchIds.length > 0) {
+      if (
+        dirtyRef.current.roster ||
+        dirtyRef.current.matchIds.length > 0 ||
+        dirtyRef.current.removedMatchIds.length > 0
+      ) {
         return;
       }
       try {
@@ -425,6 +469,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       memberships,
       membersByLeague,
       activeLeagueId,
+      canOverrideActiveLeague,
       syncStatus,
       lastSavedAt,
       syncError,
@@ -437,6 +482,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       openLeague,
       leaveLeague,
       notifyLocalChange,
+      queueImportOverrideFlush,
       flushNow,
       isDirty,
     }),
@@ -445,6 +491,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       memberships,
       membersByLeague,
       activeLeagueId,
+      canOverrideActiveLeague,
       syncStatus,
       lastSavedAt,
       syncError,
@@ -457,6 +504,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       openLeague,
       leaveLeague,
       notifyLocalChange,
+      queueImportOverrideFlush,
       flushNow,
       isDirty,
     ],

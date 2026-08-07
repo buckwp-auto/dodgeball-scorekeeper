@@ -47,7 +47,10 @@ type DatabaseContextValue = {
     fn: (data: DatabaseDto) => T,
     commitMessage: string | ((result: T) => string),
   ) => T;
-  replaceDatabase: (raw: unknown) => void;
+  replaceDatabase: (
+    raw: unknown,
+    options?: { overrideCloudLeague?: boolean },
+  ) => void;
   exportBytes: () => Uint8Array;
 };
 
@@ -65,10 +68,18 @@ function pushCommit(
 }
 
 export function DatabaseProvider({ children }: { children: ReactNode }) {
-  const { notifyLocalChange, activeLeagueId } = useLeague();
+  const {
+    notifyLocalChange,
+    activeLeagueId,
+    canOverrideActiveLeague,
+    queueImportOverrideFlush,
+    isDirty,
+  } = useLeague();
   const [data, setData] = useState<DatabaseDto>(initialData);
   const dataRef = useRef(data);
   dataRef.current = data;
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
 
   const [commits, setCommits] = useState<HistoryCommit[]>(() =>
     loadFromSession()
@@ -92,6 +103,8 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     const onRefresh = (event: Event) => {
       const detail = (event as CustomEvent<DatabaseDto>).detail;
       if (!detail) return;
+      // Never clobber an in-progress local/cloud import or unsaved edits.
+      if (isDirtyRef.current) return;
       if (serializeDatabase(detail) === serializeDatabase(dataRef.current)) {
         return;
       }
@@ -248,13 +261,42 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
   );
 
   const replaceDatabase = useCallback(
-    (raw: unknown) => {
+    (raw: unknown, options?: { overrideCloudLeague?: boolean }) => {
       const prev = dataRef.current;
       const next = normalizeDatabase(raw);
-      persist(next, activeLeagueId ? prev : null);
-      setCommits((prevCommits) => pushCommit(prevCommits, 'Replaced data.'));
+
+      if (!activeLeagueId) {
+        dataRef.current = next;
+        setData(next);
+        saveToSession(next);
+        setCommits((prevCommits) => pushCommit(prevCommits, 'Replaced data.'));
+        return;
+      }
+
+      if (!options?.overrideCloudLeague) {
+        throw new Error(
+          'This device is connected to a cloud league. Confirm an override to replace shared data, or leave the league first.',
+        );
+      }
+      if (!canOverrideActiveLeague) {
+        throw new Error(
+          'Only the league admin can replace shared league data from a file.',
+        );
+      }
+
+      dataRef.current = next;
+      setData(next);
+      saveToSession(next);
+      setCommits((prevCommits) =>
+        pushCommit(prevCommits, 'Replaced cloud league from import.'),
+      );
+      queueImportOverrideFlush(prev, next);
     },
-    [persist, activeLeagueId],
+    [
+      activeLeagueId,
+      canOverrideActiveLeague,
+      queueImportOverrideFlush,
+    ],
   );
 
   const exportBytes = useCallback(() => {

@@ -7,7 +7,7 @@
 
 ## App shell
 
-- **Overview** — Google sign-in / league directory (when Firebase configured), download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip
+- **Overview** — Google sign-in / league directory (when Firebase configured), download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
 - **Matches** — create matches, select players, download/copy match statistics CSV
 - **Track Match / Games** — add games, set on-court roster, open Track Game

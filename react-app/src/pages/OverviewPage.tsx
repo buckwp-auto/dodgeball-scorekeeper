@@ -4,6 +4,11 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   Snackbar,
   Stack,
@@ -50,6 +55,12 @@ function syncLabel(status: string, lastSavedAt: string | null): string {
   }
 }
 
+type PendingImport = {
+  raw: unknown;
+  successLabel: string;
+  source: 'file' | 'sample';
+};
+
 export function OverviewPage() {
   const { exportBytes, replaceDatabase } = useDatabase();
   const { configured, user, loading: authLoading, signInWithGoogle, signOut } =
@@ -59,6 +70,7 @@ export function OverviewPage() {
     memberships,
     membersByLeague,
     activeLeagueId,
+    canOverrideActiveLeague,
     syncStatus,
     lastSavedAt,
     syncError,
@@ -79,9 +91,12 @@ export function OverviewPage() {
   const [successOpen, setSuccessOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
 
   const busy = loading !== null || leagueBusy !== null;
   const storedLeagueId = useMemo(() => getStoredActiveLeagueId(), [activeLeagueId]);
+  const activeLeague = leagues.find((row) => row.id === activeLeagueId);
+  const importBlockedForMember = Boolean(activeLeagueId && !canOverrideActiveLeague);
 
   const downloadDatabase = () => {
     const bytes = exportBytes();
@@ -94,20 +109,57 @@ export function OverviewPage() {
     URL.revokeObjectURL(url);
   };
 
-  const importRawDatabase = async (raw: unknown, successLabel: string) => {
+  const applyImport = async (pending: PendingImport, overrideCloud: boolean) => {
     setErrorMessage(null);
     setSuccessOpen(false);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    replaceDatabase(raw);
-    setSuccessMessage(successLabel);
+    replaceDatabase(pending.raw, {
+      overrideCloudLeague: overrideCloud,
+    });
+    setSuccessMessage(
+      overrideCloud
+        ? `${pending.successLabel} Shared league data was replaced and is saving to the cloud.`
+        : pending.successLabel,
+    );
     setSuccessOpen(true);
+  };
+
+  const beginImport = async (raw: unknown, successLabel: string, source: 'file' | 'sample') => {
+    if (importBlockedForMember) {
+      throw new Error(
+        'Only the league admin can replace shared data while a cloud league is open. Leave the league to edit a local copy, or ask the admin to import.',
+      );
+    }
+    if (activeLeagueId && canOverrideActiveLeague) {
+      setPendingImport({ raw, successLabel, source });
+      return;
+    }
+    await applyImport({ raw, successLabel, source }, false);
+  };
+
+  const confirmOverride = async () => {
+    if (!pendingImport) return;
+    setLoading(pendingImport.source);
+    try {
+      await applyImport(pendingImport, true);
+      setPendingImport(null);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      setErrorMessage(`Could not load database: ${detail}`);
+    } finally {
+      setLoading(null);
+    }
   };
 
   const onFile = async (file: File) => {
     setLoading('file');
     try {
       const text = await file.text();
-      await importRawDatabase(JSON.parse(text), `Loaded “${file.name}” successfully.`);
+      await beginImport(
+        JSON.parse(text),
+        `Loaded “${file.name}” successfully.`,
+        'file',
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
       setErrorMessage(`Could not load database: ${detail}`);
@@ -124,9 +176,10 @@ export function OverviewPage() {
         throw new Error(`Could not fetch sample (${response.status})`);
       }
       const raw: unknown = await response.json();
-      await importRawDatabase(
+      await beginImport(
         raw,
         'Loaded sample league (demo) — six teams with matches and games.',
+        'sample',
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
@@ -147,8 +200,6 @@ export function OverviewPage() {
       setLeagueBusy(null);
     }
   };
-
-  const activeLeague = leagues.find((row) => row.id === activeLeagueId);
 
   return (
     <>
@@ -425,8 +476,20 @@ export function OverviewPage() {
 
         <Box>
           <Typography variant="h6" gutterBottom>
-            Local database
+            {activeLeagueId ? 'Import / export' : 'Local database'}
           </Typography>
+          {activeLeagueId ? (
+            <Alert severity={importBlockedForMember ? 'warning' : 'info'} sx={{ mb: 2 }}>
+              {importBlockedForMember
+                ? 'A cloud league is open. Only the league admin can replace shared data from a file. You can still download a copy, or leave the league to work locally.'
+                : `Connected to “${activeLeague?.name ?? 'league'}”. Loading a file will ask for confirmation, then replace the shared cloud data for all members.`}
+            </Alert>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Load a .scrkpr file locally, then open (or create) a cloud league as admin and
+              import again to publish it — or open the league first and import with override.
+            </Typography>
+          )}
           <Stack
             direction="row"
             spacing={1}
@@ -446,7 +509,7 @@ export function OverviewPage() {
               type="button"
               className="bw-button bw-button--text"
               variant="outlined"
-              disabled={busy}
+              disabled={busy || importBlockedForMember}
               onClick={() => fileInputRef.current?.click()}
               startIcon={
                 loading === 'file' ? (
@@ -460,7 +523,7 @@ export function OverviewPage() {
               type="button"
               className="bw-button bw-button--text"
               variant="outlined"
-              disabled={busy}
+              disabled={busy || importBlockedForMember}
               onClick={() => void onLoadSampleLeague()}
               startIcon={
                 loading === 'sample' ? (
@@ -484,6 +547,34 @@ export function OverviewPage() {
           ) : null}
         </Box>
       </Stack>
+
+      <Dialog
+        open={pendingImport !== null}
+        onClose={() => (busy ? undefined : setPendingImport(null))}
+      >
+        <DialogTitle>Replace shared league data?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You are about to overwrite the cloud league
+            {activeLeague ? ` “${activeLeague.name}”` : ''} for every member. Teams,
+            players, and matches on the server will be replaced by this import. This cannot
+            be undone except by importing another backup.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setPendingImport(null)}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={busy}
+            onClick={() => void confirmOverride()}
+          >
+            Yes, replace league data
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {errorMessage ? (
         <Alert severity="error" sx={{ mt: 2 }} onClose={() => setErrorMessage(null)}>
