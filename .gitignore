@@ -6,6 +6,9 @@ blob-report/
 playwright/.cache/
 tests/fixtures/.tmp-react-*.csv
 *.scrkpr
+!tests/fixtures/interop-basic.scrkpr
+!tests/fixtures/interop-with-throw.scrkpr
+!tests/fixtures/league-six-teams.scrkpr
 .DS_Store
 
 ## node defaults ##
