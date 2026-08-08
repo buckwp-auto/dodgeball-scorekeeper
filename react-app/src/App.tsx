@@ -1,5 +1,6 @@
 import {
   Box,
+  Divider,
   Drawer,
   List,
   ListItemButton,
@@ -21,6 +22,7 @@ import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
 import { CloudSyncBar } from './components/CloudSyncBar';
+import { MadeByFooter } from './components/MadeByFooter';
 
 const drawerWidth = 200;
 
@@ -102,6 +104,8 @@ export function App() {
                   <AppNav />
                 </Box>
                 <CloudSyncBar />
+                <Divider />
+                <MadeByFooter />
               </Box>
             </Drawer>
             <Box component="main" sx={{ flexGrow: 1, p: 3 }}>

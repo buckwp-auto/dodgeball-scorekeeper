@@ -17,33 +17,42 @@ export type CloudSyncPresentationInput = {
 export type CloudSyncPresentation = {
   mode: CloudSyncMode;
   connectionLabel: string;
+  saveCaption: string | null;
   saveLabel: string | null;
   saveTone: CloudSyncSaveTone;
   canSaveNow: boolean;
 };
 
-export function saveStatusLabel(
+export type SaveStatusPresentation = {
+  saveCaption: string | null;
+  saveLabel: string;
+};
+
+export function saveStatusPresentation(
   status: SyncStatus,
   lastSavedAt: string | null,
-): string {
+): SaveStatusPresentation {
   switch (status) {
     case 'unsaved':
-      return 'Unsaved…';
+      return { saveCaption: null, saveLabel: 'Unsaved…' };
     case 'saving':
-      return 'Saving…';
+      return { saveCaption: null, saveLabel: 'Saving…' };
     case 'saved':
       return lastSavedAt
-        ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}`
-        : 'Saved';
+        ? {
+            saveCaption: 'Last saved',
+            saveLabel: new Date(lastSavedAt).toLocaleTimeString(),
+          }
+        : { saveCaption: null, saveLabel: 'Saved' };
     case 'quota':
-      return 'Quota exceeded';
+      return { saveCaption: null, saveLabel: 'Quota exceeded' };
     case 'error':
-      return 'Sync error';
+      return { saveCaption: null, saveLabel: 'Sync error' };
     case 'local':
     case 'need-auth':
-      return 'Local only';
+      return { saveCaption: null, saveLabel: 'Local only' };
     default:
-      return status;
+      return { saveCaption: null, saveLabel: status };
   }
 }
 
@@ -70,6 +79,7 @@ export function deriveCloudSyncPresentation(
     return {
       mode: 'local',
       connectionLabel: 'Local only',
+      saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
       canSaveNow: false,
@@ -80,6 +90,7 @@ export function deriveCloudSyncPresentation(
     return {
       mode: 'signedInNoLeague',
       connectionLabel: `Connected as ${userDisplayName}, no league selected`,
+      saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
       canSaveNow: false,
@@ -87,10 +98,15 @@ export function deriveCloudSyncPresentation(
   }
 
   const leagueName = activeLeagueName?.trim() || 'league';
+  const { saveCaption, saveLabel } = saveStatusPresentation(
+    syncStatus,
+    lastSavedAt,
+  );
   return {
     mode: 'syncing',
     connectionLabel: `Syncing to ${leagueName}`,
-    saveLabel: saveStatusLabel(syncStatus, lastSavedAt),
+    saveCaption,
+    saveLabel,
     saveTone: saveStatusTone(syncStatus),
     canSaveNow: isDirty && syncStatus !== 'saving',
   };

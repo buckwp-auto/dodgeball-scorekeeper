@@ -1,24 +1,40 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveCloudSyncPresentation,
-  saveStatusLabel,
+  saveStatusPresentation,
   saveStatusTone,
 } from './cloudSyncStatus';
 
-describe('saveStatusLabel', () => {
-  it('formats saved with a timestamp', () => {
+describe('saveStatusPresentation', () => {
+  it('puts last-saved caption above time-only chip label', () => {
     const at = '2026-08-08T03:00:00.000Z';
-    expect(saveStatusLabel('saved', at)).toBe(
-      `Saved ${new Date(at).toLocaleTimeString()}`,
-    );
+    expect(saveStatusPresentation('saved', at)).toEqual({
+      saveCaption: 'Last saved',
+      saveLabel: new Date(at).toLocaleTimeString(),
+    });
   });
 
   it('covers transient and error states', () => {
-    expect(saveStatusLabel('unsaved', null)).toBe('Unsaved…');
-    expect(saveStatusLabel('saving', null)).toBe('Saving…');
-    expect(saveStatusLabel('quota', null)).toBe('Quota exceeded');
-    expect(saveStatusLabel('error', null)).toBe('Sync error');
-    expect(saveStatusLabel('saved', null)).toBe('Saved');
+    expect(saveStatusPresentation('unsaved', null)).toEqual({
+      saveCaption: null,
+      saveLabel: 'Unsaved…',
+    });
+    expect(saveStatusPresentation('saving', null)).toEqual({
+      saveCaption: null,
+      saveLabel: 'Saving…',
+    });
+    expect(saveStatusPresentation('quota', null)).toEqual({
+      saveCaption: null,
+      saveLabel: 'Quota exceeded',
+    });
+    expect(saveStatusPresentation('error', null)).toEqual({
+      saveCaption: null,
+      saveLabel: 'Sync error',
+    });
+    expect(saveStatusPresentation('saved', null)).toEqual({
+      saveCaption: null,
+      saveLabel: 'Saved',
+    });
   });
 });
 
@@ -47,6 +63,7 @@ describe('deriveCloudSyncPresentation', () => {
     ).toMatchObject({
       mode: 'local',
       connectionLabel: 'Local only',
+      saveCaption: null,
       saveLabel: null,
       canSaveNow: false,
     });
@@ -78,6 +95,7 @@ describe('deriveCloudSyncPresentation', () => {
     ).toEqual({
       mode: 'signedInNoLeague',
       connectionLabel: 'Connected as Will, no league selected',
+      saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
       canSaveNow: false,
@@ -97,6 +115,7 @@ describe('deriveCloudSyncPresentation', () => {
     expect(view).toEqual({
       mode: 'syncing',
       connectionLabel: 'Syncing to Spring League',
+      saveCaption: null,
       saveLabel: 'Unsaved…',
       saveTone: 'warning',
       canSaveNow: true,
