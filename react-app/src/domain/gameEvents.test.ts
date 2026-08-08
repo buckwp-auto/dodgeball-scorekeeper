@@ -117,6 +117,29 @@ describe('game event recording', () => {
     expect(entry.videoOffsetSeconds).toBe(125.4);
   });
 
+  it('rejects a group whose throwers are on opposing teams', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    expect(() =>
+      persistThrowGameEvent(data, gameId, match.Id, [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+        {
+          throwerGamePlayerId: awayGp.Id,
+          targetGamePlayerId: homeGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ]),
+    ).toThrow('Group throwers must be on the same team');
+    expect(data.Tables.GameEvent).toHaveLength(1);
+  });
+
   it('seeds a game start event on addGame and keeps it editable', () => {
     const { data, gameId } = setupOneGameMatch();
     const start = getGameStartEvent(data, gameId);

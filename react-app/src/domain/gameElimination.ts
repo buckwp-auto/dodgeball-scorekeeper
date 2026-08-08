@@ -9,13 +9,20 @@ import {
   buildThrowsDetail,
   indexGameEventErrors,
 } from './statistics/databaseViews';
-import { getGamePlayerInfos, getGameEvents, type GamePlayerInfo } from './gameEvents';
+import {
+  getGamePlayerInfos,
+  getGameEvents,
+  type GamePlayerInfo,
+  type ThrowDraft,
+} from './gameEvents';
 import { AUTO_SELECT_PLAYER_LIMIT } from './rosterAutoSelect';
 
 export { AUTO_SELECT_PLAYER_LIMIT };
 
 export type GameLiveState = {
   eliminatedGamePlayerIds: ReadonlySet<Guid>;
+  /** Video offset of the event that put each out player out; null when untimed. */
+  eliminatedAtSeconds: ReadonlyMap<Guid, number | null>;
   activeHomeCount: number;
   activeAwayCount: number;
   isGameOver: boolean;
@@ -93,11 +100,13 @@ export function computeGameLiveState(
 ): GameLiveState {
   const roster = getGamePlayerInfos(data, matchId, gameId);
   const eliminated = new Set<Guid>();
+  const eliminatedAt = new Map<Guid, number | null>();
   const throwsByEvent = buildThrowsDetail(data);
   const errorsByEvent = indexGameEventErrors(data);
   const gameEvents = getGameEvents(data, gameId);
 
   for (const event of gameEvents) {
+    const before = new Set(eliminated);
     const throws = throwsByEvent.get(event.Id) ?? [];
     for (const detail of throws) {
       applyThrowEliminations(eliminated, detail.throwRow, detail.deflections);
@@ -110,6 +119,14 @@ export function computeGameLiveState(
       ) {
         eliminated.add(error.OffenderId);
       }
+    }
+    for (const gamePlayerId of eliminated) {
+      if (!before.has(gamePlayerId)) {
+        eliminatedAt.set(gamePlayerId, event.VideoOffsetSeconds ?? null);
+      }
+    }
+    for (const gamePlayerId of before) {
+      if (!eliminated.has(gamePlayerId)) eliminatedAt.delete(gamePlayerId);
     }
   }
 
@@ -140,6 +157,7 @@ export function computeGameLiveState(
 
   return {
     eliminatedGamePlayerIds: eliminated,
+    eliminatedAtSeconds: eliminatedAt,
     activeHomeCount: activeHome,
     activeAwayCount: activeAway,
     isGameOver,
@@ -150,6 +168,48 @@ export function computeGameLiveState(
 
 export function isPlayerEliminatedInGame(live: GameLiveState, gamePlayerId: Guid): boolean {
   return live.eliminatedGamePlayerIds.has(gamePlayerId);
+}
+
+/** An out player can still throw the ball they released as they were hit. */
+export const ELIMINATED_SELECTION_GRACE_SECONDS = 5;
+
+export type StaleEliminatedSelection = {
+  gamePlayerId: Guid;
+  playerName: string;
+  secondsSinceOut: number;
+};
+
+/**
+ * Out players picked far enough past their elimination that the tracker has
+ * probably mis-identified them. Returns nothing when either time is unknown.
+ */
+export function findStaleEliminatedSelections(
+  drafts: ThrowDraft[],
+  players: GamePlayerInfo[],
+  eliminatedAtSeconds: ReadonlyMap<Guid, number | null>,
+  videoOffsetSeconds: number | null,
+): StaleEliminatedSelection[] {
+  if (videoOffsetSeconds === null) return [];
+  const stale = new Map<Guid, StaleEliminatedSelection>();
+  const selected = drafts.flatMap((draft) => [
+    draft.throwerGamePlayerId,
+    draft.targetGamePlayerId,
+  ]);
+  for (const gamePlayerId of selected) {
+    if (!gamePlayerId || stale.has(gamePlayerId)) continue;
+    const outAt = eliminatedAtSeconds.get(gamePlayerId);
+    if (outAt === undefined || outAt === null) continue;
+    const secondsSinceOut = videoOffsetSeconds - outAt;
+    if (secondsSinceOut < ELIMINATED_SELECTION_GRACE_SECONDS) continue;
+    const player = players.find((row) => row.gamePlayerId === gamePlayerId);
+    if (!player) continue;
+    stale.set(gamePlayerId, {
+      gamePlayerId,
+      playerName: player.playerName,
+      secondsSinceOut,
+    });
+  }
+  return [...stale.values()];
 }
 
 export function gamePlayerIdForPlayerId(

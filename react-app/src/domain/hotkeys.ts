@@ -28,7 +28,7 @@ export const GAME_ACTION_HOTKEYS: ReadonlyArray<{
 }> = [
   { key: 'z', action: 'addDeflection', label: 'Deflect' },
   { key: 'x', action: 'done', label: 'Done' },
-  { key: 'c', action: 'addThrow', label: 'Add throw' },
+  { key: 'c', action: 'addThrow', label: 'Add team throw' },
   { key: 'v', action: 'restore', label: 'Restore' },
   { key: 'b', action: 'insertBelow', label: 'Insert below' },
   { key: 'n', action: 'delete', label: 'Delete' },

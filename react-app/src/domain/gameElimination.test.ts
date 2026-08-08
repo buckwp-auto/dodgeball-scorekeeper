@@ -14,6 +14,8 @@ import {
 } from './gameEvents';
 import {
   computeGameLiveState,
+  ELIMINATED_SELECTION_GRACE_SECONDS,
+  findStaleEliminatedSelections,
   finishResultForLiveWinner,
   isPlayerEliminatedInGame,
   sortGamePlayerInfos,
@@ -256,6 +258,151 @@ describe('game live elimination state', () => {
       live.eliminatedGamePlayerIds,
     );
     expect(sorted[sorted.length - 1]?.gamePlayerId).toBe(awayGp.Id);
+  });
+});
+
+describe('eliminated players in a later draft', () => {
+  function gameWithOutAwayPlayer(videoOffsetSeconds: number | null) {
+    const setup = setupGameWithRoster();
+    persistThrowGameEvent(
+      setup.data,
+      setup.gameId,
+      setup.match.Id,
+      [
+        {
+          throwerGamePlayerId: setup.homeGp.Id,
+          targetGamePlayerId: setup.awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds },
+    );
+    return setup;
+  }
+
+  it('records when each player went out from the event video offset', () => {
+    const { data, match, gameId, awayGp } = gameWithOutAwayPlayer(42);
+    const live = computeGameLiveState(data, match.Id, gameId);
+    expect(live.eliminatedAtSeconds.get(awayGp.Id)).toBe(42);
+  });
+
+  it('forgets the elimination time when a player is recovered', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const h1 = addPlayer(data, home.Id, 'H1');
+    const a1 = addPlayer(data, away.Id, 'A1');
+    const a2 = addPlayer(data, away.Id, 'A2');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, h1.Id, true);
+    toggleMatchPlayer(data, match.Id, a1.Id, false);
+    toggleMatchPlayer(data, match.Id, a2.Id, false);
+    const gameId = addGame(data, match.Id);
+    for (const player of [h1, a1, a2]) {
+      toggleGamePlayer(data, match.Id, gameId, player.Id);
+    }
+    const infos = getGamePlayerInfos(data, match.Id, gameId);
+    const gp = (name: string) => infos.find((row) => row.playerName === name)!.gamePlayerId;
+
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: gp('H1'),
+          targetGamePlayerId: gp('A2'),
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 10 },
+    );
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: gp('H1'),
+          targetGamePlayerId: gp('A1'),
+          resultId: ThrowResult.Catch,
+          deflections: [],
+          recoveredId: gp('A2'),
+        },
+      ],
+      { videoOffsetSeconds: 20 },
+    );
+
+    const live = computeGameLiveState(data, match.Id, gameId);
+    expect(live.eliminatedAtSeconds.has(gp('A2'))).toBe(false);
+    expect(live.eliminatedAtSeconds.get(gp('H1'))).toBe(20);
+  });
+
+  it('stays quiet while an out player throws inside the grace window', () => {
+    const { data, match, gameId, homeGp, awayGp } = gameWithOutAwayPlayer(42);
+    const live = computeGameLiveState(data, match.Id, gameId);
+    const stale = findStaleEliminatedSelections(
+      [
+        {
+          throwerGamePlayerId: awayGp.Id,
+          targetGamePlayerId: homeGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      getGamePlayerInfos(data, match.Id, gameId),
+      live.eliminatedAtSeconds,
+      42 + ELIMINATED_SELECTION_GRACE_SECONDS - 1,
+    );
+    expect(stale).toEqual([]);
+  });
+
+  it('warns once the video has moved past the grace window', () => {
+    const { data, match, gameId, homeGp, awayGp } = gameWithOutAwayPlayer(42);
+    const live = computeGameLiveState(data, match.Id, gameId);
+    const stale = findStaleEliminatedSelections(
+      [
+        {
+          throwerGamePlayerId: awayGp.Id,
+          targetGamePlayerId: homeGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      getGamePlayerInfos(data, match.Id, gameId),
+      live.eliminatedAtSeconds,
+      60,
+    );
+    expect(stale).toEqual([
+      { gamePlayerId: awayGp.Id, playerName: 'A1', secondsSinceOut: 18 },
+    ]);
+  });
+
+  it('cannot judge staleness without both timestamps', () => {
+    const { data, match, gameId, homeGp, awayGp } = gameWithOutAwayPlayer(null);
+    const live = computeGameLiveState(data, match.Id, gameId);
+    const drafts = [
+      {
+        throwerGamePlayerId: awayGp.Id,
+        targetGamePlayerId: homeGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ];
+    const players = getGamePlayerInfos(data, match.Id, gameId);
+    expect(findStaleEliminatedSelections(drafts, players, live.eliminatedAtSeconds, 600)).toEqual(
+      [],
+    );
+    expect(findStaleEliminatedSelections(drafts, players, live.eliminatedAtSeconds, null)).toEqual(
+      [],
+    );
   });
 });
 

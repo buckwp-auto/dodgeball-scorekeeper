@@ -1,6 +1,7 @@
-import { Box, Button, IconButton, Stack, Typography } from '@mui/material';
+import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import {
   DeflectionResult,
   ThrowResult,
@@ -9,6 +10,7 @@ import type { GamePlayerInfo, ThrowDraft } from '../../domain/gameEvents';
 import {
   deflectionResultLabels,
   deflectionResultUiOrder,
+  emptyThrowDraft,
   throwResultAllowsDeflections,
   throwResultLabels,
   throwResultUiOrder,
@@ -34,18 +36,32 @@ import {
   useEditorDensity,
 } from './EditorGrid';
 
-function resolveThrowingHome(
-  draft: ThrowDraft,
+const TEAM_THROW_HELP =
+  'Group throws released at the same moment by the same team. Throws from the opposing team belong in their own event, even when they happen simultaneously.';
+
+/**
+ * Side throwing in a group of simultaneous throws, or null while undecided.
+ * One group is always one team, so every draft follows the first pick.
+ */
+export function resolveGroupThrowingHome(
+  drafts: ThrowDraft[],
   players: GamePlayerInfo[],
-): boolean {
-  if (draft.throwerGamePlayerId) {
-    return players.find((row) => row.gamePlayerId === draft.throwerGamePlayerId)?.teamHome ?? true;
+): boolean | null {
+  for (const draft of drafts) {
+    if (draft.throwerGamePlayerId) {
+      const throwerHome = players.find(
+        (row) => row.gamePlayerId === draft.throwerGamePlayerId,
+      )?.teamHome;
+      if (throwerHome !== undefined) return throwerHome;
+    }
+    if (draft.targetGamePlayerId) {
+      const targetHome = players.find(
+        (row) => row.gamePlayerId === draft.targetGamePlayerId,
+      )?.teamHome;
+      if (targetHome !== undefined) return !targetHome;
+    }
   }
-  if (draft.targetGamePlayerId) {
-    const targetHome = players.find((row) => row.gamePlayerId === draft.targetGamePlayerId)?.teamHome;
-    return targetHome === undefined ? true : !targetHome;
-  }
-  return true;
+  return null;
 }
 
 function isRecoveredCandidate(
@@ -62,10 +78,10 @@ function isRecoveredCandidate(
 }
 
 function withThrower(draft: ThrowDraft, gamePlayerId: string): ThrowDraft {
+  // The target stays put: the group's throwing side fixes which team each column holds
   return {
     ...draft,
     throwerGamePlayerId: gamePlayerId,
-    targetGamePlayerId: '',
     deflections: throwResultAllowsDeflections(draft.resultId)
       ? draft.deflections
       : [],
@@ -130,6 +146,7 @@ function SingleThrowEditor({
   onDelete,
   canDelete,
   eliminatedGamePlayerIds,
+  groupThrowingHome,
   hotkeys,
 }: {
   draft: ThrowDraft;
@@ -140,6 +157,7 @@ function SingleThrowEditor({
   onDelete?: () => void;
   canDelete: boolean;
   eliminatedGamePlayerIds: ReadonlySet<string>;
+  groupThrowingHome: boolean | null;
   hotkeys: ReadonlyMap<string, string>;
 }) {
   const homePlayers = sortGamePlayerInfos(
@@ -150,7 +168,7 @@ function SingleThrowEditor({
     players.filter((row) => !row.teamHome),
     eliminatedGamePlayerIds,
   );
-  const throwingHome = resolveThrowingHome(draft, players);
+  const throwingHome = groupThrowingHome ?? true;
   const defendingHome = !throwingHome;
   const throwingPlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome === throwingHome),
@@ -160,10 +178,14 @@ function SingleThrowEditor({
     players.filter((row) => row.teamHome === defendingHome),
     eliminatedGamePlayerIds,
   );
-  const showTarget = Boolean(draft.throwerGamePlayerId || draft.targetGamePlayerId);
+  const showTarget = groupThrowingHome !== null;
   const isOut = (gamePlayerId: string) => eliminatedGamePlayerIds.has(gamePlayerId);
   const playerLabel = (row: GamePlayerInfo): string =>
     isOut(row.gamePlayerId) ? `${row.playerName} (out)` : row.playerName;
+  const chipLabel = (pool: GamePlayerInfo[], gamePlayerId: string): string => {
+    const row = pool.find((entry) => entry.gamePlayerId === gamePlayerId);
+    return row ? playerLabel(row) : '?';
+  };
 
   const excludedFromTarget = new Set<string>([
     draft.throwerGamePlayerId,
@@ -176,17 +198,15 @@ function SingleThrowEditor({
     eliminatedGamePlayerIds,
   );
 
-  const pendingThrower = !draft.throwerGamePlayerId && !draft.targetGamePlayerId;
+  const pendingThrower = !draft.throwerGamePlayerId;
   const pendingTarget = showTarget && !draft.targetGamePlayerId;
   const pendingResult = draft.resultId === null;
 
   const setThrower = (gamePlayerId: string) => {
-    if (gamePlayerId && isOut(gamePlayerId)) return;
     onChange(withThrower(draft, gamePlayerId));
   };
 
   const setTarget = (gamePlayerId: string) => {
-    if (gamePlayerId && isOut(gamePlayerId)) return;
     onChange(withTarget(draft, gamePlayerId));
   };
 
@@ -343,8 +363,7 @@ function SingleThrowEditor({
                   teamHome={throwingHome}
                   onClick={() => setThrower('')}
                 >
-                  {throwingPlayers.find((row) => row.gamePlayerId === draft.throwerGamePlayerId)
-                    ?.playerName ?? '?'}
+                  {chipLabel(throwingPlayers, draft.throwerGamePlayerId)}
                 </EditorChipButton>
               ) : (
                 throwingPlayers.map((row) => (
@@ -372,8 +391,7 @@ function SingleThrowEditor({
                   teamHome={defendingHome}
                   onClick={() => setTarget('')}
                 >
-                  {defendingPlayers.find((row) => row.gamePlayerId === draft.targetGamePlayerId)
-                    ?.playerName ?? '?'}
+                  {chipLabel(defendingPlayers, draft.targetGamePlayerId)}
                 </EditorChipButton>
               ) : (
                 targetCandidates.map((row) => (
@@ -540,6 +558,7 @@ export function ThrowEditor({
   eliminatedGamePlayerIds: ReadonlySet<string>;
 }) {
   const hotkeys = buildPermanentPlayerHotkeys(players);
+  const groupThrowingHome = resolveGroupThrowingHome(drafts, players);
   return (
     <Box>
       {drafts.map((draft, index) => (
@@ -550,30 +569,27 @@ export function ThrowEditor({
           homeTeamName={homeTeamName}
           awayTeamName={awayTeamName}
           eliminatedGamePlayerIds={eliminatedGamePlayerIds}
+          groupThrowingHome={groupThrowingHome}
           hotkeys={hotkeys}
           canDelete={drafts.length > 1}
           onDelete={() => onChange(drafts.filter((_, i) => i !== index))}
           onChange={(next) => onChange(drafts.map((row, i) => (i === index ? next : row)))}
         />
       ))}
-      <Button
-        startIcon={<AddIcon />}
-        className="bw-button bw-button--text"
-        onClick={() =>
-          onChange([
-            ...drafts,
-            {
-              throwerGamePlayerId: '',
-              targetGamePlayerId: '',
-              resultId: null,
-              deflections: [],
-              recoveredId: undefined,
-            },
-          ])
-        }
-      >
-        Add Throw
-      </Button>
+      <Stack direction="row" sx={{ alignItems: 'center' }}>
+        <Button
+          startIcon={<AddIcon />}
+          className="bw-button bw-button--text"
+          onClick={() => onChange([...drafts, emptyThrowDraft()])}
+        >
+          Add Team Throw
+        </Button>
+        <Tooltip title={TEAM_THROW_HELP}>
+          <IconButton size="small" aria-label={TEAM_THROW_HELP}>
+            <InfoOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
     </Box>
   );
 }
@@ -600,7 +616,6 @@ export function applyPlayerHotkeyToThrowDrafts(
   drafts: ThrowDraft[],
   players: GamePlayerInfo[],
   key: string,
-  eliminatedGamePlayerIds: ReadonlySet<string> = new Set(),
 ): ThrowDraft[] | null {
   if (drafts.length === 0) return null;
   const draft = drafts[drafts.length - 1];
@@ -613,7 +628,8 @@ export function applyPlayerHotkeyToThrowDrafts(
     return patch(withResult(draft, draft.resultId === resultId ? null : resultId));
   }
 
-  const throwingHome = resolveThrowingHome(draft, players);
+  const groupThrowingHome = resolveGroupThrowingHome(drafts, players);
+  const throwingHome = groupThrowingHome ?? true;
 
   if (throwDraftNeedsRecovered(draft) && key.toLowerCase() === RECOVERED_NONE_HOTKEY) {
     return patch(withToggledRecovery(draft, null));
@@ -630,14 +646,8 @@ export function applyPlayerHotkeyToThrowDrafts(
     return patch(withToggledRecovery(draft, hit.gamePlayerId));
   }
 
-  if (eliminatedGamePlayerIds.has(hit.gamePlayerId)) {
-    return null;
-  }
-
-  const showTarget = Boolean(draft.throwerGamePlayerId || draft.targetGamePlayerId);
-
-  // Phase 1: any player key picks/toggles thrower
-  if (!showTarget) {
+  // Phase 1: with no side chosen yet, any player key picks/toggles thrower
+  if (groupThrowingHome === null) {
     if (draft.throwerGamePlayerId === hit.gamePlayerId) {
       return patch(withThrower(draft, ''));
     }

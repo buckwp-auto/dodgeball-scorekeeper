@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { PageHeader } from '../components/Ui';
@@ -52,6 +52,7 @@ import { buildTimelineEntries } from '../domain/gameEventTimeline';
 import { getGameName, getMatchById } from '../domain/matchGame';
 import {
   computeGameLiveState,
+  findStaleEliminatedSelections,
   finishResultForLiveWinner,
 } from '../domain/gameElimination';
 import {
@@ -106,6 +107,10 @@ export function GameEventsPage() {
   const [finishDraft, setFinishDraft] = useState<FinishDraft>(() => emptyFinishDraft());
   const [savedSnapshot, setSavedSnapshot] = useState(emptyThrowSnapshot);
 
+  const [commitError, setCommitError] = useState<string | null>(null);
+  /** Player position when the throw drafts were last touched, for out-player warnings. */
+  const [editVideoOffsetSeconds, setEditVideoOffsetSeconds] = useState<number | null>(null);
+
   const autoCommittingRef = useRef(false);
   const autoFinishPromptedRef = useRef(false);
 
@@ -118,6 +123,14 @@ export function GameEventsPage() {
     seekToVideoOffset,
     setModeAndPersist: setYoutubeModeAndPersist,
   } = useYoutubeControls(youtubeUrl);
+
+  const updateThrowDrafts = useCallback(
+    (next: ThrowDraft[] | ((prev: ThrowDraft[]) => ThrowDraft[])) => {
+      setThrowDrafts(next);
+      setEditVideoOffsetSeconds(readVideoOffset());
+    },
+    [readVideoOffset],
+  );
 
   const timeline = useMemo(
     () => buildTimelineEntries(data, gameId, matchId),
@@ -142,6 +155,24 @@ export function GameEventsPage() {
     ? getGameEventType(data, effectiveSelectedId)
     : null;
   const visibleTab: GameEventType = lockedTab ?? activeTab;
+
+  // Editing an existing event judges outs against its stored time, not the player head
+  const throwVideoOffsetSeconds = effectiveSelectedId
+    ? timeline.find((row) => row.id === effectiveSelectedId)?.videoOffsetSeconds ?? null
+    : editVideoOffsetSeconds;
+
+  const staleEliminatedSelections = useMemo(
+    () =>
+      visibleTab === 'throw'
+        ? findStaleEliminatedSelections(
+            throwDrafts,
+            players,
+            live.eliminatedAtSeconds,
+            throwVideoOffsetSeconds,
+          )
+        : [],
+    [visibleTab, throwDrafts, players, live.eliminatedAtSeconds, throwVideoOffsetSeconds],
+  );
 
   const currentDraftPayload = useMemo(() => {
     if (visibleTab === 'throw') return throwDrafts;
@@ -390,6 +421,10 @@ export function GameEventsPage() {
       setInsertBeforeEventId(null);
       setPendingWipeFinish(false);
       setSavedSnapshot(JSON.stringify(currentDraftPayload));
+      setCommitError(null);
+    } catch (error) {
+      // Keep the draft on screen so the tracker can correct it instead of losing the event
+      setCommitError(error instanceof Error ? error.message : String(error));
     } finally {
       autoCommittingRef.current = false;
     }
@@ -457,22 +492,17 @@ export function GameEventsPage() {
         return;
       }
       if (action === 'addThrow') {
-        setThrowDrafts((prev) => [...prev, emptyThrowDraft()]);
+        updateThrowDrafts((prev) => [...prev, emptyThrowDraft()]);
         return;
       }
       if (action === 'addDeflection' && visibleTab === 'throw') {
-        setThrowDrafts((prev) => addDeflectionToDrafts(prev));
+        updateThrowDrafts((prev) => addDeflectionToDrafts(prev));
         return;
       }
 
       if (visibleTab === 'throw') {
-        const next = applyPlayerHotkeyToThrowDrafts(
-          throwDrafts,
-          players,
-          key,
-          live.eliminatedGamePlayerIds,
-        );
-        if (next) setThrowDrafts(next);
+        const next = applyPlayerHotkeyToThrowDrafts(throwDrafts, players, key);
+        if (next) updateThrowDrafts(next);
         return;
       }
       if (visibleTab === 'error') {
@@ -498,6 +528,7 @@ export function GameEventsPage() {
       handleRestore,
       players,
       throwDrafts,
+      updateThrowDrafts,
       visibleTab,
       live.eliminatedGamePlayerIds,
     ],
@@ -691,6 +722,22 @@ export function GameEventsPage() {
                 canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
               />
             ) : null}
+            {commitError ? (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                {commitError}
+              </Alert>
+            ) : null}
+            {staleEliminatedSelections.length > 0 ? (
+              <Alert severity="warning" sx={{ mb: 1 }}>
+                {staleEliminatedSelections
+                  .map(
+                    (row) =>
+                      `${row.playerName} went out ${Math.round(row.secondsSinceOut)}s earlier in the video`,
+                  )
+                  .join('; ')}
+                . Recorded anyway — pick again if that is not who you meant.
+              </Alert>
+            ) : null}
             {visibleTab === 'throw' ? (
               <ThrowEditor
                 drafts={throwDrafts}
@@ -698,7 +745,7 @@ export function GameEventsPage() {
                 homeTeamName={homeTeam?.Name ?? 'Home'}
                 awayTeamName={awayTeam?.Name ?? 'Away'}
                 eliminatedGamePlayerIds={live.eliminatedGamePlayerIds}
-                onChange={setThrowDrafts}
+                onChange={updateThrowDrafts}
               />
             ) : null}
             {visibleTab === 'error' ? (
