@@ -49,12 +49,12 @@ export function MatchEventsPage() {
             Match Events
           </Typography>
           <Stack spacing={0.5}>
-            {games.map(({ gameId, label }) => (
+            {games.map(({ gameId, label, scoringComplete }) => (
               <TextButton
                 key={gameId}
                 onClick={() => navigate(`/matches/${matchId}/games/${gameId}`)}
               >
-                {label}
+                {label} — {scoringComplete ? 'Scoring complete' : 'In progress'}
               </TextButton>
             ))}
           </Stack>

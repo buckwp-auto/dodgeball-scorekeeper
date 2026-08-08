@@ -68,10 +68,16 @@ export function getMatchSidePlayers(
   return getPlayersForTeam(data, teamId);
 }
 
+export type MatchGameListItem = {
+  gameId: Guid;
+  label: string;
+  scoringComplete: boolean;
+};
+
 export function getMatchGames(
   data: DatabaseDto,
   matchId: Guid,
-): { gameId: Guid; label: string }[] {
+): MatchGameListItem[] {
   const matchEvents = table<{ Id: Guid; MatchId: Guid; Ordinal: number }>(
     data,
     'MatchEvent',
@@ -79,16 +85,35 @@ export function getMatchGames(
     .filter((row) => row.MatchId === matchId)
     .sort((a, b) => a.Ordinal - b.Ordinal);
 
-  return matchEvents.map((matchEvent, index) => {
-    const link = table<{ MatchEventId: Guid; GameId: Guid }>(
-      data,
-      'MatchEventGame',
-    ).find((row) => row.MatchEventId === matchEvent.Id);
-    return {
-      gameId: link?.GameId ?? '',
-      label: `Game ${index + 1}`,
-    };
-  }).filter((row) => row.gameId);
+  const finishEventIds = new Set(
+    table<{ GameEventId: Guid }>(data, 'GameEventFinish').map(
+      (row) => row.GameEventId,
+    ),
+  );
+  const eventsByGameId = new Map<Guid, Guid[]>();
+  for (const event of table<{ Id: Guid; GameId: Guid }>(data, 'GameEvent')) {
+    const list = eventsByGameId.get(event.GameId);
+    if (list) list.push(event.Id);
+    else eventsByGameId.set(event.GameId, [event.Id]);
+  }
+
+  return matchEvents
+    .map((matchEvent, index) => {
+      const link = table<{ MatchEventId: Guid; GameId: Guid }>(
+        data,
+        'MatchEventGame',
+      ).find((row) => row.MatchEventId === matchEvent.Id);
+      const gameId = link?.GameId ?? '';
+      if (!gameId) return null;
+      const eventIds = eventsByGameId.get(gameId) ?? [];
+      const scoringComplete = eventIds.some((id) => finishEventIds.has(id));
+      return {
+        gameId,
+        label: `Game ${index + 1}`,
+        scoringComplete,
+      };
+    })
+    .filter((row): row is MatchGameListItem => row !== null);
 }
 
 export function getGameIdForMatchOrdinal(
