@@ -9,6 +9,7 @@ import {
   buildPermanentPlayerHotkeys,
   findGamePlayerIdByHotkey,
   getThrowResultForKey,
+  getTrackGameActionForKey,
   hotkeyForGamePlayer,
 } from './hotkeys';
 import { ThrowResult } from './statistics/constants';
@@ -55,5 +56,14 @@ describe('result hotkeys', () => {
 describe('recovered none hotkey', () => {
   it('uses m for None recovery', () => {
     expect(RECOVERED_NONE_HOTKEY).toBe('m');
+  });
+});
+
+describe('undo / redo hotkeys', () => {
+  it('maps - and + to undo and redo', () => {
+    expect(getTrackGameActionForKey('-')).toBe('undo');
+    expect(getTrackGameActionForKey('+')).toBe('redo');
+    expect(getTrackGameActionForKey('Add')).toBe('redo');
+    expect(getTrackGameActionForKey('Subtract')).toBe('undo');
   });
 });

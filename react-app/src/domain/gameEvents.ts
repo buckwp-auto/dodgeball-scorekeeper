@@ -609,6 +609,191 @@ export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {
   }
 }
 
+export type ThrowSnapshot = {
+  Id: Guid;
+  Ordinal: number;
+  ThrowerId: Guid;
+  TargetId: Guid;
+  RecoveredId: Guid | null;
+  ResultId: number;
+  deflections: Array<{
+    Id: Guid;
+    Ordinal: number;
+    ReceiverId: Guid;
+    ResultId: number;
+  }>;
+};
+
+export type GameEventSnapshot = {
+  event: GameEventRow;
+  type: Exclude<GameEventType, 'start'>;
+  error?: { OffenderId: Guid; OffenseId: number };
+  finish?: { ResultId: number };
+  throws?: ThrowSnapshot[];
+};
+
+export function getLastUndoableGameEvent(
+  data: DatabaseDto,
+  gameId: Guid,
+): GameEventRow | null {
+  const events = getGameEventsNewestFirst(data, gameId);
+  return (
+    events.find((event) => {
+      const type = getGameEventType(data, event.Id);
+      return type !== null && type !== 'start';
+    }) ?? null
+  );
+}
+
+export function snapshotGameEvent(
+  data: DatabaseDto,
+  gameEventId: Guid,
+): GameEventSnapshot | null {
+  const event = table<GameEventRow>(data, 'GameEvent').find(
+    (row) => row.Id === gameEventId,
+  );
+  if (!event) return null;
+  const type = getGameEventType(data, gameEventId);
+  if (!type || type === 'start') return null;
+
+  const base: GameEventSnapshot = {
+    event: { ...event },
+    type,
+  };
+
+  if (type === 'error') {
+    const row = table<{ GameEventId: Guid; OffenderId: Guid; OffenseId: number }>(
+      data,
+      'GameEventError',
+    ).find((entry) => entry.GameEventId === gameEventId);
+    if (!row) return null;
+    return {
+      ...base,
+      error: { OffenderId: row.OffenderId, OffenseId: row.OffenseId },
+    };
+  }
+
+  if (type === 'finish') {
+    const row = table<{ GameEventId: Guid; ResultId: number }>(
+      data,
+      'GameEventFinish',
+    ).find((entry) => entry.GameEventId === gameEventId);
+    if (!row) return null;
+    return { ...base, finish: { ResultId: row.ResultId } };
+  }
+
+  const throwRows = table<{
+    Id: Guid;
+    GameEventThrowId: Guid;
+    ThrowerId: Guid;
+    TargetId: Guid;
+    ResultId: number;
+    RecoveredId?: Guid | null;
+    Ordinal: number;
+  }>(data, 'Throw')
+    .filter((row) => row.GameEventThrowId === gameEventId)
+    .sort((a, b) => a.Ordinal - b.Ordinal);
+
+  const throws: ThrowSnapshot[] = throwRows.map((throwRow) => ({
+    Id: throwRow.Id,
+    Ordinal: throwRow.Ordinal,
+    ThrowerId: throwRow.ThrowerId,
+    TargetId: throwRow.TargetId,
+    RecoveredId: throwRow.RecoveredId ?? null,
+    ResultId: throwRow.ResultId,
+    deflections: table<{
+      Id: Guid;
+      ThrowId: Guid;
+      ReceiverId: Guid;
+      ResultId: number;
+      Ordinal: number;
+    }>(data, 'Deflection')
+      .filter((row) => row.ThrowId === throwRow.Id)
+      .sort((a, b) => a.Ordinal - b.Ordinal)
+      .map((row) => ({
+        Id: row.Id,
+        Ordinal: row.Ordinal,
+        ReceiverId: row.ReceiverId,
+        ResultId: row.ResultId,
+      })),
+  }));
+
+  return { ...base, throws };
+}
+
+/** Undo the latest non-start event; returns the snapshot for the redo stack. */
+export function undoLastGameEvent(
+  data: DatabaseDto,
+  gameId: Guid,
+): GameEventSnapshot | null {
+  const last = getLastUndoableGameEvent(data, gameId);
+  if (!last) return null;
+  const snapshot = snapshotGameEvent(data, last.Id);
+  if (!snapshot) return null;
+  deleteGameEvent(data, last.Id);
+  return snapshot;
+}
+
+export function restoreGameEventSnapshot(
+  data: DatabaseDto,
+  snapshot: GameEventSnapshot,
+): Guid {
+  const { event, type } = snapshot;
+  if (table<GameEventRow>(data, 'GameEvent').some((row) => row.Id === event.Id)) {
+    throw new Error('Event already exists');
+  }
+
+  shiftOrdinalsFrom(data, event.GameId, event.Ordinal, 1);
+  pushRow(data, 'GameEvent', {
+    Id: event.Id,
+    GameId: event.GameId,
+    Ordinal: event.Ordinal,
+    VideoOffsetSeconds: event.VideoOffsetSeconds ?? null,
+  });
+
+  if (type === 'error') {
+    if (!snapshot.error) throw new Error('Missing error snapshot');
+    pushRow(data, 'GameEventError', {
+      GameEventId: event.Id,
+      OffenderId: snapshot.error.OffenderId,
+      OffenseId: snapshot.error.OffenseId,
+    });
+    return event.Id;
+  }
+
+  if (type === 'finish') {
+    if (!snapshot.finish) throw new Error('Missing finish snapshot');
+    pushRow(data, 'GameEventFinish', {
+      GameEventId: event.Id,
+      ResultId: snapshot.finish.ResultId,
+    });
+    return event.Id;
+  }
+
+  pushRow(data, 'GameEventThrow', { GameEventId: event.Id });
+  for (const throwSnap of snapshot.throws ?? []) {
+    pushRow(data, 'Throw', {
+      Id: throwSnap.Id,
+      GameEventThrowId: event.Id,
+      Ordinal: throwSnap.Ordinal,
+      ThrowerId: throwSnap.ThrowerId,
+      TargetId: throwSnap.TargetId,
+      RecoveredId: throwSnap.RecoveredId,
+      ResultId: throwSnap.ResultId,
+    });
+    for (const deflection of throwSnap.deflections) {
+      pushRow(data, 'Deflection', {
+        Id: deflection.Id,
+        ThrowId: throwSnap.Id,
+        Ordinal: deflection.Ordinal,
+        ReceiverId: deflection.ReceiverId,
+        ResultId: deflection.ResultId,
+      });
+    }
+  }
+  return event.Id;
+}
+
 export function getInsertBelowTargetEventId(
   eventsNewestFirst: GameEventRow[],
   selectedEventId: Guid,

@@ -19,7 +19,9 @@ export type TrackGameAction =
   | 'addThrow'
   | 'restore'
   | 'insertBelow'
-  | 'delete';
+  | 'delete'
+  | 'undo'
+  | 'redo';
 
 export const GAME_ACTION_HOTKEYS: ReadonlyArray<{
   key: string;
@@ -32,6 +34,8 @@ export const GAME_ACTION_HOTKEYS: ReadonlyArray<{
   { key: 'v', action: 'restore', label: 'Restore' },
   { key: 'b', action: 'insertBelow', label: 'Insert below' },
   { key: 'n', action: 'delete', label: 'Delete' },
+  { key: '-', action: 'undo', label: 'Undo last event' },
+  { key: '+', action: 'redo', label: 'Redo last event' },
 ];
 
 export type PlayerHotkeySource = {
@@ -146,6 +150,8 @@ export function getThrowResultForKey(key: string): ThrowResult | null {
 }
 
 export function getTrackGameActionForKey(key: string): TrackGameAction | null {
+  if (key === '+' || key === 'Add') return 'redo';
+  if (key === '-' || key === '_' || key === 'Subtract') return 'undo';
   const normalized = key.length === 1 ? key.toLowerCase() : key;
   return GAME_ACTION_HOTKEYS.find((row) => row.key === normalized)?.action ?? null;
 }

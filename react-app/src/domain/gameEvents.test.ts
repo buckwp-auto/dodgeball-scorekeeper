@@ -11,12 +11,17 @@ import { getStatisticsSummaryCsvText } from './statistics/statisticsFormatServic
 import { buildTimelineEntries } from './gameEventTimeline';
 import {
   ensureGameStartEvent,
+  gameHasFinishEvent,
   getGameEventType,
+  getGameEvents,
   getGameStartEvent,
   initialVideoSeekSeconds,
+  loadThrowDraftsFromEvent,
   persistFinishGameEvent,
   persistThrowGameEvent,
+  restoreGameEventSnapshot,
   setGameEventVideoOffset,
+  undoLastGameEvent,
 } from './gameEvents';
 
 function setupOneGameMatch(extraHome = false) {
@@ -332,5 +337,61 @@ describe('initialVideoSeekSeconds', () => {
       { videoOffsetSeconds: 100 },
     );
     expect(initialVideoSeekSeconds(data, gameId)).toBe(12);
+  });
+});
+
+describe('undo / redo game events', () => {
+  it('undoes and restores the last throw with deflections', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Catch,
+          deflections: [
+            {
+              receiverGamePlayerId: awayGp.Id,
+              resultId: DeflectionResult.Block,
+            },
+          ],
+          recoveredId: homeGp2!.Id,
+        },
+      ],
+      { videoOffsetSeconds: 55 },
+    );
+
+    const snapshot = undoLastGameEvent(data, gameId);
+    expect(snapshot?.type).toBe('throw');
+    expect(getGameEvents(data, gameId)).toHaveLength(1); // start only
+
+    const restoredId = restoreGameEventSnapshot(data, snapshot!);
+    expect(restoredId).toBe(snapshot!.event.Id);
+    const drafts = loadThrowDraftsFromEvent(data, restoredId);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].resultId).toBe(ThrowResult.Catch);
+    expect(drafts[0].recoveredId).toBe(homeGp2!.Id);
+    expect(drafts[0].deflections).toHaveLength(1);
+    expect(
+      (data.Tables.GameEvent as { Id: string; VideoOffsetSeconds?: number }[]).find(
+        (row) => row.Id === restoredId,
+      )?.VideoOffsetSeconds,
+    ).toBe(55);
+  });
+
+  it('undoes a finish event', () => {
+    const { data, gameId } = setupOneGameMatch();
+    persistFinishGameEvent(data, gameId, {
+      resultId: GameEventFinishResult.WinAway,
+    });
+    expect(gameHasFinishEvent(data, gameId)).toBe(true);
+    const snapshot = undoLastGameEvent(data, gameId);
+    expect(snapshot?.type).toBe('finish');
+    expect(gameHasFinishEvent(data, gameId)).toBe(false);
+    restoreGameEventSnapshot(data, snapshot!);
+    expect(gameHasFinishEvent(data, gameId)).toBe(true);
   });
 });

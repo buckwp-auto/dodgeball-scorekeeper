@@ -43,9 +43,12 @@ import {
   persistErrorGameEvent,
   persistFinishGameEvent,
   persistThrowGameEvent,
+  restoreGameEventSnapshot,
   setGameEventVideoOffset,
+  undoLastGameEvent,
   type ErrorDraft,
   type FinishDraft,
+  type GameEventSnapshot,
   type GameEventType,
   type ThrowDraft,
 } from '../domain/gameEvents';
@@ -114,6 +117,7 @@ export function GameEventsPage() {
 
   const autoCommittingRef = useRef(false);
   const autoFinishPromptedRef = useRef(false);
+  const redoStackRef = useRef<GameEventSnapshot[]>([]);
 
   const youtubeUrl = match?.YoutubeUrl?.trim() || '';
   const {
@@ -251,6 +255,7 @@ export function GameEventsPage() {
         persistFinishGameEvent(draft, gameId, finishDraft, { videoOffsetSeconds }),
       (id) => `Saved finish event (${id}).`,
     );
+    redoStackRef.current = [];
     autoFinishPromptedRef.current = false;
     setPendingWipeFinish(false);
     setSelectedEventId(null);
@@ -278,6 +283,7 @@ export function GameEventsPage() {
   useEffect(() => {
     autoFinishPromptedRef.current = false;
     autoCommittingRef.current = false;
+    redoStackRef.current = [];
     setSelectedEventId(null);
     setInsertBeforeEventId(null);
     setActiveTab('throw');
@@ -335,6 +341,30 @@ export function GameEventsPage() {
     );
     resetNewEventMode();
   }, [effectiveSelectedId, mutate, resetNewEventMode, data]);
+
+  const handleUndo = useCallback(() => {
+    const snapshot = mutate(
+      (draft) => undoLastGameEvent(draft, gameId),
+      (removed) => (removed ? 'Undid last game event.' : ''),
+    );
+    if (!snapshot) return;
+    redoStackRef.current = [...redoStackRef.current, snapshot];
+    resetNewEventMode();
+  }, [mutate, gameId, resetNewEventMode]);
+
+  const handleRedo = useCallback(() => {
+    const snapshot = redoStackRef.current[redoStackRef.current.length - 1];
+    if (!snapshot) return;
+    mutate(
+      (draft) => {
+        restoreGameEventSnapshot(draft, snapshot);
+        return null;
+      },
+      'Redid game event.',
+    );
+    redoStackRef.current = redoStackRef.current.slice(0, -1);
+    resetNewEventMode();
+  }, [mutate, resetNewEventMode]);
 
   const handleCommitVideoOffset = useCallback(
     (eventId: string, seconds: number | null) => {
@@ -426,6 +456,11 @@ export function GameEventsPage() {
             : `Saved ${visibleTab} event (${id}).`,
       );
 
+      // New commits clear the redo stack (standard undo/redo)
+      if (!effectiveSelectedId) {
+        redoStackRef.current = [];
+      }
+
       setSelectedEventId(eventId);
       setInsertBeforeEventId(null);
       setPendingWipeFinish(false);
@@ -469,6 +504,20 @@ export function GameEventsPage() {
     (key: string, event: KeyboardEvent) => {
       if (isYoutubeControlHotkey(key)) return;
 
+      const undoRedoAction = getTrackGameActionForKey(key);
+      if (undoRedoAction === 'undo') {
+        event.preventDefault();
+        handleUndo();
+        return;
+      }
+      if (undoRedoAction === 'redo') {
+        event.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      if (gameCompleteIdle) return;
+
       if (key === 'Enter') {
         if (
           (awaitingFinishConfirm ||
@@ -483,7 +532,7 @@ export function GameEventsPage() {
         return;
       }
 
-      const action = getTrackGameActionForKey(key);
+      const action = undoRedoAction;
       if (action === 'done') {
         handleDone();
         return;
@@ -530,8 +579,11 @@ export function GameEventsPage() {
       confirmFinishEvent,
       finishDraft,
       gameFinished,
+      gameCompleteIdle,
       effectiveSelectedId,
       handleDelete,
+      handleUndo,
+      handleRedo,
       handleDone,
       handleInsertBelow,
       handleRestore,
@@ -543,7 +595,7 @@ export function GameEventsPage() {
     ],
   );
 
-  useDocumentHotkeys(handleTrackGameHotkey, !gameCompleteIdle, { capture: true });
+  useDocumentHotkeys(handleTrackGameHotkey, true, { capture: true });
 
   const youtubeDocked = hasYoutube && youtubeMode === 'docked';
   const youtubeTall = hasYoutube && youtubeMode === 'tall';
