@@ -33,6 +33,7 @@ import {
   EditorGrid,
   EditorLabel,
   TeamBanner,
+  TeamBannerSpacer,
   useEditorDensity,
 } from './EditorGrid';
 
@@ -274,7 +275,7 @@ function SingleThrowEditor({
           <>
             <TeamBanner name={homeTeamName} teamHome />
             <TeamBanner name={awayTeamName} teamHome={false} />
-            <Box />
+            <TeamBannerSpacer />
           </>
         ) : (
           <>
@@ -286,7 +287,7 @@ function SingleThrowEditor({
               name={defendingHome ? homeTeamName : awayTeamName}
               teamHome={defendingHome}
             />
-            <Box />
+            <TeamBannerSpacer />
           </>
         )}
 

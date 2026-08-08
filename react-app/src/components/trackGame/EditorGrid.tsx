@@ -80,22 +80,43 @@ export function EditorLabel({
 export function TeamBanner({ name, teamHome }: { name: string; teamHome: boolean }) {
   const styles = teamHeaderStyles(teamHome, 'light');
   const density = useEditorDensity();
+  const compact = density === 'compact';
   return (
     <Typography
-      variant={density === 'compact' ? 'caption' : 'subtitle2'}
+      variant={compact ? 'caption' : 'subtitle2'}
       sx={{
         fontWeight: 700,
-        px: density === 'compact' ? 0.5 : 1,
-        py: density === 'compact' ? 0.15 : 0.35,
+        px: compact ? 0.5 : 1,
+        py: compact ? 0.4 : 0.75,
+        minHeight: compact ? 28 : 36,
+        display: 'flex',
+        alignItems: 'center',
+        mb: compact ? 0.5 : 0.75,
         borderRadius: 1,
         border: '1px solid',
         backgroundColor: styles.backgroundColor,
         color: styles.color,
         borderColor: styles.borderColor,
+        boxSizing: 'border-box',
       }}
     >
       {name}
     </Typography>
+  );
+}
+
+/** Spacer matching TeamBanner height so the result column aligns with player rows. */
+export function TeamBannerSpacer() {
+  const density = useEditorDensity();
+  const compact = density === 'compact';
+  return (
+    <Box
+      aria-hidden
+      sx={{
+        minHeight: compact ? 28 : 36,
+        mb: compact ? 0.5 : 0.75,
+      }}
+    />
   );
 }
 
