@@ -67,9 +67,36 @@ const LeagueContext = createContext<LeagueContextValue | null>(null);
 
 function loadStoredLeagueId(): string | null {
   try {
-    return sessionStorage.getItem(ACTIVE_LEAGUE_KEY);
+    const fromLocal = localStorage.getItem(ACTIVE_LEAGUE_KEY);
+    if (fromLocal) return fromLocal;
+    // Migrate from the older sessionStorage key once
+    const fromSession = sessionStorage.getItem(ACTIVE_LEAGUE_KEY);
+    if (fromSession) {
+      localStorage.setItem(ACTIVE_LEAGUE_KEY, fromSession);
+      sessionStorage.removeItem(ACTIVE_LEAGUE_KEY);
+      return fromSession;
+    }
+    return null;
   } catch {
     return null;
+  }
+}
+
+function storeActiveLeagueId(leagueId: string): void {
+  try {
+    localStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId);
+    sessionStorage.removeItem(ACTIVE_LEAGUE_KEY);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function clearStoredActiveLeagueId(): void {
+  try {
+    localStorage.removeItem(ACTIVE_LEAGUE_KEY);
+    sessionStorage.removeItem(ACTIVE_LEAGUE_KEY);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -110,6 +137,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [directoryReady, setDirectoryReady] = useState(false);
 
   const revisionsRef = useRef<CloudRevisions>({
     rosterRevision: 0,
@@ -124,6 +152,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   });
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushingRef = useRef(false);
+  const autoOpenAttemptedRef = useRef(false);
   const [isDirty, setIsDirty] = useState(false);
 
   const clearFlushTimer = () => {
@@ -146,6 +175,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       setLeagues([]);
       setMemberships({});
       setMembersByLeague({});
+      setDirectoryReady(false);
       return;
     }
     setRefreshing(true);
@@ -183,6 +213,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       console.error('refreshDirectory failed', error);
     } finally {
       setRefreshing(false);
+      setDirectoryReady(true);
     }
   }, [user]);
 
@@ -376,7 +407,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       revisionsRef.current = revisions;
       markClean(data);
       setActiveLeagueId(leagueId);
-      sessionStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId);
+      storeActiveLeagueId(leagueId);
       setSyncStatus('saved');
       setLastSavedAt(new Date().toISOString());
       setSyncError(null);
@@ -395,7 +426,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     }
     clearFlushTimer();
     setActiveLeagueId(null);
-    sessionStorage.removeItem(ACTIVE_LEAGUE_KEY);
+    clearStoredActiveLeagueId();
     syncedDataRef.current = null;
     latestDataRef.current = null;
     dirtyRef.current = { roster: false, matchIds: [], removedMatchIds: [] };
@@ -464,16 +495,32 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     };
   }, [activeLeagueId, flushNow]);
 
-  // Clear active league on sign-out
+  // Clear active league on sign-out (keep stored id for next sign-in)
   useEffect(() => {
     if (!user && activeLeagueId) {
       clearFlushTimer();
       setActiveLeagueId(null);
-      sessionStorage.removeItem(ACTIVE_LEAGUE_KEY);
       setSyncStatus('local');
       setIsDirty(false);
+      autoOpenAttemptedRef.current = false;
     }
   }, [user, activeLeagueId]);
+
+  // Auto-open the last league after sign-in when membership is still active
+  useEffect(() => {
+    if (!user || activeLeagueId || autoOpenAttemptedRef.current) return;
+    if (!directoryReady || refreshing) return;
+    const storedId = loadStoredLeagueId();
+    autoOpenAttemptedRef.current = true;
+    if (!storedId) return;
+    if (memberships[storedId]?.status !== 'active') return;
+    void openLeague(storedId).catch((error) => {
+      console.error('auto-open league failed', error);
+      setSyncError(
+        error instanceof Error ? error.message : 'Failed to reopen last league',
+      );
+    });
+  }, [user, activeLeagueId, directoryReady, refreshing, memberships, openLeague]);
 
   const value = useMemo(
     () => ({
