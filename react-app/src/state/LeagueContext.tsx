@@ -38,6 +38,8 @@ type LeagueContextValue = {
   activeLeagueId: string | null;
   /** True when the signed-in user may replace the open cloud league from a file. */
   canOverrideActiveLeague: boolean;
+  /** True for local-only data, or when the signed-in user is admin of the open league. */
+  canDeleteMatchesAndGames: boolean;
   syncStatus: SyncStatus;
   lastSavedAt: string | null;
   syncError: string | null;
@@ -387,6 +389,8 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     );
   }, [user, activeLeagueId, leagues, memberships]);
 
+  const canDeleteMatchesAndGames = !activeLeagueId || canOverrideActiveLeague;
+
   const openLeague = useCallback(
     async (leagueId: string) => {
       const cloud = await loadCloud();
@@ -529,6 +533,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       membersByLeague,
       activeLeagueId,
       canOverrideActiveLeague,
+      canDeleteMatchesAndGames,
       syncStatus,
       lastSavedAt,
       syncError,
@@ -552,6 +557,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       membersByLeague,
       activeLeagueId,
       canOverrideActiveLeague,
+      canDeleteMatchesAndGames,
       syncStatus,
       lastSavedAt,
       syncError,

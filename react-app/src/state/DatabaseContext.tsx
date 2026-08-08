@@ -24,6 +24,9 @@ import {
   serializeDatabase,
 } from '../domain/database';
 import {
+  deleteGame as deleteGameOp,
+  deleteMatch as deleteMatchOp,
+  getMatchById,
   toggleGamePlayer as toggleGamePlayerOp,
   toggleMatchPlayer as toggleMatchPlayerOp,
 } from '../domain/matchGame';
@@ -41,6 +44,8 @@ type DatabaseContextValue = {
   deleteTeam: (teamId: Guid) => void;
   deletePlayer: (playerId: Guid) => void;
   addMatch: (teamIdHome: Guid, teamIdAway: Guid) => Guid;
+  deleteMatch: (matchId: Guid) => void;
+  deleteGame: (matchId: Guid, gameId: Guid) => void;
   toggleMatchPlayer: (matchId: Guid, playerId: Guid, teamHome: boolean) => void;
   toggleGamePlayer: (matchId: Guid, gameId: Guid, playerId: Guid) => void;
   mutate: <T>(
@@ -240,6 +245,34 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const deleteMatch = useCallback(
+    (matchId: Guid) => {
+      mutate(
+        (draft) => {
+          const match = getMatchById(draft, matchId);
+          const name = match ? getMatchName(draft, match) : '?';
+          deleteMatchOp(draft, matchId);
+          return name;
+        },
+        (matchName) => `Deleted match (${matchName}).`,
+      );
+    },
+    [mutate],
+  );
+
+  const deleteGame = useCallback(
+    (matchId: Guid, gameId: Guid) => {
+      mutate(
+        (draft) => {
+          deleteGameOp(draft, matchId, gameId);
+          return null;
+        },
+        'Deleted game.',
+      );
+    },
+    [mutate],
+  );
+
   const toggleMatchPlayer = useCallback(
     (matchId: Guid, playerId: Guid, teamHome: boolean) => {
       mutate(
@@ -314,6 +347,8 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       deleteTeam,
       deletePlayer,
       addMatch,
+      deleteMatch,
+      deleteGame,
       toggleMatchPlayer,
       toggleGamePlayer,
       mutate,
@@ -330,6 +365,8 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       deleteTeam,
       deletePlayer,
       addMatch,
+      deleteMatch,
+      deleteGame,
       toggleMatchPlayer,
       toggleGamePlayer,
       mutate,

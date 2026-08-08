@@ -59,6 +59,7 @@ type YtPlayer = {
   getPlayerState: () => number;
   getVideoData?: () => { title?: string };
   getIframe?: () => HTMLIFrameElement;
+  cueVideoById?: (args: { videoId: string; startSeconds?: number }) => void;
 };
 
 let apiLoadPromise: Promise<void> | null = null;
@@ -231,8 +232,13 @@ export const YoutubePlayer = forwardRef<
     youtubeUrl: string;
     mode: YoutubePlayerMode;
     onModeChange: (mode: YoutubePlayerMode) => void;
+    /** Seconds to cue on first load (paused). Timeline seeks do not use this. */
+    startSeconds?: number | null;
   }
->(function YoutubePlayer({ youtubeUrl, mode, onModeChange }, ref) {
+>(function YoutubePlayer(
+  { youtubeUrl, mode, onModeChange, startSeconds = null },
+  ref,
+) {
   const videoId = parseYoutubeVideoId(youtubeUrl);
   const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YtPlayer | null>(null);
@@ -343,7 +349,24 @@ export const YoutubePlayer = forwardRef<
       releaseIframeFocusRef.current?.();
       releaseIframeFocusRef.current = null;
       playerRef.current?.destroy();
-      playerRef.current = new window.YT.Player(mountRef.current, {
+      // YT.Player replaces its mount node with an iframe. Keep that iframe
+      // off React's reconcile path or setState in onReady will wipe the embed.
+      const host = mountRef.current;
+      host.replaceChildren();
+      const target = document.createElement('div');
+      target.style.width = '100%';
+      target.style.height = '100%';
+      host.appendChild(target);
+
+      const pending = pendingSeekSecondsRef.current;
+      const cueAt =
+        pending ??
+        (startSeconds != null && Number.isFinite(startSeconds)
+          ? Math.max(0, startSeconds)
+          : 0);
+      pendingSeekSecondsRef.current = null;
+
+      playerRef.current = new window.YT.Player(target, {
         videoId,
         width: '100%',
         height: '100%',
@@ -352,6 +375,8 @@ export const YoutubePlayer = forwardRef<
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
+          autoplay: 0,
+          start: Math.floor(cueAt),
           // Prefer our page-level Space / arrows / , . handlers
           disablekb: 1,
         },
@@ -372,15 +397,20 @@ export const YoutubePlayer = forwardRef<
             } catch {
               /* ignore */
             }
-            const pending = pendingSeekSecondsRef.current;
-            if (pending !== null) {
+            const lateSeek = pendingSeekSecondsRef.current;
+            if (lateSeek !== null) {
+              pendingSeekSecondsRef.current = null;
               try {
-                event.target.seekTo(pending, true);
-                setDisplayTime(pending);
-                pendingSeekSecondsRef.current = null;
+                event.target.cueVideoById?.({
+                  videoId,
+                  startSeconds: lateSeek,
+                });
+                setDisplayTime(lateSeek);
               } catch {
-                /* keep pending for a later seekTo */
+                /* playerVars.start already applied */
               }
+            } else if (cueAt > 0) {
+              setDisplayTime(cueAt);
             }
           },
           onError: () => {
@@ -401,7 +431,7 @@ export const YoutubePlayer = forwardRef<
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [videoId, mode === 'hidden' ? 'hidden' : 'visible']);
+  }, [videoId, mode === 'hidden' ? 'hidden' : 'visible', startSeconds]);
 
   useEffect(() => {
     if (!ready || mode === 'hidden') return;

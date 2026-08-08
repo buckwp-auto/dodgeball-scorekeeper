@@ -11,6 +11,7 @@ import {
 } from '../domain/matchGame';
 import type { DatabaseDto } from '../domain/types';
 import { useDatabase } from '../state/DatabaseContext';
+import { useLeague } from '../state/LeagueContext';
 
 function gameHref(matchId: string, gameId: string, data: DatabaseDto) {
   if (canNavigateToGameEvents(data, matchId, gameId)) {
@@ -22,7 +23,8 @@ function gameHref(matchId: string, gameId: string, data: DatabaseDto) {
 export function MatchEventsPage() {
   const { matchId = '' } = useParams();
   const navigate = useNavigate();
-  const { data, mutate } = useDatabase();
+  const { data, mutate, deleteGame } = useDatabase();
+  const { canDeleteMatchesAndGames } = useLeague();
   const games = getMatchGames(data, matchId);
 
   const onAddGame = () => {
@@ -48,6 +50,11 @@ export function MatchEventsPage() {
     );
   };
 
+  const onDeleteGame = (gameId: string, label: string) => {
+    if (!window.confirm(`Delete ${label} and all of its events?`)) return;
+    deleteGame(matchId, gameId);
+  };
+
   return (
     <>
       <PageHeader>Track Match</PageHeader>
@@ -68,12 +75,29 @@ export function MatchEventsPage() {
           </Typography>
           <Stack spacing={0.5}>
             {games.map(({ gameId, label, scoringComplete }) => (
-              <TextButton
+              <Stack
                 key={gameId}
-                onClick={() => navigate(gameHref(matchId, gameId, data))}
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center' }}
               >
-                {label} — {scoringComplete ? 'Scoring complete' : 'In progress'}
-              </TextButton>
+                <TextButton
+                  expand
+                  onClick={() => navigate(gameHref(matchId, gameId, data))}
+                >
+                  {label} — {scoringComplete ? 'Scoring complete' : 'In progress'}
+                </TextButton>
+                {canDeleteMatchesAndGames ? (
+                  <Button
+                    size="small"
+                    color="error"
+                    className="bw-button bw-button--text"
+                    onClick={() => onDeleteGame(gameId, label)}
+                  >
+                    Delete
+                  </Button>
+                ) : null}
+              </Stack>
             ))}
           </Stack>
         </Box>

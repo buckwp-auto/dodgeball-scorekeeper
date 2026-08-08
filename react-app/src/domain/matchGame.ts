@@ -191,6 +191,87 @@ export function addGame(data: DatabaseDto, matchId: Guid): Guid {
   return gameId;
 }
 
+function removeGameScopedRows(data: DatabaseDto, gameId: Guid): void {
+  const gameEventIds = new Set(
+    table<{ Id: Guid; GameId: Guid }>(data, 'GameEvent')
+      .filter((row) => row.GameId === gameId)
+      .map((row) => row.Id),
+  );
+  const throwIds = new Set(
+    table<{ Id: Guid; GameEventThrowId: Guid }>(data, 'Throw')
+      .filter((row) => gameEventIds.has(row.GameEventThrowId))
+      .map((row) => row.Id),
+  );
+
+  data.Tables.Deflection = table(data, 'Deflection').filter(
+    (row) => !throwIds.has((row as { ThrowId: Guid }).ThrowId),
+  );
+  data.Tables.Throw = table(data, 'Throw').filter(
+    (row) => !throwIds.has((row as { Id: Guid }).Id),
+  );
+  data.Tables.GameEventThrow = table(data, 'GameEventThrow').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
+  data.Tables.GameEventError = table(data, 'GameEventError').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
+  data.Tables.GameEventFinish = table(data, 'GameEventFinish').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
+  data.Tables.GameEventStart = table(data, 'GameEventStart').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
+  data.Tables.GameEvent = table(data, 'GameEvent').filter(
+    (row) => (row as { GameId: Guid }).GameId !== gameId,
+  );
+  data.Tables.GamePlayer = table(data, 'GamePlayer').filter(
+    (row) => (row as { GameId: Guid }).GameId !== gameId,
+  );
+  data.Tables.Game = table(data, 'Game').filter(
+    (row) => (row as { Id: Guid }).Id !== gameId,
+  );
+}
+
+/** Removes a game and all of its events/players from a match. */
+export function deleteGame(data: DatabaseDto, matchId: Guid, gameId: Guid): void {
+  const link = table<{ MatchEventId: Guid; GameId: Guid }>(
+    data,
+    'MatchEventGame',
+  ).find((row) => row.GameId === gameId);
+  if (!link) throw new Error('Game not found');
+  const matchEvent = table<{ Id: Guid; MatchId: Guid }>(data, 'MatchEvent').find(
+    (row) => row.Id === link.MatchEventId,
+  );
+  if (!matchEvent || matchEvent.MatchId !== matchId) {
+    throw new Error('Game not in match');
+  }
+
+  removeGameScopedRows(data, gameId);
+  data.Tables.MatchEventGame = table(data, 'MatchEventGame').filter(
+    (row) => (row as { GameId: Guid }).GameId !== gameId,
+  );
+  data.Tables.MatchEvent = table(data, 'MatchEvent').filter(
+    (row) => (row as { Id: Guid }).Id !== link.MatchEventId,
+  );
+}
+
+/** Removes a match, its roster, and every game/event under it. */
+export function deleteMatch(data: DatabaseDto, matchId: Guid): void {
+  if (!getMatchById(data, matchId)) throw new Error('Match not found');
+  for (const { gameId } of getMatchGames(data, matchId)) {
+    deleteGame(data, matchId, gameId);
+  }
+  data.Tables.MatchEvent = table<{ MatchId: Guid }>(data, 'MatchEvent').filter(
+    (row) => row.MatchId !== matchId,
+  );
+  data.Tables.MatchPlayer = table<{ MatchId: Guid }>(data, 'MatchPlayer').filter(
+    (row) => row.MatchId !== matchId,
+  );
+  data.Tables.Match = table<{ Id: Guid }>(data, 'Match').filter(
+    (row) => row.Id !== matchId,
+  );
+}
+
 export function getGamePlayers(data: DatabaseDto, gameId: Guid) {
   return table<{ Id: Guid; GameId: Guid; MatchPlayerId: Guid }>(
     data,

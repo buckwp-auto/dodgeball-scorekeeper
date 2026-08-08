@@ -10,8 +10,8 @@
 
 - **Overview** — Google sign-in / league directory (when Firebase configured), download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
-- **Matches** — create matches, select players, download/copy match statistics CSV
-- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; opening a game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen
+- **Matches** — create matches, select players, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
+- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; opening a game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; **Delete** game (with confirm) for local data or league admins
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed
 
@@ -63,7 +63,7 @@ Derived from persisted events (not a separate toggle):
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
   - **Hide** — scoring only (timestamps pause)
 - Playback hotkeys work without focusing the embed: `Space` play/pause, `←`/`→` ±5s, `,`/`.` frame step when paused
-- **On open**: unfinished games seek to the last stamped event; finished games seek to **Game start** (seek is queued until the player is ready)
+- **On open**: unfinished games start paused at the last stamped event; finished games start paused at **Game start** (no autoplay)
 - Saving an event stamps `VideoOffsetSeconds` from the player clock on **create** (edits keep the existing time); timeline times are editable (type m:ss or **From video**); select seeks
 - Every game has a **Game start** event (ordinal 1) with an editable timestamp; cannot be deleted
 - GitHub Pages–safe iframe (`origin` + referrer policy); embed failures don’t block scoring

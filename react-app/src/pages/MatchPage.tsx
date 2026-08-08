@@ -18,11 +18,13 @@ import {
   getMatchSidePlayersWithSelection,
 } from '../domain/matchGame';
 import { useDatabase } from '../state/DatabaseContext';
+import { useLeague } from '../state/LeagueContext';
 
 export function MatchPage() {
   const { matchId = '' } = useParams();
   const navigate = useNavigate();
-  const { data, toggleMatchPlayer, mutate } = useDatabase();
+  const { data, toggleMatchPlayer, mutate, deleteMatch } = useDatabase();
+  const { canDeleteMatchesAndGames } = useLeague();
   const match = getMatchById(data, matchId);
   const [youtubeDraft, setYoutubeDraft] = useState('');
 
@@ -102,6 +104,14 @@ export function MatchPage() {
     URL.revokeObjectURL(url);
   };
 
+  const onDeleteMatch = () => {
+    if (!match) return;
+    const matchName = getMatchName(data, match);
+    if (!window.confirm(`Delete match “${matchName}” and all of its games?`)) return;
+    deleteMatch(matchId);
+    navigate('/matches');
+  };
+
   const copyStatistics = async () => {
     const text = new TextDecoder().decode(statisticsBytes());
     const tsv = text
@@ -145,6 +155,17 @@ export function MatchPage() {
         >
           Copy Match Statistics
         </Button>
+        {canDeleteMatchesAndGames ? (
+          <Button
+            type="button"
+            className="bw-button bw-button--text"
+            variant="outlined"
+            color="error"
+            onClick={onDeleteMatch}
+          >
+            Delete Match
+          </Button>
+        ) : null}
       </Stack>
       <Stack spacing={1} sx={{ mb: 2, maxWidth: 720 }}>
         <TextField

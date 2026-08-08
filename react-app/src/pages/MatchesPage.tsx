@@ -1,12 +1,14 @@
-import { Button } from '@mui/material';
+import { Button, Stack } from '@mui/material';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { PageHeader, TeamSearch, TextButton } from '../components/Ui';
 import { getMatches, getTeams } from '../domain/database';
 import { useDatabase } from '../state/DatabaseContext';
+import { useLeague } from '../state/LeagueContext';
 
 export function MatchesPage() {
-  const { data, addMatch } = useDatabase();
+  const { data, addMatch, deleteMatch } = useDatabase();
+  const { canDeleteMatchesAndGames } = useLeague();
   const navigate = useNavigate();
   const teams = getTeams(data);
   const matches = getMatches(data);
@@ -19,6 +21,11 @@ export function MatchesPage() {
     if (!homeId || !awayId) return;
     const matchId = addMatch(homeId, awayId);
     navigate(`/matches/${matchId}`);
+  };
+
+  const onDeleteMatch = (matchId: string, matchName: string) => {
+    if (!window.confirm(`Delete match “${matchName}” and all of its games?`)) return;
+    deleteMatch(matchId);
   };
 
   return (
@@ -66,9 +73,25 @@ export function MatchesPage() {
           {matches.map(({ match, matchName }) => (
             <tr key={match.Id}>
               <td>
-                <TextButton onClick={() => navigate(`/matches/${match.Id}`)}>
-                  {matchName}
-                </TextButton>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                >
+                  <TextButton onClick={() => navigate(`/matches/${match.Id}`)}>
+                    {matchName}
+                  </TextButton>
+                  {canDeleteMatchesAndGames ? (
+                    <Button
+                      size="small"
+                      color="error"
+                      className="bw-button bw-button--text"
+                      onClick={() => onDeleteMatch(match.Id, matchName)}
+                    >
+                      Delete
+                    </Button>
+                  ) : null}
+                </Stack>
               </td>
             </tr>
           ))}

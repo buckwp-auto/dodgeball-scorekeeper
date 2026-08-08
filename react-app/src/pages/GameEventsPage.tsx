@@ -147,6 +147,12 @@ export function GameEventsPage() {
   );
   const gameFinished = gameHasFinishEvent(data, gameId);
   const gameTitle = getGameName(data, matchId, gameId);
+  const openSeekSeconds = useMemo(
+    () => (gameId ? initialVideoSeekSeconds(data, gameId) : 0),
+    // Snapshot once per game open — later edits should not recreate the player
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gameId],
+  );
 
   // Ignore selections that belong to another game after route changes
   const eventIdsInGame = useMemo(
@@ -294,14 +300,6 @@ export function GameEventsPage() {
     setFinishDraft(emptyFinishDraft());
     setSavedSnapshot(JSON.stringify(freshThrows));
   }, [gameId]);
-
-  // Seek VOD to last stamped event (unfinished) or game start (finished)
-  useEffect(() => {
-    if (!hasYoutube || !gameId) return;
-    seekToVideoOffset(initialVideoSeekSeconds(data, gameId));
-    // Only on game open / youtube availability — not on every data mutation
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot per gameId
-  }, [gameId, hasYoutube, seekToVideoOffset]);
 
   useEffect(() => {
     if (!isGameOver || gameFinished) {
@@ -637,6 +635,7 @@ export function GameEventsPage() {
             youtubeUrl={youtubeUrl}
             mode={youtubeMode}
             onModeChange={setYoutubeModeAndPersist}
+            startSeconds={openSeekSeconds}
           />
         </Box>
       ) : null}
