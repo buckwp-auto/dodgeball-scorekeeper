@@ -2,11 +2,17 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Session storage key for scorekeeper database JSON. */
 export const STORAGE_KEY = 'SCOREKEEPER_DATA';
+/** Last game/match resume pointer (localStorage). */
+export const LAST_SCORING_KEY = 'SCOREKEEPER_LAST_SCORING';
 
 export async function clearScorekeeperStorage(page: Page) {
-  await page.addInitScript((key) => {
-    sessionStorage.removeItem(key);
-  }, STORAGE_KEY);
+  await page.addInitScript(
+    ([dataKey, lastScoringKey]) => {
+      sessionStorage.removeItem(dataKey);
+      localStorage.removeItem(lastScoringKey);
+    },
+    [STORAGE_KEY, LAST_SCORING_KEY],
+  );
 }
 
 export async function gotoScorekeeper(page: Page, subPath = '') {

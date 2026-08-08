@@ -53,6 +53,7 @@ import {
   type ThrowDraft,
 } from '../domain/gameEvents';
 import { buildTimelineEntries } from '../domain/gameEventTimeline';
+import { rememberLastGame, rememberLastMatch } from '../domain/lastScoring';
 import { getGameName, getMatchById } from '../domain/matchGame';
 import {
   computeGameLiveState,
@@ -147,6 +148,12 @@ export function GameEventsPage() {
   );
   const gameFinished = gameHasFinishEvent(data, gameId);
   const gameTitle = getGameName(data, matchId, gameId);
+
+  useEffect(() => {
+    if (!matchId || !gameId) return;
+    rememberLastGame(matchId, gameId);
+  }, [matchId, gameId]);
+
   const openSeekSeconds = useMemo(
     () => (gameId ? initialVideoSeekSeconds(data, gameId) : 0),
     // Snapshot once per game open — later edits should not recreate the player
@@ -261,6 +268,7 @@ export function GameEventsPage() {
         persistFinishGameEvent(draft, gameId, finishDraft, { videoOffsetSeconds }),
       (id) => `Saved finish event (${id}).`,
     );
+    rememberLastMatch(matchId);
     redoStackRef.current = [];
     autoFinishPromptedRef.current = false;
     setPendingWipeFinish(false);
@@ -268,7 +276,7 @@ export function GameEventsPage() {
     setInsertBeforeEventId(null);
     setActiveTab('throw');
     loadDraftsForSelection(null);
-  }, [finishDraft, gameFinished, mutate, gameId, loadDraftsForSelection, readVideoOffset]);
+  }, [finishDraft, gameFinished, mutate, gameId, matchId, loadDraftsForSelection, readVideoOffset]);
 
   const awaitingFinishConfirm =
     pendingWipeFinish &&
@@ -457,6 +465,7 @@ export function GameEventsPage() {
       // New commits clear the redo stack (standard undo/redo)
       if (!effectiveSelectedId) {
         redoStackRef.current = [];
+        if (visibleTab === 'finish') rememberLastMatch(matchId);
       }
 
       setSelectedEventId(eventId);

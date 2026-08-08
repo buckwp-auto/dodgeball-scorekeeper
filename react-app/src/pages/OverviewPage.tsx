@@ -21,6 +21,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMemo, useRef, useState } from 'react';
+import { ResumeScoringCta } from '../components/ResumeScoringButton';
 import { PageHeader } from '../components/Ui';
 import { MAX_LEAGUE_NAME } from '../domain/limits';
 import { useAuth } from '../state/AuthContext';
@@ -181,6 +182,8 @@ export function OverviewPage() {
       <PageHeader>Overview</PageHeader>
 
       <Stack spacing={3}>
+        <ResumeScoringCta />
+
         <Box>
           <Typography variant="h6" gutterBottom>
             Account

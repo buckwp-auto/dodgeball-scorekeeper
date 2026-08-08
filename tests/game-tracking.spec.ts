@@ -28,5 +28,26 @@ test.describe('Game tracking (full roster)', () => {
     await selectGameRoster(page, 'H1', 'A1');
     await page.getByRole('button', { name: 'Track Game' }).click();
     await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+
+    await page.locator('.sk-menu-link').filter({ hasText: 'Overview' }).first().click();
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    const resume = page.locator('.sk-resume-scoring').first();
+    await expect(resume).toContainText('Resume Game 1');
+    await resume.click();
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Finish', exact: true }).click();
+    await page.getByRole('button', { name: 'Home Hawks', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByText('Game Complete!')).toBeVisible();
+
+    await page.locator('.sk-menu-link').filter({ hasText: 'Overview' }).first().click();
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    const resumeMatch = page.locator('.sk-resume-scoring').first();
+    await expect(resumeMatch).toContainText('Resume match');
+    await resumeMatch.click();
+    await expect(page.getByRole('heading', { name: 'Track Match' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
   });
 });

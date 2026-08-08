@@ -1,6 +1,7 @@
 import { Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { rememberLastGame } from '../domain/lastScoring';
 import { PlayerRoster } from '../components/MatchRoster';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
@@ -35,6 +36,11 @@ export function GamePage() {
       return null;
     }, '');
   }, [matchId, gameId, mutate]);
+
+  useEffect(() => {
+    if (!matchId || !gameId) return;
+    rememberLastGame(matchId, gameId);
+  }, [matchId, gameId]);
 
   const live = useMemo(
     () => (matchId && gameId ? computeGameLiveState(data, matchId, gameId) : null),

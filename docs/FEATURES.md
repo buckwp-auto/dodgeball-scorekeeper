@@ -4,16 +4,17 @@
 
 - Browser **session storage** (`SCOREKEEPER_DATA`) for the working `.scrkpr` database; Overview import/export unchanged
 - Last opened cloud league id in **localStorage** (`SCOREKEEPER_ACTIVE_LEAGUE`): auto-opens on sign-in when membership is still active; cleared on **Leave league**; kept across sign-out for the next session
+- Last scoring target in **localStorage** (`SCOREKEEPER_LAST_SCORING`): **Resume game** / **Resume match** in the drawer and on Overview — jumps to the in-progress game, or to Track Match after a finish is recorded; hidden if the match/game is gone
 - Optional **Firebase** shared leagues (Google sign-in): directory on Overview, join requests, admin approve, per-match cloud docs, 30s idle / game-complete flush — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md)
 
 ## App shell
 
-- **Overview** — Google sign-in / league directory (when Firebase configured), download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
+- **Overview** — Google sign-in / league directory (when Firebase configured), **Resume** last game/match, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
 - **Matches** — create matches, select players, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
 - **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; opening a game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; **Delete** game (with confirm) for local data or league admins
 - **History** — commit log for local mutations
-- **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed
+- **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
 ## Roster & match setup
 
@@ -35,7 +36,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 ### Editor UX
 
-- Three-column grid (home / away / result) with slightly taller team banners separated from player rows (result column spacer keeps tops aligned)
+- Three-column grid (home / away / result) with slightly taller team banners separated from player rows (result column spacer keeps tops aligned); six player buttons stretch to the same total height as the seven result rows
 - Throw results shown with **MUI icons**; result can be chosen before thrower
 - **Deflections** chain on eligible results (block, hit, etc.)
 - **Catch recovery** — pick a teammate (including outs) or **None** (`M`)

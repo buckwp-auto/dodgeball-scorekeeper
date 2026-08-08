@@ -293,7 +293,7 @@ function SingleThrowEditor({
 
         {!showTarget ? (
           <>
-            <EditorChoiceStack pending={pendingThrower} gridColumn={1}>
+            <EditorChoiceStack pending={pendingThrower} gridColumn={1} distribute>
               {homePlayers.map((row) => (
                 <EditorChoiceButton
                   key={row.gamePlayerId}
@@ -311,7 +311,7 @@ function SingleThrowEditor({
                 </EditorChoiceButton>
               ))}
             </EditorChoiceStack>
-            <EditorChoiceStack pending={pendingThrower} gridColumn={2}>
+            <EditorChoiceStack pending={pendingThrower} gridColumn={2} distribute>
               {awayPlayers.map((row) => (
                 <EditorChoiceButton
                   key={row.gamePlayerId}
@@ -353,7 +353,11 @@ function SingleThrowEditor({
           </>
         ) : (
           <>
-            <EditorChoiceStack pending={pendingThrower} gridColumn={1}>
+            <EditorChoiceStack
+              pending={pendingThrower}
+              gridColumn={1}
+              distribute={!draft.throwerGamePlayerId}
+            >
               {draft.throwerGamePlayerId ? (
                 <EditorChipButton
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.throwerGamePlayerId)}
@@ -381,7 +385,11 @@ function SingleThrowEditor({
                 ))
               )}
             </EditorChoiceStack>
-            <EditorChoiceStack pending={pendingTarget} gridColumn={2}>
+            <EditorChoiceStack
+              pending={pendingTarget}
+              gridColumn={2}
+              distribute={!draft.targetGamePlayerId}
+            >
               {draft.targetGamePlayerId ? (
                 <EditorChipButton
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.targetGamePlayerId)}

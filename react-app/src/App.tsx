@@ -23,6 +23,7 @@ import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
 import { CloudSyncBar } from './components/CloudSyncBar';
 import { MadeByFooter } from './components/MadeByFooter';
+import { ResumeScoringNavItem } from './components/ResumeScoringButton';
 
 const drawerWidth = 200;
 
@@ -102,6 +103,7 @@ export function App() {
               >
                 <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
                   <AppNav />
+                  <ResumeScoringNavItem />
                 </Box>
                 <CloudSyncBar />
                 <Divider />

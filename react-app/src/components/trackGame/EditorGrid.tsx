@@ -36,7 +36,8 @@ export function EditorGrid({ children }: { children: ReactNode }) {
         display: 'grid',
         gridTemplateColumns: '35% 35% 1fr',
         gap: compact ? 0.25 : 0.5,
-        alignItems: 'start',
+        // Stretch choice stacks so 6 player buttons can fill the 7-result column height
+        alignItems: 'stretch',
       }}
     >
       {children}
@@ -124,23 +125,35 @@ export function EditorChoiceStack({
   pending,
   children,
   gridColumn,
+  distribute,
 }: {
   pending?: boolean;
   children: ReactNode;
   gridColumn?: string | number;
+  /** Grow child buttons to fill the grid row (6 players vs 7 results). */
+  distribute?: boolean;
 }) {
   const density = useEditorDensity();
+  const compact = density === 'compact';
   return (
     <Box
       sx={{
         gridColumn,
         display: 'flex',
         flexDirection: 'column',
-        gap: density === 'compact' ? 0.25 : 0.5,
+        gap: compact ? 0.25 : 0.5,
         borderLeft: pending ? '4px solid' : '4px solid transparent',
         borderColor: pending ? 'error.main' : 'transparent',
-        pl: pending ? (density === 'compact' ? 0.5 : 1) : 0,
-        minHeight: density === 'compact' ? 28 : 40,
+        pl: pending ? (compact ? 0.5 : 1) : 0,
+        minHeight: compact ? 28 : 40,
+        ...(distribute
+          ? {
+              '& > *': {
+                flex: '1 1 auto',
+                minHeight: compact ? 32 : 44,
+              },
+            }
+          : null),
       }}
     >
       {children}
@@ -185,8 +198,10 @@ export function EditorChoiceButton({
       sx={{
         justifyContent: 'flex-start',
         textTransform: 'none',
-        py: compact ? 0.15 : 0.75,
-        minHeight: compact ? 26 : 36,
+        whiteSpace: 'nowrap',
+        lineHeight: 1.4,
+        py: compact ? 0.35 : 1,
+        minHeight: compact ? 32 : 44,
         fontSize: compact ? '0.75rem' : undefined,
         opacity: eliminated ? 0.45 : 1,
         ...(pill
@@ -253,8 +268,10 @@ export function EditorChipButton({
       sx={{
         justifyContent: 'flex-start',
         textTransform: 'none',
-        py: compact ? 0.15 : 0.75,
-        minHeight: compact ? 26 : 36,
+        whiteSpace: 'nowrap',
+        lineHeight: 1.4,
+        py: compact ? 0.35 : 1,
+        minHeight: compact ? 32 : 44,
         fontSize: compact ? '0.75rem' : undefined,
         ...(pill
           ? {
