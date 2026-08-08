@@ -1,0 +1,183 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  YOUTUBE_FRAME_SECONDS,
+  type YoutubePlayerHandle,
+} from './youtube';
+import {
+  applyYoutubePopoutCommand,
+  buildYoutubePopoutHref,
+  createRemoteYoutubePlayerHandle,
+  envelopeYoutubePopoutMessage,
+  isYoutubePopoutControllerMessage,
+  isYoutubePopoutHostMessage,
+  parseYoutubePopoutSearch,
+  YOUTUBE_POPOUT_MESSAGE_KIND,
+  youtubePopoutChannelName,
+  type YoutubePopoutSnapshot,
+} from './youtubePopout';
+
+describe('youtube popout URL + channel', () => {
+  it('names a channel per session', () => {
+    expect(youtubePopoutChannelName('abc')).toBe('scorekeeper-yt-popout:abc');
+  });
+
+  it('builds and parses popout href query params', () => {
+    const href = buildYoutubePopoutHref({
+      videoId: 'dQw4w9WgXcQ',
+      startSeconds: 61.5,
+      sessionId: 'sess-1',
+      origin: 'https://example.test',
+      base: '/dodgeball-score/',
+    });
+    expect(href).toBe(
+      'https://example.test/dodgeball-score/youtube-popout?v=dQw4w9WgXcQ&t=61.5&sid=sess-1',
+    );
+    const parsed = parseYoutubePopoutSearch(new URL(href).search);
+    expect(parsed).toEqual({
+      videoId: 'dQw4w9WgXcQ',
+      startSeconds: 61.5,
+      sessionId: 'sess-1',
+    });
+  });
+
+  it('rejects invalid popout search', () => {
+    expect(parseYoutubePopoutSearch('v=nope&sid=x')).toBeNull();
+    expect(parseYoutubePopoutSearch('v=dQw4w9WgXcQ')).toBeNull();
+    expect(parseYoutubePopoutSearch('')).toBeNull();
+  });
+
+  it('defaults missing or invalid t to 0', () => {
+    expect(
+      parseYoutubePopoutSearch('v=dQw4w9WgXcQ&sid=s1'),
+    ).toMatchObject({ startSeconds: 0 });
+    expect(
+      parseYoutubePopoutSearch('v=dQw4w9WgXcQ&sid=s1&t=-4'),
+    ).toMatchObject({ startSeconds: 0 });
+  });
+});
+
+describe('youtube popout messages', () => {
+  it('accepts controller and host envelopes', () => {
+    expect(
+      isYoutubePopoutControllerMessage(
+        envelopeYoutubePopoutMessage({ type: 'shutdown' }),
+      ),
+    ).toBe(true);
+    expect(
+      isYoutubePopoutControllerMessage(
+        envelopeYoutubePopoutMessage({
+          type: 'command',
+          op: 'seekTo',
+          seconds: 12,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isYoutubePopoutHostMessage(
+        envelopeYoutubePopoutMessage({
+          type: 'state',
+          currentTime: 3,
+          playing: true,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isYoutubePopoutHostMessage(
+        envelopeYoutubePopoutMessage({
+          type: 'keydown',
+          key: ' ',
+          code: 'Space',
+          repeat: false,
+          shiftKey: false,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects garbage', () => {
+    expect(isYoutubePopoutControllerMessage({ type: 'shutdown' })).toBe(false);
+    expect(
+      isYoutubePopoutHostMessage({
+        kind: YOUTUBE_POPOUT_MESSAGE_KIND,
+        type: 'state',
+        currentTime: 'nope',
+        playing: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('applyYoutubePopoutCommand', () => {
+  it('drives the local player handle', () => {
+    const player: YoutubePlayerHandle = {
+      getCurrentTime: () => 10,
+      seekTo: vi.fn(),
+      seekBy: vi.fn(),
+      togglePlayPause: vi.fn(),
+      stepFrame: vi.fn(),
+      isPaused: () => true,
+    };
+    applyYoutubePopoutCommand(player, { type: 'command', op: 'togglePlayPause' });
+    applyYoutubePopoutCommand(player, {
+      type: 'command',
+      op: 'seekTo',
+      seconds: 40,
+    });
+    applyYoutubePopoutCommand(player, {
+      type: 'command',
+      op: 'seekBy',
+      deltaSeconds: -5,
+    });
+    applyYoutubePopoutCommand(player, {
+      type: 'command',
+      op: 'stepFrame',
+      direction: 1,
+    });
+    expect(player.togglePlayPause).toHaveBeenCalledOnce();
+    expect(player.seekTo).toHaveBeenCalledWith(40);
+    expect(player.seekBy).toHaveBeenCalledWith(-5);
+    expect(player.stepFrame).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('createRemoteYoutubePlayerHandle', () => {
+  it('posts commands and updates the snapshot optimistically', () => {
+    const posted: unknown[] = [];
+    const snapshot: YoutubePopoutSnapshot = {
+      currentTime: 10,
+      playing: false,
+      ready: true,
+    };
+    const handle = createRemoteYoutubePlayerHandle({
+      post: (message) => posted.push(message),
+      getSnapshot: () => snapshot,
+    });
+
+    handle.seekBy(5);
+    expect(snapshot.currentTime).toBe(15);
+    handle.togglePlayPause();
+    expect(snapshot.playing).toBe(true);
+    handle.stepFrame(1);
+    expect(snapshot.currentTime).toBe(15);
+    handle.togglePlayPause();
+    handle.stepFrame(1);
+    expect(snapshot.currentTime).toBeCloseTo(15 + YOUTUBE_FRAME_SECONDS);
+
+    expect(posted).toEqual([
+      envelopeYoutubePopoutMessage({
+        type: 'command',
+        op: 'seekBy',
+        deltaSeconds: 5,
+      }),
+      envelopeYoutubePopoutMessage({ type: 'command', op: 'togglePlayPause' }),
+      envelopeYoutubePopoutMessage({ type: 'command', op: 'togglePlayPause' }),
+      envelopeYoutubePopoutMessage({
+        type: 'command',
+        op: 'stepFrame',
+        direction: 1,
+      }),
+    ]);
+    expect(handle.getCurrentTime()).toBeCloseTo(15 + YOUTUBE_FRAME_SECONDS);
+    expect(handle.isPaused()).toBe(true);
+  });
+});

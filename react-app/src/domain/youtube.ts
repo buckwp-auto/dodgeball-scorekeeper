@@ -103,25 +103,42 @@ export function parseVideoTime(input: string): number | null {
  * tall = full-width large player above editor+timeline
  * docked = player centered in editor column; timeline rises beside it
  * hidden = scoring only
+ * popout = player in a second window; Track Game keeps a thin control bar
  */
-export type YoutubePlayerMode = 'tall' | 'docked' | 'hidden';
+export type YoutubeInPageMode = 'tall' | 'docked' | 'hidden';
+export type YoutubePlayerMode = YoutubeInPageMode | 'popout';
+
+export type YoutubePlayerHandle = {
+  getCurrentTime: () => number | null;
+  seekTo: (seconds: number) => void;
+  seekBy: (deltaSeconds: number) => void;
+  togglePlayPause: () => void;
+  /** Step ~1 frame when paused (YouTube , / . behavior). */
+  stepFrame: (direction: -1 | 1) => void;
+  isPaused: () => boolean;
+};
 
 export const YOUTUBE_PLAYER_MODE_KEY = 'SCOREKEEPER_YT_PLAYER_MODE';
 
-export function loadYoutubePlayerMode(): YoutubePlayerMode {
+export function isYoutubeInPageMode(value: string): value is YoutubeInPageMode {
+  return value === 'tall' || value === 'docked' || value === 'hidden';
+}
+
+export function loadYoutubePlayerMode(): YoutubeInPageMode {
   try {
     const raw = sessionStorage.getItem(YOUTUBE_PLAYER_MODE_KEY);
-    if (raw === 'tall' || raw === 'docked' || raw === 'hidden') return raw;
+    if (isYoutubeInPageMode(raw ?? '')) return raw as YoutubeInPageMode;
     // Migrate prior session values
     if (raw === 'expanded') return 'tall';
     if (raw === 'compact') return 'docked';
+    if (raw === 'popout') return 'tall';
   } catch {
     /* ignore */
   }
   return 'tall';
 }
 
-export function saveYoutubePlayerMode(mode: YoutubePlayerMode): void {
+export function saveYoutubePlayerMode(mode: YoutubeInPageMode): void {
   try {
     sessionStorage.setItem(YOUTUBE_PLAYER_MODE_KEY, mode);
   } catch {

@@ -70,11 +70,13 @@ describe('youtube player mode', () => {
     expect(loadYoutubePlayerMode()).toBe('docked');
   });
 
-  it('migrates legacy expand/compact values', () => {
+  it('migrates legacy expand/compact/popout values', () => {
     sessionStorage.setItem(YOUTUBE_PLAYER_MODE_KEY, 'expanded');
     expect(loadYoutubePlayerMode()).toBe('tall');
     sessionStorage.setItem(YOUTUBE_PLAYER_MODE_KEY, 'compact');
     expect(loadYoutubePlayerMode()).toBe('docked');
+    sessionStorage.setItem(YOUTUBE_PLAYER_MODE_KEY, 'popout');
+    expect(loadYoutubePlayerMode()).toBe('tall');
   });
 });
 describe('YOUTUBE_FRAME_SECONDS', () => {

@@ -1,3 +1,4 @@
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -24,6 +25,7 @@ import {
   YOUTUBE_FRAME_SECONDS,
   YOUTUBE_LAYOUT_SMALL_HOTKEY,
   YOUTUBE_LAYOUT_TALL_HOTKEY,
+  type YoutubePlayerHandle,
   type YoutubePlayerMode,
 } from '../../domain/youtube';
 import { HotkeyBadge } from '../HotkeyBadge';
@@ -100,15 +102,7 @@ function retainKeyboardFocusOutsideIframe(iframe: HTMLIFrameElement): () => void
   return () => iframe.removeEventListener('focus', onFocus);
 }
 
-export type YoutubePlayerHandle = {
-  getCurrentTime: () => number | null;
-  seekTo: (seconds: number) => void;
-  seekBy: (deltaSeconds: number) => void;
-  togglePlayPause: () => void;
-  /** Step ~1 frame when paused (YouTube , / . behavior). */
-  stepFrame: (direction: -1 | 1) => void;
-  isPaused: () => boolean;
-};
+export type { YoutubePlayerHandle };
 
 function PlayerChrome({
   ready,
@@ -122,18 +116,22 @@ function PlayerChrome({
   onStepFrame,
   onSetLayout,
   onHide,
+  onPopOut,
+  onDockBack,
 }: {
   ready: boolean;
   playing: boolean;
   displayTime: number;
   videoTitle: string;
-  layout: 'tall' | 'docked';
+  layout: 'tall' | 'docked' | 'popout' | 'popoutWindow';
   minimal: boolean;
   onPlayPause: () => void;
   onSeekBy: (delta: number) => void;
   onStepFrame: (direction: -1 | 1) => void;
-  onSetLayout: (mode: 'tall' | 'docked') => void;
-  onHide: () => void;
+  onSetLayout?: (mode: 'tall' | 'docked') => void;
+  onHide?: () => void;
+  onPopOut?: () => void;
+  onDockBack?: () => void;
 }) {
   return (
     <Stack
@@ -201,28 +199,52 @@ function PlayerChrome({
       ) : null}
       <Box sx={{ flex: 1 }} />
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        {layout === 'tall' ? <TrackGameHotkeysTooltip /> : null}
-        <HotkeyBadge hotkey={YOUTUBE_LAYOUT_SMALL_HOTKEY} />
-        <Button
-          size="small"
-          color="inherit"
-          variant={layout === 'docked' ? 'outlined' : 'text'}
-          onClick={() => onSetLayout('docked')}
-        >
-          Small
-        </Button>
-        <HotkeyBadge hotkey={YOUTUBE_LAYOUT_TALL_HOTKEY} />
-        <Button
-          size="small"
-          color="inherit"
-          variant={layout === 'tall' ? 'outlined' : 'text'}
-          onClick={() => onSetLayout('tall')}
-        >
-          Tall
-        </Button>
-        <IconButton size="small" color="inherit" aria-label="Hide player" onClick={onHide}>
-          <VisibilityOffIcon fontSize="small" />
-        </IconButton>
+        {layout === 'tall' || layout === 'popoutWindow' ? (
+          <TrackGameHotkeysTooltip />
+        ) : null}
+        {onPopOut ? (
+          <Button
+            size="small"
+            color="inherit"
+            startIcon={<OpenInNewIcon fontSize="small" />}
+            onClick={onPopOut}
+            title="Open video in a second window"
+          >
+            Pop out
+          </Button>
+        ) : null}
+        {onDockBack ? (
+          <Button size="small" color="inherit" variant="outlined" onClick={onDockBack}>
+            Dock back
+          </Button>
+        ) : null}
+        {onSetLayout ? (
+          <>
+            <HotkeyBadge hotkey={YOUTUBE_LAYOUT_SMALL_HOTKEY} />
+            <Button
+              size="small"
+              color="inherit"
+              variant={layout === 'docked' ? 'outlined' : 'text'}
+              onClick={() => onSetLayout('docked')}
+            >
+              Small
+            </Button>
+            <HotkeyBadge hotkey={YOUTUBE_LAYOUT_TALL_HOTKEY} />
+            <Button
+              size="small"
+              color="inherit"
+              variant={layout === 'tall' ? 'outlined' : 'text'}
+              onClick={() => onSetLayout('tall')}
+            >
+              Tall
+            </Button>
+          </>
+        ) : null}
+        {onHide ? (
+          <IconButton size="small" color="inherit" aria-label="Hide player" onClick={onHide}>
+            <VisibilityOffIcon fontSize="small" />
+          </IconButton>
+        ) : null}
       </Stack>
     </Stack>
   );
@@ -236,9 +258,22 @@ export const YoutubePlayer = forwardRef<
     onModeChange: (mode: YoutubePlayerMode) => void;
     /** Seconds to cue on first load (paused). Timeline seeks do not use this. */
     startSeconds?: number | null;
+    variant?: 'page' | 'popoutWindow';
+    onPopOut?: () => void;
+    onDockBack?: () => void;
+    popoutBlocked?: boolean;
   }
 >(function YoutubePlayer(
-  { youtubeUrl, mode, onModeChange, startSeconds = null },
+  {
+    youtubeUrl,
+    mode,
+    onModeChange,
+    startSeconds = null,
+    variant = 'page',
+    onPopOut,
+    onDockBack,
+    popoutBlocked = false,
+  },
   ref,
 ) {
   const videoId = parseYoutubeVideoId(youtubeUrl);
@@ -504,8 +539,9 @@ export const YoutubePlayer = forwardRef<
   }
 
   const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const layout = mode;
-  const isTall = layout === 'tall';
+  const isPopoutWindow = variant === 'popoutWindow';
+  const layout = isPopoutWindow ? 'popoutWindow' : mode === 'docked' ? 'docked' : 'tall';
+  const isTall = layout === 'tall' || layout === 'popoutWindow';
 
   const chrome = (
     <PlayerChrome
@@ -518,8 +554,12 @@ export const YoutubePlayer = forwardRef<
       onPlayPause={togglePlayPause}
       onSeekBy={seekBy}
       onStepFrame={stepFrame}
-      onSetLayout={onModeChange}
-      onHide={() => onModeChange('hidden')}
+      onSetLayout={
+        isPopoutWindow ? undefined : (next) => onModeChange(next)
+      }
+      onHide={isPopoutWindow ? undefined : () => onModeChange('hidden')}
+      onPopOut={isPopoutWindow ? undefined : onPopOut}
+      onDockBack={onDockBack}
     />
   );
 
@@ -580,6 +620,17 @@ export const YoutubePlayer = forwardRef<
       }}
     >
       {chrome}
+      {popoutBlocked ? (
+        <Alert severity="warning" sx={{ borderRadius: 0 }}>
+          Pop-out was blocked. Allow pop-ups for this site and try again.
+        </Alert>
+      ) : null}
+      {isPopoutWindow ? (
+        <Typography variant="caption" sx={{ px: 1.5, py: 0.5, opacity: 0.8 }}>
+          Fullscreen this window (F11), not YouTube’s fullscreen button. Scoring
+          hotkeys work from either window.
+        </Typography>
+      ) : null}
       {embedError ? (
         <Alert
           severity="warning"
@@ -604,3 +655,51 @@ export const YoutubePlayer = forwardRef<
     </Box>
   );
 });
+
+export function YoutubePopoutBar({
+  ready,
+  playing,
+  displayTime,
+  blocked,
+  handle,
+  onDockBack,
+  onModeChange,
+}: {
+  ready: boolean;
+  playing: boolean;
+  displayTime: number;
+  blocked?: boolean;
+  handle: YoutubePlayerHandle;
+  onDockBack: () => void;
+  onModeChange: (mode: 'tall' | 'docked') => void;
+}) {
+  return (
+    <Box
+      className="sk-youtube-player"
+      sx={{ bgcolor: 'grey.900', color: 'grey.100', borderBottom: 1, borderColor: 'divider' }}
+    >
+      {blocked ? (
+        <Alert severity="warning" sx={{ borderRadius: 0 }}>
+          Pop-out was blocked. Allow pop-ups for this site and try again.
+        </Alert>
+      ) : null}
+      <PlayerChrome
+        ready={ready}
+        playing={playing}
+        displayTime={displayTime}
+        videoTitle=""
+        layout="popout"
+        minimal
+        onPlayPause={() => handle.togglePlayPause()}
+        onSeekBy={(delta) => handle.seekBy(delta)}
+        onStepFrame={(direction) => handle.stepFrame(direction)}
+        onSetLayout={onModeChange}
+        onDockBack={onDockBack}
+      />
+      <Typography variant="caption" sx={{ display: 'block', px: 1.5, py: 0.5, opacity: 0.8 }}>
+        Video is in the pop-out window. Fullscreen that window (F11), not YouTube’s
+        button. Scoring hotkeys work from either window.
+      </Typography>
+    </Box>
+  );
+}

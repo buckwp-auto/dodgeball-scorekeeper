@@ -13,7 +13,10 @@ import { StartEventEditor } from '../components/trackGame/StartEventEditor';
 import { GameEventsTimeline } from '../components/trackGame/GameEventsTimeline';
 import { EditorDensityProvider } from '../components/trackGame/EditorGrid';
 import { TrackGameHotkeyHints } from '../components/trackGame/TrackGameHotkeyHints';
-import { YoutubePlayer } from '../components/trackGame/YoutubePlayer';
+import {
+  YoutubePlayer,
+  YoutubePopoutBar,
+} from '../components/trackGame/YoutubePlayer';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import {
   isYoutubeControlHotkey,
@@ -128,6 +131,10 @@ export function GameEventsPage() {
     readVideoOffset,
     seekToVideoOffset,
     setModeAndPersist: setYoutubeModeAndPersist,
+    cueSeconds,
+    popOut,
+    dockBack,
+    popoutPlayback,
   } = useYoutubeControls(youtubeUrl);
 
   const updateThrowDrafts = useCallback(
@@ -604,6 +611,7 @@ export function GameEventsPage() {
 
   useDocumentHotkeys(handleTrackGameHotkey, true, { capture: true });
 
+  const youtubePopout = hasYoutube && youtubeMode === 'popout';
   const youtubeDocked = hasYoutube && youtubeMode === 'docked';
   const youtubeTall = hasYoutube && youtubeMode === 'tall';
   const youtubeTopBand = hasYoutube && youtubeMode !== 'docked';
@@ -639,13 +647,27 @@ export function GameEventsPage() {
             overflow: 'hidden',
           }}
         >
-          <YoutubePlayer
-            ref={youtubePlayerRef}
-            youtubeUrl={youtubeUrl}
-            mode={youtubeMode}
-            onModeChange={setYoutubeModeAndPersist}
-            startSeconds={openSeekSeconds}
-          />
+          {youtubePopout ? (
+            <YoutubePopoutBar
+              ready={popoutPlayback.ready}
+              playing={popoutPlayback.playing}
+              displayTime={popoutPlayback.displayTime}
+              blocked={popoutPlayback.blocked}
+              handle={popoutPlayback.handle}
+              onDockBack={() => dockBack()}
+              onModeChange={(next) => setYoutubeModeAndPersist(next)}
+            />
+          ) : (
+            <YoutubePlayer
+              ref={youtubePlayerRef}
+              youtubeUrl={youtubeUrl}
+              mode={youtubeMode}
+              onModeChange={setYoutubeModeAndPersist}
+              startSeconds={cueSeconds ?? openSeekSeconds}
+              onPopOut={popOut}
+              popoutBlocked={popoutPlayback.blocked}
+            />
+          )}
         </Box>
       ) : null}
 
