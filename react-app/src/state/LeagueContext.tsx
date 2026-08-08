@@ -8,19 +8,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  createLeague,
-  flushLeagueChanges,
-  getMembership,
-  listLeagues,
-  listMembers,
-  loadLeagueDatabase,
-  QuotaExceededError,
-  requestJoinLeague,
-  setMemberStatus,
-  type FlushPlan,
-} from '../cloud/leagueApi';
-import { getFirebase } from '../cloud/firebase';
+import type { Firestore } from 'firebase/firestore';
+import type { FlushPlan } from '../cloud/leagueApi';
+import { QuotaExceededError } from '../cloud/errors';
 import {
   diffDirty,
   gainedGameFinish,
@@ -81,6 +71,21 @@ function loadStoredLeagueId(): string | null {
   }
 }
 
+type LeagueApi = typeof import('../cloud/leagueApi');
+
+/**
+ * Loads the Firebase SDK and cloud API on demand so local-only sessions never
+ * download them. Resolves to null when Firebase is not configured.
+ */
+async function loadCloud(): Promise<{ db: Firestore; api: LeagueApi } | null> {
+  const [{ getDb }, api] = await Promise.all([
+    import('../cloud/firestoreDb'),
+    import('../cloud/leagueApi'),
+  ]);
+  const db = getDb();
+  return db ? { db, api } : null;
+}
+
 function hasDirtyChanges(plan: FlushPlan): boolean {
   return (
     plan.roster ||
@@ -134,8 +139,8 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshDirectory = useCallback(async () => {
-    const fb = getFirebase();
-    if (!fb || !user) {
+    const cloud = user ? await loadCloud() : null;
+    if (!cloud || !user) {
       setLeagues([]);
       setMemberships({});
       setMembersByLeague({});
@@ -143,19 +148,22 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     }
     setRefreshing(true);
     try {
-      const list = await listLeagues(fb.db);
+      const list = await cloud.api.listLeagues(cloud.db);
       setLeagues(list);
       const nextMemberships: Record<string, LeagueMember | null> = {};
       const nextMembers: Record<string, LeagueMember[]> = {};
       await Promise.all(
         list.map(async (league) => {
-          nextMemberships[league.id] = await getMembership(
-            fb.db,
+          nextMemberships[league.id] = await cloud.api.getMembership(
+            cloud.db,
             league.id,
             user.uid,
           );
           if (league.adminUid === user.uid) {
-            nextMembers[league.id] = await listMembers(fb.db, league.id);
+            nextMembers[league.id] = await cloud.api.listMembers(
+              cloud.db,
+              league.id,
+            );
           }
         }),
       );
@@ -182,9 +190,9 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const createNewLeague = useCallback(
     async (name: string) => {
-      const fb = getFirebase();
-      if (!fb || !user) throw new Error('Sign in required');
-      const id = await createLeague(fb.db, user, name);
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      const id = await cloud.api.createLeague(cloud.db, user, name);
       await refreshDirectory();
       return id;
     },
@@ -193,9 +201,9 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const requestJoin = useCallback(
     async (leagueId: string) => {
-      const fb = getFirebase();
-      if (!fb || !user) throw new Error('Sign in required');
-      await requestJoinLeague(fb.db, user, leagueId);
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.api.requestJoinLeague(cloud.db, user, leagueId);
       await refreshDirectory();
     },
     [user, refreshDirectory],
@@ -203,9 +211,9 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const approveMember = useCallback(
     async (leagueId: string, uid: string) => {
-      const fb = getFirebase();
-      if (!fb || !user) throw new Error('Sign in required');
-      await setMemberStatus(fb.db, user, leagueId, uid, 'active');
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.api.setMemberStatus(cloud.db, user, leagueId, uid, 'active');
       await refreshDirectory();
     },
     [user, refreshDirectory],
@@ -213,9 +221,9 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const rejectMember = useCallback(
     async (leagueId: string, uid: string) => {
-      const fb = getFirebase();
-      if (!fb || !user) throw new Error('Sign in required');
-      await setMemberStatus(fb.db, user, leagueId, uid, 'rejected');
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.api.setMemberStatus(cloud.db, user, leagueId, uid, 'rejected');
       await refreshDirectory();
     },
     [user, refreshDirectory],
@@ -223,23 +231,25 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const flushNow = useCallback(
     async (data: DatabaseDto) => {
-      const fb = getFirebase();
       const leagueId = activeLeagueId;
-      if (!fb || !user || !leagueId) return;
+      if (!user || !leagueId) return;
 
       const plan = dirtyRef.current;
       if (!hasDirtyChanges(plan)) {
         setSyncStatus('saved');
         return;
       }
+      // Claim the flush before awaiting so concurrent callers cannot overlap.
       if (flushingRef.current) return;
       flushingRef.current = true;
       clearFlushTimer();
       setSyncStatus('saving');
       setSyncError(null);
       try {
-        const nextRevisions = await flushLeagueChanges(
-          fb.db,
+        const cloud = await loadCloud();
+        if (!cloud) return;
+        const nextRevisions = await cloud.api.flushLeagueChanges(
+          cloud.db,
           user,
           leagueId,
           data,
@@ -346,14 +356,21 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const openLeague = useCallback(
     async (leagueId: string) => {
-      const fb = getFirebase();
-      if (!fb || !user) throw new Error('Sign in required');
-      const membership = await getMembership(fb.db, leagueId, user.uid);
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      const membership = await cloud.api.getMembership(
+        cloud.db,
+        leagueId,
+        user.uid,
+      );
       if (membership?.status !== 'active') {
         throw new Error('You must be an approved member to open this league');
       }
       clearFlushTimer();
-      const { data, revisions } = await loadLeagueDatabase(fb.db, leagueId);
+      const { data, revisions } = await cloud.api.loadLeagueDatabase(
+        cloud.db,
+        leagueId,
+      );
       revisionsRef.current = revisions;
       markClean(data);
       setActiveLeagueId(leagueId);
@@ -387,15 +404,15 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   // Poll remote while connected and clean
   useEffect(() => {
     if (!activeLeagueId || !user) return;
-    const fb = getFirebase();
-    if (!fb) return;
 
     const tick = async () => {
       if (document.visibilityState !== 'visible') return;
       if (hasDirtyChanges(dirtyRef.current)) return;
       try {
-        const { data, revisions } = await loadLeagueDatabase(
-          fb.db,
+        const cloud = await loadCloud();
+        if (!cloud) return;
+        const { data, revisions } = await cloud.api.loadLeagueDatabase(
+          cloud.db,
           activeLeagueId,
         );
         revisionsRef.current = revisions;

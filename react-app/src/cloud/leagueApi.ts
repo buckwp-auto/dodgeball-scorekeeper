@@ -18,6 +18,7 @@ import {
 } from '../domain/limits';
 import type { DatabaseDto, Guid } from '../domain/types';
 import { newIdTimestamp } from '../domain/id';
+import { QuotaExceededError } from './errors';
 import {
   emptyRosterTables,
   extractMatchTables,
@@ -43,13 +44,6 @@ function hourBucketKey(date = new Date()): string {
 
 function rateLimitRef(db: Firestore, uid: string) {
   return doc(db, 'rateLimits', uid, 'hours', hourBucketKey());
-}
-
-export class QuotaExceededError extends Error {
-  constructor() {
-    super(`Write quota exceeded (${WRITES_PER_HOUR} per hour)`);
-    this.name = 'QuotaExceededError';
-  }
 }
 
 /** Increment hourly write counter in a batch; throws if quota exceeded. */

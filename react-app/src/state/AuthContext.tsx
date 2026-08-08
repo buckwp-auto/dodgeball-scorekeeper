@@ -1,10 +1,4 @@
-import {
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut as firebaseSignOut,
-  type User,
-} from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import {
   createContext,
   useCallback,
@@ -14,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getFirebase, isFirebaseConfigured } from '../cloud/firebase';
+import { isFirebaseConfigured } from '../cloud/firebaseConfig';
 
 type AuthContextValue = {
   configured: boolean;
@@ -32,27 +26,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(configured);
 
   useEffect(() => {
-    const fb = getFirebase();
-    if (!fb) {
+    if (!configured) {
       setLoading(false);
       return;
     }
-    return onAuthStateChanged(fb.auth, (next) => {
-      setUser(next);
-      setLoading(false);
-    });
-  }, []);
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+
+    void (async () => {
+      const { watchAuthState } = await import('../cloud/authApi');
+      if (cancelled) return;
+      unsubscribe = watchAuthState((next) => {
+        setUser(next);
+        setLoading(false);
+      });
+      if (!unsubscribe) setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [configured]);
 
   const signInWithGoogle = useCallback(async () => {
-    const fb = getFirebase();
-    if (!fb) throw new Error('Firebase is not configured');
-    await signInWithPopup(fb.auth, new GoogleAuthProvider());
+    const api = await import('../cloud/authApi');
+    await api.signInWithGoogle();
   }, []);
 
   const signOut = useCallback(async () => {
-    const fb = getFirebase();
-    if (!fb) return;
-    await firebaseSignOut(fb.auth);
+    const api = await import('../cloud/authApi');
+    await api.signOutOfFirebase();
   }, []);
 
   const value = useMemo(
