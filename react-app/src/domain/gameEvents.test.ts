@@ -13,6 +13,7 @@ import {
   ensureGameStartEvent,
   getGameEventType,
   getGameStartEvent,
+  initialVideoSeekSeconds,
   persistFinishGameEvent,
   persistThrowGameEvent,
   setGameEventVideoOffset,
@@ -265,5 +266,71 @@ describe('buildTimelineEntries', () => {
     const [entry] = buildTimelineEntries(data, gameId, match.Id);
     expect(entry.rows[0].tone).toBe('hit');
     expect(flattenText(entry.rows[0].segments)).toContain('a Failed Block');
+  });
+});
+
+describe('initialVideoSeekSeconds', () => {
+  it('seeks to the last stamped event for an unfinished game', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    setGameEventVideoOffset(data, getGameStartEvent(data, gameId)!.Id, 10);
+    const first = persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Dodge,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 40 },
+    );
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: awayGp.Id,
+          targetGamePlayerId: homeGp.Id,
+          resultId: ThrowResult.Miss,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 95 },
+    );
+    expect(first).toBeTruthy();
+    expect(initialVideoSeekSeconds(data, gameId)).toBe(95);
+  });
+
+  it('seeks to game start for a finished game', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    setGameEventVideoOffset(data, getGameStartEvent(data, gameId)!.Id, 12);
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 80 },
+    );
+    persistFinishGameEvent(
+      data,
+      gameId,
+      { resultId: GameEventFinishResult.WinHome },
+      { videoOffsetSeconds: 100 },
+    );
+    expect(initialVideoSeekSeconds(data, gameId)).toBe(12);
   });
 });

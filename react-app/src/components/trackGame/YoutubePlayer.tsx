@@ -237,6 +237,7 @@ export const YoutubePlayer = forwardRef<
   const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YtPlayer | null>(null);
   const releaseIframeFocusRef = useRef<(() => void) | null>(null);
+  const pendingSeekSecondsRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
@@ -295,12 +296,16 @@ export const YoutubePlayer = forwardRef<
         }
       },
       seekTo: (seconds: number) => {
-        if (!ready || !playerRef.current || mode === 'hidden') return;
+        if (!ready || !playerRef.current || mode === 'hidden') {
+          pendingSeekSecondsRef.current = seconds;
+          return;
+        }
         try {
           playerRef.current.seekTo(seconds, true);
           setDisplayTime(seconds);
+          pendingSeekSecondsRef.current = null;
         } catch {
-          /* ignore */
+          pendingSeekSecondsRef.current = seconds;
         }
       },
       seekBy,
@@ -324,6 +329,7 @@ export const YoutubePlayer = forwardRef<
       releaseIframeFocusRef.current = null;
       playerRef.current?.destroy();
       playerRef.current = null;
+      pendingSeekSecondsRef.current = null;
       setReady(false);
       return;
     }
@@ -365,6 +371,16 @@ export const YoutubePlayer = forwardRef<
               }
             } catch {
               /* ignore */
+            }
+            const pending = pendingSeekSecondsRef.current;
+            if (pending !== null) {
+              try {
+                event.target.seekTo(pending, true);
+                setDisplayTime(pending);
+                pendingSeekSecondsRef.current = null;
+              } catch {
+                /* keep pending for a later seekTo */
+              }
             }
           },
           onError: () => {

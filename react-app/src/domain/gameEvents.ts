@@ -162,6 +162,28 @@ export function getGameStartEvent(data: DatabaseDto, gameId: Guid): GameEventRow
 }
 
 /**
+ * Where the YouTube player should open when entering Track Game.
+ * Finished games resume at game start; unfinished games resume at the last stamped event.
+ */
+export function initialVideoSeekSeconds(data: DatabaseDto, gameId: Guid): number {
+  const start = getGameStartEvent(data, gameId);
+  const startSeconds = start?.VideoOffsetSeconds ?? 0;
+
+  if (gameHasFinishEvent(data, gameId)) {
+    return startSeconds;
+  }
+
+  const events = getGameEvents(data, gameId);
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index];
+    if (getGameEventType(data, event.Id) === 'start') continue;
+    if (event.VideoOffsetSeconds != null) return event.VideoOffsetSeconds;
+  }
+
+  return startSeconds;
+}
+
+/**
  * Ensure every game has a Game Start event at ordinal 1.
  * Safe to call repeatedly (idempotent).
  */

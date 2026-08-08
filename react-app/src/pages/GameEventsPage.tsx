@@ -34,6 +34,7 @@ import {
   getGameEventsNewestFirst,
   getGamePlayerInfos,
   getInsertBelowTargetEventId,
+  initialVideoSeekSeconds,
   isErrorDraftComplete,
   isFinishDraftComplete,
   loadErrorDraftFromEvent,
@@ -287,6 +288,14 @@ export function GameEventsPage() {
     setFinishDraft(emptyFinishDraft());
     setSavedSnapshot(JSON.stringify(freshThrows));
   }, [gameId]);
+
+  // Seek VOD to last stamped event (unfinished) or game start (finished)
+  useEffect(() => {
+    if (!hasYoutube || !gameId) return;
+    seekToVideoOffset(initialVideoSeekSeconds(data, gameId));
+    // Only on game open / youtube availability — not on every data mutation
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot per gameId
+  }, [gameId, hasYoutube, seekToVideoOffset]);
 
   useEffect(() => {
     if (!isGameOver || gameFinished) {
