@@ -29,14 +29,13 @@ export function MatchEventsPage() {
   const games = getMatchGames(data, matchId);
 
   const onAddGame = () => {
-    const { gameId, openEvents } = mutate(
+    const { gameId } = mutate(
       (draft) => {
         const gameId = addGameOp(draft, matchId);
         autoSelectGameRoster(draft, matchId, gameId);
         const match = getMatchById(draft, matchId);
         return {
           gameId,
-          openEvents: canNavigateToGameEvents(draft, matchId, gameId),
           message: match
             ? `Added game to match (${getMatchName(draft, match)}).`
             : 'Added game to match.',
@@ -44,11 +43,8 @@ export function MatchEventsPage() {
       },
       ({ message }) => message,
     );
-    navigate(
-      openEvents
-        ? `/matches/${matchId}/games/${gameId}/events`
-        : `/matches/${matchId}/games/${gameId}`,
-    );
+    // Always land on game roster first so starters can be reviewed/adjusted.
+    navigate(`/matches/${matchId}/games/${gameId}`);
   };
 
   const onDeleteGame = (gameId: string, label: string) => {
