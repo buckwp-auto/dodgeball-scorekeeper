@@ -9,10 +9,11 @@
 
 ## App shell
 
-- **Overview** — Google sign-in / league directory (when Firebase configured), **Resume** last game/match, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
+- **Overview** — Google sign-in / league directory (when Firebase configured), **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
-- **Matches** — create matches, select players, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
-- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; opening a game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; **Delete** game (with confirm) for local data or league admins
+- **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
+- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; opening a game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; **Delete** game (with confirm) for local data or league admins
+- **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
@@ -96,7 +97,13 @@ Same permanent map is used on Match / Game roster screens and Track Game throw/e
 
 ## Statistics & interop
 
-- Match statistics **CSV download / copy** (TSV for spreadsheet paste)
+- In-app **Stats** pages: league (`/stats`), match (`/matches/:id/stats`), game (`/matches/:id/games/:id/stats`)
+- Entry points: drawer **Stats**, Overview **League stats**, Matches/Match **See stats**, Track Match per-game **See stats**
+- Sortable **player table** with leaderboard toggles (Kills, Catches, K/D, Hit%, Games won) and min-games filter
+- **Team standings** (game W-L-T + match W-L from finished games) and match series scoreboard
+- Charts (`@mui/x-charts`): throw-result mix, top-N bars, home vs away, game elimination timeline; thrower→target heatmap on match/game
+- Display metrics (catches, recoveries, rates) sit on top of the legacy engine — **golden CSV unchanged**
+- Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page
 - Domain statistics service aligned with legacy kill/death/catch aggregates
 - **Golden fixture** tests vs original WASM/scorekeeper CSV output
 - Playwright coverage for workflow, import/export, and statistics
@@ -104,6 +111,6 @@ Same permanent map is used on Match / Game roster screens and Track Game throw/e
 ## Technical notes
 
 - Domain logic under `react-app/src/domain/` (events, elimination, hotkeys, roster auto-select, statistics)
-- UI under `react-app/src/pages/` and `react-app/src/components/trackGame/`
+- UI under `react-app/src/pages/` and `react-app/src/components/` (including `stats/` and `trackGame/`)
 - Unit tests: Vitest; e2e: Playwright in `tests/`
 - Deployable as a static SPA (including GitHub Pages)

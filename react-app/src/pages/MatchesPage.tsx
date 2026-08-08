@@ -1,6 +1,7 @@
 import { Button, Stack } from '@mui/material';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader, TeamSearch, TextButton } from '../components/Ui';
 import { getMatches, getTeams } from '../domain/database';
 import { useDatabase } from '../state/DatabaseContext';
@@ -81,6 +82,7 @@ export function MatchesPage() {
                   <TextButton onClick={() => navigate(`/matches/${match.Id}`)}>
                     {matchName}
                   </TextButton>
+                  <SeeStatsButton to={`/matches/${match.Id}/stats`} />
                   {canDeleteMatchesAndGames ? (
                     <Button
                       size="small"

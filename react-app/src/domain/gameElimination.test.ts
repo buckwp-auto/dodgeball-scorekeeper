@@ -13,6 +13,7 @@ import {
   persistThrowGameEvent,
 } from './gameEvents';
 import {
+  buildEliminationTimeline,
   computeGameLiveState,
   ELIMINATED_SELECTION_GRACE_SECONDS,
   findStaleEliminatedSelections,
@@ -68,6 +69,13 @@ describe('game live elimination state', () => {
     const live = computeGameLiveState(data, match.Id, gameId);
     expect(isPlayerEliminatedInGame(live, awayGp.Id)).toBe(true);
     expect(isPlayerEliminatedInGame(live, homeGp.Id)).toBe(false);
+
+    const timeline = buildEliminationTimeline(data, match.Id, gameId);
+    expect(timeline[0]).toMatchObject({ ordinal: 0, activeHome: 1, activeAway: 1 });
+    expect(timeline[timeline.length - 1]).toMatchObject({
+      activeHome: 1,
+      activeAway: 0,
+    });
   });
 
   it('eliminates the thrower when their throw is caught', () => {

@@ -21,6 +21,14 @@ export async function gotoScorekeeper(page: Page, subPath = '') {
   await expect(page.locator('.sk-layout')).toBeVisible({ timeout: 60_000 });
 }
 
+export async function loadSampleLeague(page: Page) {
+  await gotoScorekeeper(page);
+  await page.getByRole('button', { name: 'Load sample league (demo)' }).click();
+  await expect(page.getByRole('button', { name: 'League stats' })).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
 export async function navigateMenu(page: Page, menuLabel: string) {
   await page.locator('.sk-menu-link').filter({ hasText: menuLabel }).first().click();
 }

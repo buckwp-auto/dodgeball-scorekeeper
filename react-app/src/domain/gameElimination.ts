@@ -64,6 +64,82 @@ function deflectionEliminatesReceiver(resultId: number): boolean {
   );
 }
 
+function applyGameEventEliminations(
+  eliminated: Set<Guid>,
+  eventId: Guid,
+  throwsByEvent: ReturnType<typeof buildThrowsDetail>,
+  errorsByEvent: ReturnType<typeof indexGameEventErrors>,
+): void {
+  for (const detail of throwsByEvent.get(eventId) ?? []) {
+    applyThrowEliminations(eliminated, detail.throwRow, detail.deflections);
+  }
+  const error = errorsByEvent.get(eventId);
+  if (
+    error &&
+    (error.OffenseId === GameEventErrorOffense.LineOut ||
+      error.OffenseId === GameEventErrorOffense.BlockIllegal)
+  ) {
+    eliminated.add(error.OffenderId);
+  }
+}
+
+function countActiveBySide(
+  roster: GamePlayerInfo[],
+  eliminated: ReadonlySet<Guid>,
+): { activeHome: number; activeAway: number } {
+  let activeHome = 0;
+  let activeAway = 0;
+  for (const player of roster) {
+    if (eliminated.has(player.gamePlayerId)) continue;
+    if (player.teamHome) activeHome += 1;
+    else activeAway += 1;
+  }
+  return { activeHome, activeAway };
+}
+
+export type EliminationTimelinePoint = {
+  ordinal: number;
+  eventId: Guid | null;
+  activeHome: number;
+  activeAway: number;
+  videoOffsetSeconds: number | null;
+};
+
+/** Remaining home/away players after each event, starting with the opening roster. */
+export function buildEliminationTimeline(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+): EliminationTimelinePoint[] {
+  const roster = getGamePlayerInfos(data, matchId, gameId);
+  const eliminated = new Set<Guid>();
+  const throwsByEvent = buildThrowsDetail(data);
+  const errorsByEvent = indexGameEventErrors(data);
+  const gameEvents = getGameEvents(data, gameId);
+  const opening = countActiveBySide(roster, eliminated);
+  const points: EliminationTimelinePoint[] = [
+    {
+      ordinal: 0,
+      eventId: null,
+      activeHome: opening.activeHome,
+      activeAway: opening.activeAway,
+      videoOffsetSeconds: null,
+    },
+  ];
+  for (const event of gameEvents) {
+    applyGameEventEliminations(eliminated, event.Id, throwsByEvent, errorsByEvent);
+    const counts = countActiveBySide(roster, eliminated);
+    points.push({
+      ordinal: event.Ordinal,
+      eventId: event.Id,
+      activeHome: counts.activeHome,
+      activeAway: counts.activeAway,
+      videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
+    });
+  }
+  return points;
+}
+
 function applyThrowEliminations(
   eliminated: Set<Guid>,
   throwRow: {
@@ -107,19 +183,7 @@ export function computeGameLiveState(
 
   for (const event of gameEvents) {
     const before = new Set(eliminated);
-    const throws = throwsByEvent.get(event.Id) ?? [];
-    for (const detail of throws) {
-      applyThrowEliminations(eliminated, detail.throwRow, detail.deflections);
-    }
-    const error = errorsByEvent.get(event.Id);
-    if (error) {
-      if (
-        error.OffenseId === GameEventErrorOffense.LineOut ||
-        error.OffenseId === GameEventErrorOffense.BlockIllegal
-      ) {
-        eliminated.add(error.OffenderId);
-      }
-    }
+    applyGameEventEliminations(eliminated, event.Id, throwsByEvent, errorsByEvent);
     for (const gamePlayerId of eliminated) {
       if (!before.has(gamePlayerId)) {
         eliminatedAt.set(gamePlayerId, event.VideoOffsetSeconds ?? null);

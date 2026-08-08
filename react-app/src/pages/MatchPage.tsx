@@ -2,6 +2,7 @@ import { Button, Stack, TextField } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { PlayerRoster } from '../components/MatchRoster';
+import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { buildStatisticsCsvBytes } from '../domain/statisticsCsv';
@@ -139,6 +140,7 @@ export function MatchPage() {
         >
           Track Match
         </Button>
+        <SeeStatsButton to={`/matches/${matchId}/stats`} size="medium" />
         <Button
           type="button"
           className="bw-button bw-button--text"

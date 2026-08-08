@@ -21,8 +21,11 @@ import {
   Typography,
 } from '@mui/material';
 import { useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { ResumeScoringCta } from '../components/ResumeScoringButton';
+import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader } from '../components/Ui';
+import { getMatches } from '../domain/database';
 import { MAX_LEAGUE_NAME } from '../domain/limits';
 import { useAuth } from '../state/AuthContext';
 import { useDatabase } from '../state/DatabaseContext';
@@ -40,7 +43,9 @@ type PendingImport = {
 };
 
 export function OverviewPage() {
-  const { exportBytes, replaceDatabase } = useDatabase();
+  const navigate = useNavigate();
+  const { data, exportBytes, replaceDatabase } = useDatabase();
+  const hasMatches = getMatches(data).length > 0;
   const { configured, user, loading: authLoading, signInWithGoogle, signOut } =
     useAuth();
   const {
@@ -339,6 +344,16 @@ export function OverviewPage() {
                                 {isActive ? 'Opened' : 'Open'}
                               </Button>
                             ) : null}
+                            {isActive ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={busy}
+                                onClick={() => navigate('/stats')}
+                              >
+                                League stats
+                              </Button>
+                            ) : null}
                             {!membership || status === 'rejected' ? (
                               <Button
                                 size="small"
@@ -494,6 +509,7 @@ export function OverviewPage() {
             >
               {loading === 'sample' ? 'Loading…' : 'Load sample league (demo)'}
             </Button>
+            {hasMatches ? <SeeStatsButton to="/stats" size="medium" label="League stats" /> : null}
           </Stack>
 
           {loading ? (

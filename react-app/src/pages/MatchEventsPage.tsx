@@ -1,5 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { useNavigate, useParams } from 'react-router';
+import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader, TextButton } from '../components/Ui';
 import { getMatchName } from '../domain/database';
 import { autoSelectGameRoster } from '../domain/rosterAutoSelect';
@@ -85,8 +86,9 @@ export function MatchEventsPage() {
                   expand
                   onClick={() => navigate(gameHref(matchId, gameId, data))}
                 >
-                  {label} — {scoringComplete ? 'Scoring complete' : 'In progress'}
+                  {`${label} — ${scoringComplete ? 'Scoring complete' : 'In progress'}`}
                 </TextButton>
+                <SeeStatsButton to={`/matches/${matchId}/games/${gameId}/stats`} />
                 {canDeleteMatchesAndGames ? (
                   <Button
                     size="small"

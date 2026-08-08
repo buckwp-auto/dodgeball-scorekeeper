@@ -16,6 +16,7 @@ import { GamePage } from './pages/GamePage';
 import { GameEventsPage } from './pages/GameEventsPage';
 import { MatchesPage } from './pages/MatchesPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { StatsPage } from './pages/StatsPage';
 import { TeamPage } from './pages/TeamPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { DatabaseProvider } from './state/DatabaseContext';
@@ -31,6 +32,7 @@ const navItems = [
   { to: '/', label: 'Overview' },
   { to: '/teams', label: 'Teams' },
   { to: '/matches', label: 'Matches' },
+  { to: '/stats', label: 'Stats' },
   { to: '/history', label: 'History' },
 ];
 
@@ -50,7 +52,7 @@ function AppNav() {
             component={Link}
             to={item.to}
             selected={selected}
-            className="sk-menu-link sk-menu-link--root"
+            className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}`}
             sx={{ py: 0.75 }}
           >
             <ListItemText
@@ -117,12 +119,18 @@ export function App() {
                 <Route path="/teams/:teamId" element={<TeamPage />} />
                 <Route path="/matches" element={<MatchesPage />} />
                 <Route path="/matches/:matchId" element={<MatchPage />} />
+                <Route path="/matches/:matchId/stats" element={<StatsPage />} />
                 <Route path="/matches/:matchId/events" element={<MatchEventsPage />} />
                 <Route path="/matches/:matchId/games/:gameId" element={<GamePage />} />
+                <Route
+                  path="/matches/:matchId/games/:gameId/stats"
+                  element={<StatsPage />}
+                />
                 <Route
                   path="/matches/:matchId/games/:gameId/events"
                   element={<GameEventsPage />}
                 />
+                <Route path="/stats" element={<StatsPage />} />
                 <Route path="/history" element={<HistoryPage />} />
               </Routes>
             </Box>
