@@ -1,4 +1,4 @@
-import { Button, Stack, Tab, Tabs } from '@mui/material';
+import { Button, Stack, Tab, Tabs, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { MatchSeriesScoreboard } from '../components/stats/MatchSeriesScoreboard';
@@ -10,11 +10,15 @@ import { PageHeader } from '../components/Ui';
 import { getMatchName } from '../domain/database';
 import { buildEliminationTimeline } from '../domain/gameElimination';
 import { getMatchById, getMatchGames } from '../domain/matchGame';
+import { resolveLeagueStatPolicy } from '../domain/leagueSettings';
 import {
   buildDisplayStats,
+  loadStatsCountingMode,
   resolveStatsQuery,
+  saveStatsCountingMode,
   statsPageTitle,
   type LeaderboardMetric,
+  type StatsCountingMode,
   type StatsScope,
 } from '../domain/statistics/displayStats';
 import { getStatisticsSummaryCsv } from '../domain/statistics/statisticsFormatService';
@@ -35,6 +39,7 @@ export function StatsPage() {
   const [tab, setTab] = useState<StatsTab>(matchId && gameId ? 'players' : 'standings');
   const [metric, setMetric] = useState<LeaderboardMetric>('kills');
   const [minGames, setMinGames] = useState(1);
+  const [counting, setCounting] = useState<StatsCountingMode>(() => loadStatsCountingMode());
 
   const scope: StatsScope | null = useMemo(() => {
     if (matchId && gameId) return { kind: 'game', matchId, gameId };
@@ -55,6 +60,23 @@ export function StatsPage() {
     () => (scope && valid ? buildDisplayStats(data, scope) : []),
     [data, scope, valid],
   );
+  const policy = useMemo(() => resolveLeagueStatPolicy(data), [data]);
+  const showAssists =
+    policy.teamThrowAssistMode !== 'none' || rows.some((row) => row.assists > 0);
+  const showMultiKills =
+    policy.trackMultiKills ||
+    rows.some((row) => row.doubleKills + row.tripleKills + row.quadKills > 0);
+  const showMultiCatches =
+    policy.trackMultiCatches ||
+    rows.some((row) => row.doubleCatches + row.tripleCatches + row.quadCatches > 0);
+  const showDeflectionCatches =
+    policy.countDeflectionCatchesSeparately ||
+    rows.some((row) => row.catchesDeflection > 0);
+
+  const onCountingChange = (next: StatsCountingMode) => {
+    setCounting(next);
+    saveStatsCountingMode(next);
+  };
   const standings = useMemo(
     () => (scope && valid ? buildTeamStandingsForScope(data, scope) : []),
     [data, scope, valid],
@@ -133,6 +155,21 @@ export function StatsPage() {
         <Tab value="players" label="Players" />
         <Tab value="charts" label="Charts" />
       </Tabs>
+      {activeTab === 'players' || activeTab === 'charts' ? (
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={counting}
+          onChange={(_, next: StatsCountingMode | null) => {
+            if (next) onCountingChange(next);
+          }}
+          className="sk-stats-counting"
+          sx={{ mb: 2 }}
+        >
+          <ToggleButton value="counts">Counts</ToggleButton>
+          <ToggleButton value="credit">Credit</ToggleButton>
+        </ToggleButtonGroup>
+      ) : null}
       {activeTab === 'standings' ? <StatsStandingsTable rows={standings} /> : null}
       {activeTab === 'players' ? (
         <StatsPlayerTable
@@ -141,6 +178,11 @@ export function StatsPage() {
           onMetricChange={setMetric}
           minGames={minGames}
           onMinGamesChange={setMinGames}
+          counting={counting}
+          showAssists={showAssists}
+          showMultiKills={showMultiKills}
+          showMultiCatches={showMultiCatches}
+          showDeflectionCatches={showDeflectionCatches}
         />
       ) : null}
       {activeTab === 'charts' ? (
@@ -149,6 +191,7 @@ export function StatsPage() {
             rows={rows}
             metric={metric}
             minGames={minGames}
+            counting={counting}
             homeTeamName={series?.homeTeam.Name}
             awayTeamName={series?.awayTeam.Name}
             timeline={timeline}

@@ -1,7 +1,12 @@
 import type { EntityTableName } from '../domain/tableNames';
 
 /** League-wide tables stored on `leagues/{id}/roster/current`. */
-export const ROSTER_TABLES = ['Team', 'Player', 'TeamPlayer'] as const satisfies readonly EntityTableName[];
+export const ROSTER_TABLES = [
+  'Team',
+  'Player',
+  'TeamPlayer',
+  'LeagueSettings',
+] as const satisfies readonly EntityTableName[];
 
 /** Match-scoped tables stored on `leagues/{id}/matches/{matchId}`. */
 export const MATCH_TABLES = [

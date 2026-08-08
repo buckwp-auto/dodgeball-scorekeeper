@@ -3,7 +3,6 @@ import { getGameName, getMatchById, getMatchPlayers } from '../matchGame';
 import { throwResultLabels, throwResultUiOrder } from '../gameEvents';
 import type { DatabaseDto, Guid } from '../types';
 import {
-  DeflectionResult,
   ECompetitionOutcome,
   EDeathError,
   EThrowError,
@@ -30,6 +29,28 @@ export type StatsScope =
 
 export type LeaderboardMetric = 'kills' | 'catches' | 'kd' | 'hitRate' | 'gamesWon';
 
+export type StatsCountingMode = 'counts' | 'credit';
+
+export const STATS_COUNTING_STORAGE_KEY = 'SCOREKEEPER_STATS_COUNTING';
+
+export function loadStatsCountingMode(): StatsCountingMode {
+  try {
+    const raw = sessionStorage.getItem(STATS_COUNTING_STORAGE_KEY);
+    if (raw === 'counts' || raw === 'credit') return raw;
+  } catch {
+    /* ignore */
+  }
+  return 'counts';
+}
+
+export function saveStatsCountingMode(mode: StatsCountingMode): void {
+  try {
+    sessionStorage.setItem(STATS_COUNTING_STORAGE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
 export type DisplayPlayerStats = {
   playerId: Guid;
   teamId: Guid;
@@ -48,16 +69,26 @@ export type DisplayPlayerStats = {
   killsCredit: number;
   killsSupportCredit: number;
   deaths: number;
+  deathsCredit: number;
+  assists: number;
+  doubleKills: number;
+  tripleKills: number;
+  quadKills: number;
+  doubleCatches: number;
+  tripleCatches: number;
+  quadCatches: number;
   throws: number;
   throwHits: number;
   throwCounts: Partial<Record<ThrowResult, number>>;
   targets: number;
   catches: number;
+  catchesDeflection: number;
   recoveries: number;
   wastedBalls: number;
   lineOuts: number;
   illegalBlocks: number;
   kd: number | null;
+  kdCredit: number | null;
   hitRate: number | null;
   catchRate: number | null;
 };
@@ -117,30 +148,54 @@ export function filterAndSortDisplayStats(
     metric: LeaderboardMetric;
     minGames: number;
     direction?: 'asc' | 'desc';
+    counting?: StatsCountingMode;
   },
 ): DisplayPlayerStats[] {
   const direction = options.direction ?? 'desc';
+  const counting = options.counting ?? 'counts';
   return rows
     .filter((row) => row.gamesPlayed >= options.minGames)
-    .sort((a, b) => compareMetric(a, b, options.metric, direction));
+    .sort((a, b) => compareMetric(a, b, options.metric, direction, counting));
 }
 
 export function metricValue(
   row: DisplayPlayerStats,
   metric: LeaderboardMetric,
+  counting: StatsCountingMode = 'counts',
 ): number | null {
   switch (metric) {
     case 'kills':
-      return row.kills;
+      return counting === 'credit' ? row.killsCredit : row.kills;
     case 'catches':
       return row.catches;
     case 'kd':
-      return row.kd;
+      return counting === 'credit' ? row.kdCredit : row.kd;
     case 'hitRate':
       return row.hitRate;
     case 'gamesWon':
       return row.gamesWon;
   }
+}
+
+export function displayedKills(
+  row: DisplayPlayerStats,
+  counting: StatsCountingMode,
+): number {
+  return counting === 'credit' ? row.killsCredit : row.kills;
+}
+
+export function displayedDeaths(
+  row: DisplayPlayerStats,
+  counting: StatsCountingMode,
+): number {
+  return counting === 'credit' ? row.deathsCredit : row.deaths;
+}
+
+export function displayedKd(
+  row: DisplayPlayerStats,
+  counting: StatsCountingMode,
+): number | null {
+  return counting === 'credit' ? row.kdCredit : row.kd;
 }
 
 export function aggregateThrowMix(rows: DisplayPlayerStats[]): ThrowMixSlice[] {
@@ -163,16 +218,29 @@ export function aggregateThrowMix(rows: DisplayPlayerStats[]): ThrowMixSlice[] {
 
 export function buildSideComparison(
   rows: DisplayPlayerStats[],
+  counting: StatsCountingMode = 'counts',
 ): SideComparisonRow[] | null {
   if (rows.length === 0 || rows.some((row) => row.teamHome == null)) return null;
   const home = rows.filter((row) => row.teamHome);
   const away = rows.filter((row) => row.teamHome === false);
   const sum = (side: DisplayPlayerStats[], key: keyof DisplayPlayerStats) =>
     side.reduce((total, row) => total + (Number(row[key]) || 0), 0);
+  const sumFn = (
+    side: DisplayPlayerStats[],
+    pick: (row: DisplayPlayerStats) => number,
+  ) => side.reduce((total, row) => total + pick(row), 0);
   return [
-    { metric: 'Kills', home: sum(home, 'kills'), away: sum(away, 'kills') },
+    {
+      metric: 'Kills',
+      home: sumFn(home, (row) => displayedKills(row, counting)),
+      away: sumFn(away, (row) => displayedKills(row, counting)),
+    },
     { metric: 'Catches', home: sum(home, 'catches'), away: sum(away, 'catches') },
-    { metric: 'Deaths', home: sum(home, 'deaths'), away: sum(away, 'deaths') },
+    {
+      metric: 'Deaths',
+      home: sumFn(home, (row) => displayedDeaths(row, counting)),
+      away: sumFn(away, (row) => displayedDeaths(row, counting)),
+    },
     { metric: 'Throws', home: sum(home, 'throws'), away: sum(away, 'throws') },
   ];
 }
@@ -186,6 +254,11 @@ export function formatRate(value: number | null): string {
 export function formatPct(value: number | null): string {
   if (value == null) return '—';
   return `${Math.round(value * 100)}%`;
+}
+
+export function formatCountValue(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(2);
 }
 
 export function formatRecord(wins: number, losses: number, ties: number): string {
@@ -202,7 +275,7 @@ export const LEADERBOARD_METRICS: { id: LeaderboardMetric; label: string }[] = [
 
 function toDisplayPlayer(
   row: PlayerStatistics,
-  extras: Map<Guid, { catches: number; recoveries: number }>,
+  extras: Map<Guid, { recoveries: number }>,
   sideByPlayer: Map<Guid, boolean> | null,
 ): DisplayPlayerStats {
   const gamesWon = countOutcome(row.games, ECompetitionOutcome.Win);
@@ -226,7 +299,9 @@ function toDisplayPlayer(
     row.killsDeflectionsGroup,
   );
   const deaths = totalOf(row.deathsDirect, row.deathsDeflections, row.deathsErrors);
-  const extra = extras.get(row.playerId) ?? { catches: 0, recoveries: 0 };
+  const extra = extras.get(row.playerId) ?? { recoveries: 0 };
+  const catches = row.catchesDirect + row.catchesDeflection;
+  const killsCredit = totalOf(row.killsDirectCredit, row.killsDeflectionsCredit);
 
   return {
     playerId: row.playerId,
@@ -242,21 +317,31 @@ function toDisplayPlayer(
     gameWinPct: decidedGames > 0 ? gamesWon / decidedGames : null,
     matchesPlayed: row.matches.total ?? 0,
     kills,
-    killsCredit: totalOf(row.killsDirectCredit, row.killsDeflectionsCredit),
+    killsCredit,
     killsSupportCredit: row.killsSupportCredit.total ?? 0,
     deaths,
+    deathsCredit: row.deathsCredit,
+    assists: row.teamThrowAssists,
+    doubleKills: row.doubleKills,
+    tripleKills: row.tripleKills,
+    quadKills: row.quadKills,
+    doubleCatches: row.doubleCatches,
+    tripleCatches: row.tripleCatches,
+    quadCatches: row.quadCatches,
     throws,
     throwHits,
     throwCounts,
     targets,
-    catches: extra.catches,
+    catches,
+    catchesDeflection: row.catchesDeflection,
     recoveries: extra.recoveries,
     wastedBalls: row.offenseErrors.get(EThrowError.WastedBall) ?? 0,
     lineOuts: row.deathsErrors.get(EDeathError.LineOut) ?? 0,
     illegalBlocks: row.deathsErrors.get(EDeathError.BlockIllegal) ?? 0,
     kd: rateOrInfinite(kills, deaths),
+    kdCredit: rateOrInfinite(killsCredit, row.deathsCredit),
     hitRate: throws > 0 ? throwHits / throws : null,
-    catchRate: targets > 0 ? extra.catches / targets : null,
+    catchRate: targets > 0 ? catches / targets : null,
   };
 }
 
@@ -298,9 +383,10 @@ function compareMetric(
   b: DisplayPlayerStats,
   metric: LeaderboardMetric,
   direction: 'asc' | 'desc',
+  counting: StatsCountingMode,
 ): number {
-  const av = metricValue(a, metric);
-  const bv = metricValue(b, metric);
+  const av = metricValue(a, metric, counting);
+  const bv = metricValue(b, metric, counting);
   if (av == null && bv == null) {
     return a.playerName.localeCompare(b.playerName);
   }
@@ -319,35 +405,25 @@ function teamHomeByPlayer(data: DatabaseDto, matchId: Guid): Map<Guid, boolean> 
   return map;
 }
 
-type CatchRecoveryCounts = { catches: number; recoveries: number };
+type RecoveryCounts = { recoveries: number };
 
 function countCatchesAndRecoveries(
   data: DatabaseDto,
   matchIds: Guid[],
   gameIds?: Set<Guid>,
-): Map<Guid, CatchRecoveryCounts> {
-  const counts = new Map<Guid, CatchRecoveryCounts>();
-  const bump = (playerId: Guid, field: keyof CatchRecoveryCounts) => {
-    const current = counts.get(playerId) ?? { catches: 0, recoveries: 0 };
-    current[field] += 1;
+): Map<Guid, RecoveryCounts> {
+  const counts = new Map<Guid, RecoveryCounts>();
+  const bump = (playerId: Guid) => {
+    const current = counts.get(playerId) ?? { recoveries: 0 };
+    current.recoveries += 1;
     counts.set(playerId, current);
   };
 
   const playerIdByGamePlayer = playerIdByGamePlayerId(data);
   iterateScopedThrows(data, matchIds, gameIds, (detail) => {
-    if (detail.throwRow.ResultId === ThrowResult.Catch) {
-      const catcherId = playerIdByGamePlayer.get(detail.throwRow.TargetId);
-      if (catcherId) bump(catcherId, 'catches');
-    }
-    for (const deflection of detail.deflections) {
-      if (deflection.ResultId !== DeflectionResult.Catch) continue;
-      const catcherId = playerIdByGamePlayer.get(deflection.ReceiverId);
-      if (catcherId) bump(catcherId, 'catches');
-    }
-    if (detail.throwRow.RecoveredId) {
-      const recoveredId = playerIdByGamePlayer.get(detail.throwRow.RecoveredId);
-      if (recoveredId) bump(recoveredId, 'recoveries');
-    }
+    if (!detail.throwRow.RecoveredId) return;
+    const recoveredId = playerIdByGamePlayer.get(detail.throwRow.RecoveredId);
+    if (recoveredId) bump(recoveredId);
   });
 
   return counts;

@@ -14,6 +14,7 @@
 - **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
 - **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; opening a game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; **Delete** game (with confirm) for local data or league admins
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game
+- **Settings** — league stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
@@ -100,13 +101,28 @@ Same permanent map is used on Match / Game roster screens and Track Game throw/e
 - In-app **Stats** pages: league (`/stats`), match (`/matches/:id/stats`), game (`/matches/:id/games/:id/stats`)
 - Entry points: drawer **Stats**, Overview **League stats**, Matches/Match **See stats**, Track Match per-game **See stats**
 - Sortable **player table** with leaderboard toggles (Kills, Catches, K/D, Hit%, Games won) and min-games filter
+- **Counts vs Credit** toggle (session): integer involvement vs league-weighted kill/death credit
+- Optional columns when the league policy enables them: assists, double/triple/quad kills, multi-catches, deflection catches
 - **Team standings** (game W-L-T + match W-L from finished games) and match series scoreboard
 - Charts (`@mui/x-charts`): throw-result mix, top-N bars, home vs away, game elimination timeline; thrower→target heatmap on match/game
-- Display metrics (catches, recoveries, rates) sit on top of the legacy engine — **golden CSV unchanged**
+- Display metrics (catches, recoveries, rates) sit on top of the engine — **golden CSV unchanged** under the default Legacy policy
 - Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page
-- Domain statistics service aligned with legacy kill/death/catch aggregates
+- Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events
 - **Golden fixture** tests vs original WASM/scorekeeper CSV output
 - Playwright coverage for workflow, import/export, and statistics
+
+## Stat credit policy
+
+League-scoped settings (`LeagueSettings` table, synced with roster) control how stats award team throws and deflections. Default is **Legacy** (today’s engine) so existing `.scrkpr` files and golden CSV stay stable until a league opts in.
+
+| Preset | Behavior |
+|--------|----------|
+| **Legacy** | Each hitting throw counts a full kill; same-target team throws can double-count deaths; credit is `1/N` including non-hitters. Deflection kills are full weight (1.0). |
+| **Shared credit** | One death per unique target; hitters split credit; non-hitting teammates get an assist; deflection kills and deflection-catch deaths at 0.5 |
+| **Full credit each** | One death per unique target; every hitter gets 1.0; assists for non-hitters |
+| **First-hitter** | One death per unique target; first throw ordinal gets the configured share, remaining hitters split the rest |
+
+First-hitter mode uses `Throw.Ordinal` (order in the team throw). List the first ball to connect first. Catch on a throw still suppresses that throw’s kills. Live elimination is unchanged.
 
 ## Technical notes
 

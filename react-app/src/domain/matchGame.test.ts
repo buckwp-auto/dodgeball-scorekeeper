@@ -81,6 +81,15 @@ describe('deleteGame / deleteMatch', () => {
     expect(getGamePlayers(data, game2).length).toBeGreaterThan(0);
   });
 
+  it('keeps a match roster player who already appears in a game', () => {
+    const { data, match } = seedMatchWithTwoGames();
+    const before = getMatchPlayers(data, match.Id);
+    expect(before).toHaveLength(2);
+    const playerId = before[0].PlayerId;
+    toggleMatchPlayer(data, match.Id, playerId, before[0].TeamHome);
+    expect(getMatchPlayers(data, match.Id)).toHaveLength(2);
+  });
+
   it('removes a match, games, and roster while keeping teams', () => {
     const { data, match, home, away } = seedMatchWithTwoGames();
     deleteMatch(data, match.Id);

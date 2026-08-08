@@ -18,24 +18,24 @@ export function StatsStandingsTable({ rows }: { rows: TeamStanding[] }) {
       <TableHead>
         <TableRow>
           <TableCell>Team</TableCell>
-          <TableCell align="right">Games</TableCell>
-          <TableCell align="right">Win%</TableCell>
-          <TableCell align="right">Matches</TableCell>
-          <TableCell align="right">Match win%</TableCell>
+          <TableCell align="center">Games</TableCell>
+          <TableCell align="center">Win%</TableCell>
+          <TableCell align="center">Matches</TableCell>
+          <TableCell align="center">Match win%</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
         {rows.map((row) => (
           <TableRow key={row.teamId}>
             <TableCell>{row.teamName}</TableCell>
-            <TableCell align="right">
+            <TableCell align="center">
               {formatRecord(row.gamesWon, row.gamesLost, row.gamesTied)}
             </TableCell>
-            <TableCell align="right">{formatPct(row.gameWinPct)}</TableCell>
-            <TableCell align="right">
+            <TableCell align="center">{formatPct(row.gameWinPct)}</TableCell>
+            <TableCell align="center">
               {formatRecord(row.matchesWon, row.matchesLost, row.matchesTied)}
             </TableCell>
-            <TableCell align="right">{formatPct(row.matchWinPct)}</TableCell>
+            <TableCell align="center">{formatPct(row.matchWinPct)}</TableCell>
           </TableRow>
         ))}
       </TableBody>

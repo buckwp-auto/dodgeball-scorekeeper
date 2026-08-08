@@ -37,6 +37,24 @@ body {
   border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
 
+.sk-grid td.MuiTableCell-alignCenter,
+.sk-grid th.MuiTableCell-alignCenter {
+  text-align: center;
+}
+
+.sk-grid th.MuiTableCell-alignCenter .MuiTableSortLabel-root {
+  justify-content: center;
+}
+
+.sk-grid td.MuiTableCell-alignRight,
+.sk-grid th.MuiTableCell-alignRight {
+  text-align: right;
+}
+
+.sk-grid th.MuiTableCell-alignRight .MuiTableSortLabel-root {
+  justify-content: flex-end;
+}
+
 .history .timestamp {
   white-space: nowrap;
 }

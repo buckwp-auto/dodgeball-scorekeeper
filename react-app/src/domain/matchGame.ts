@@ -48,6 +48,11 @@ export function toggleMatchPlayer(
     (row) => row.MatchId === matchId && row.PlayerId === playerId,
   );
   if (index >= 0) {
+    const matchPlayerId = rows[index].Id;
+    const usedInGame = table<{ MatchPlayerId: Guid }>(data, 'GamePlayer').some(
+      (row) => row.MatchPlayerId === matchPlayerId,
+    );
+    if (usedInGame) return;
     rows.splice(index, 1);
     return;
   }

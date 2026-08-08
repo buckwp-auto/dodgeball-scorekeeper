@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from '../database';
 import { addGame, toggleGamePlayer, toggleMatchPlayer } from '../matchGame';
+import { setLeagueSettings } from '../leagueSettings';
 import {
   persistFinishGameEvent,
   persistThrowGameEvent,
@@ -15,12 +16,15 @@ import {
   buildDisplayStats,
   buildSideComparison,
   filterAndSortDisplayStats,
+  formatCountValue,
   formatPct,
   formatRate,
   formatRecord,
+  metricValue,
   statsPageTitle,
   type DisplayPlayerStats,
 } from './displayStats';
+import { STAT_CREDIT_PRESETS } from './statCreditPolicy';
 
 function gpFor(
   data: ReturnType<typeof createEmptyDatabase>,
@@ -114,6 +118,33 @@ describe('buildDisplayStats', () => {
     expect(casey.gamesLost).toBe(1);
     expect(casey.kd).toBe(0);
     expect(casey.teamHome).toBe(false);
+  });
+
+  it('skips orphaned throws instead of crashing when a match roster row is missing', () => {
+    const { data, match, gameId, homeGp, awayGp, h1 } = setupMatch();
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistFinishGameEvent(data, gameId, {
+      resultId: GameEventFinishResult.WinHome,
+    });
+    data.Tables.MatchPlayer = (
+      data.Tables.MatchPlayer as { PlayerId: string }[]
+    ).filter((row) => row.PlayerId !== h1.Id);
+
+    expect(() =>
+      buildDisplayStats(data, { kind: 'match', matchId: match.Id }),
+    ).not.toThrow();
+    const rows = buildDisplayStats(data, { kind: 'match', matchId: match.Id });
+    expect(byName(rows, 'Alex')).toBeUndefined();
+    expect(byName(rows, 'Casey')?.deaths).toBe(1);
+    expect(byName(rows, 'Casey')?.targets).toBe(1);
   });
 
   it('counts catches made and recoveries without changing CSV aggregates', () => {
@@ -289,5 +320,58 @@ describe('buildDisplayStats', () => {
     expect(formatPct(0.67)).toBe('67%');
     expect(formatRecord(3, 1, 0)).toBe('3-1');
     expect(formatRecord(2, 2, 1)).toBe('2-2-1');
+    expect(formatCountValue(2)).toBe('2');
+    expect(formatCountValue(0.5)).toBe('0.50');
+  });
+
+  it('applies shared credit to same-target team throws and supports the counts/credit toggle', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupMatch({ extraHome: true });
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+      {
+        throwerGamePlayerId: homeGp2!.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+
+    const legacyRows = buildDisplayStats(data, { kind: 'match', matchId: match.Id });
+    expect(byName(legacyRows, 'Casey')?.deaths).toBe(2);
+    expect(byName(legacyRows, 'Alex')?.kills).toBe(1);
+    expect(byName(legacyRows, 'Blake')?.kills).toBe(1);
+    expect(byName(legacyRows, 'Alex')?.killsCredit).toBeCloseTo(0.5);
+
+    setLeagueSettings(data, STAT_CREDIT_PRESETS.sharedCredit);
+    const sharedRows = buildDisplayStats(data, { kind: 'match', matchId: match.Id });
+    const alex = byName(sharedRows, 'Alex')!;
+    const blake = byName(sharedRows, 'Blake')!;
+    const casey = byName(sharedRows, 'Casey')!;
+
+    expect(casey.deaths).toBe(1);
+    expect(casey.deathsCredit).toBeCloseTo(1);
+    expect(alex.kills).toBe(1);
+    expect(blake.kills).toBe(1);
+    expect(alex.killsCredit).toBeCloseTo(0.5);
+    expect(blake.killsCredit).toBeCloseTo(0.5);
+    expect(metricValue(alex, 'kills', 'counts')).toBe(1);
+    expect(metricValue(alex, 'kills', 'credit')).toBeCloseTo(0.5);
+    expect(metricValue(alex, 'kd', 'credit')).toBe(Number.POSITIVE_INFINITY);
+    expect(metricValue(casey, 'kd', 'credit')).toBe(0);
+
+    const comparison = buildSideComparison(sharedRows, 'credit');
+    expect(comparison).toEqual(
+      expect.arrayContaining([
+        { metric: 'Kills', home: 1, away: 0 },
+        { metric: 'Deaths', home: 0, away: 1 },
+      ]),
+    );
   });
 });

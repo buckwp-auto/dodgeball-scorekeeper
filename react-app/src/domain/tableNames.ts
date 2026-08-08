@@ -8,6 +8,7 @@ export const ENTITY_TABLE_NAMES = [
   'GameEventStart',
   'GameEventThrow',
   'GamePlayer',
+  'LeagueSettings',
   'Match',
   'MatchEvent',
   'MatchEventGame',

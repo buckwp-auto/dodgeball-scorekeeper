@@ -1,3 +1,4 @@
+import { resolveLeagueStatPolicy } from '../leagueSettings';
 import type { DatabaseDto, Guid } from '../types';
 import {
   DeflectionResult,
@@ -36,6 +37,11 @@ import {
   type PlayerOverview,
   type ThrowDetail,
 } from './databaseViews';
+import {
+  awardThrowEventCredit,
+  type EventCreditAwards,
+} from './statCreditEngine';
+import type { StatCreditPolicy } from './statCreditPolicy';
 
 class PlayerStatisticsBuilder {
   readonly playerId: Guid;
@@ -49,6 +55,16 @@ class PlayerStatisticsBuilder {
   readonly killsGroup = new PlayerStatisticsBuilderKills();
   readonly killsCredit = new PlayerStatisticsBuilderKillsCredit();
   readonly deaths = new PlayerStatisticsBuilderDeaths();
+  deathsCredit = 0;
+  teamThrowAssists = 0;
+  doubleKills = 0;
+  tripleKills = 0;
+  quadKills = 0;
+  doubleCatches = 0;
+  tripleCatches = 0;
+  quadCatches = 0;
+  catchesDirect = 0;
+  catchesDeflection = 0;
 
   constructor(playerId: Guid) {
     this.playerId = playerId;
@@ -105,6 +121,16 @@ export type PlayerStatistics = {
   deathsDirect: StatisticAggregates<EDeathType, number>;
   deathsDeflections: StatisticAggregates<EDeathType, number>;
   deathsErrors: StatisticAggregates<EDeathError, number>;
+  deathsCredit: number;
+  teamThrowAssists: number;
+  doubleKills: number;
+  tripleKills: number;
+  quadKills: number;
+  doubleCatches: number;
+  tripleCatches: number;
+  quadCatches: number;
+  catchesDirect: number;
+  catchesDeflection: number;
 };
 
 class StatisticsContext {
@@ -123,18 +149,33 @@ class StatisticsContext {
     this.gamePlayers = gamePlayers;
   }
 
-  getPlayerStatisticsByGamePlayer(gamePlayerId: Guid): {
+  tryGetPlayerStatisticsByGamePlayer(gamePlayerId: Guid): {
     builder: PlayerStatisticsBuilder;
     teamHome: boolean;
-  } {
+  } | null {
     const gamePlayer = this.gamePlayers.get(gamePlayerId);
-    if (!gamePlayer) throw new Error('Game player not found');
+    if (!gamePlayer) return null;
     const matchPlayer = this.matchPlayers.get(gamePlayer.MatchPlayerId);
-    if (!matchPlayer) throw new Error('Match player not found');
+    if (!matchPlayer) return null;
     return {
       builder: this.getPlayerStatistics(matchPlayer.PlayerId),
       teamHome: matchPlayer.TeamHome,
     };
+  }
+
+  getPlayerStatisticsByGamePlayer(gamePlayerId: Guid): {
+    builder: PlayerStatisticsBuilder;
+    teamHome: boolean;
+  } {
+    const resolved = this.tryGetPlayerStatisticsByGamePlayer(gamePlayerId);
+    if (!resolved) {
+      throw new Error(
+        this.gamePlayers.has(gamePlayerId)
+          ? 'Match player not found'
+          : 'Game player not found',
+      );
+    }
+    return resolved;
   }
 
   getPlayerStatisticsByMatchPlayer(matchPlayerId: Guid): {
@@ -186,55 +227,19 @@ class StatisticsContext {
           deathsDirect: builder.deaths.direct.build(),
           deathsDeflections: builder.deaths.deflections.build(),
           deathsErrors: builder.deaths.errors.build(),
+          deathsCredit: builder.deathsCredit,
+          teamThrowAssists: builder.teamThrowAssists,
+          doubleKills: builder.doubleKills,
+          tripleKills: builder.tripleKills,
+          quadKills: builder.quadKills,
+          doubleCatches: builder.doubleCatches,
+          tripleCatches: builder.tripleCatches,
+          quadCatches: builder.quadCatches,
+          catchesDirect: builder.catchesDirect,
+          catchesDeflection: builder.catchesDeflection,
         };
       })
       .filter((row): row is PlayerStatistics => row !== null);
-  }
-}
-
-function isCatch(
-  throwDetail: ThrowDetail,
-): { caught: true; deflection: boolean } | { caught: false } {
-  if (throwDetail.throwRow.ResultId === ThrowResult.Catch) {
-    return { caught: true, deflection: false };
-  }
-  if (
-    throwDetail.deflections.some(
-      (deflection) => deflection.ResultId === DeflectionResult.Catch,
-    )
-  ) {
-    return { caught: true, deflection: true };
-  }
-  return { caught: false };
-}
-
-function tryGetKillFromThrow(
-  result: number,
-): { killType: EKillType; deathType: EDeathType } | undefined {
-  switch (result) {
-    case ThrowResult.Hit:
-      return { killType: EKillType.Hit, deathType: EDeathType.Hit };
-    case ThrowResult.BlockFailed:
-      return { killType: EKillType.BlockFailed, deathType: EDeathType.BlockFailed };
-    case ThrowResult.CatchFailed:
-      return { killType: EKillType.CatchFailed, deathType: EDeathType.CatchFailed };
-    default:
-      return undefined;
-  }
-}
-
-function tryGetKillFromDeflection(
-  result: number,
-): { killType: EKillType; deathType: EDeathType } | undefined {
-  switch (result) {
-    case DeflectionResult.Hit:
-      return { killType: EKillType.Hit, deathType: EDeathType.Hit };
-    case DeflectionResult.BlockFailed:
-      return { killType: EKillType.BlockFailed, deathType: EDeathType.BlockFailed };
-    case DeflectionResult.CatchFailed:
-      return { killType: EKillType.CatchFailed, deathType: EDeathType.CatchFailed };
-    default:
-      return undefined;
   }
 }
 
@@ -245,11 +250,11 @@ function populateThrowers(
   const throwersHome: Guid[] = [];
   const throwersAway: Guid[] = [];
   for (const throwDetail of throwDetails) {
-    const { builder, teamHome } = context.getPlayerStatisticsByGamePlayer(
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(
       throwDetail.throwRow.ThrowerId,
     );
-    void builder;
-    const throwers = teamHome ? throwersHome : throwersAway;
+    if (!resolved) continue;
+    const throwers = resolved.teamHome ? throwersHome : throwersAway;
     if (!throwers.includes(throwDetail.throwRow.ThrowerId)) {
       throwers.push(throwDetail.throwRow.ThrowerId);
     }
@@ -257,70 +262,122 @@ function populateThrowers(
   return { throwersHome, throwersAway };
 }
 
-function processThrow(
+function incrementThrowFacts(
   context: StatisticsContext,
   throwDetail: ThrowDetail,
   allThrowDetails: ThrowDetail[],
 ): void {
-  const catchResult = isCatch(throwDetail);
   const { throwersHome, throwersAway } = populateThrowers(context, allThrowDetails);
-  const { builder: thrower, teamHome: throwerHome } =
-    context.getPlayerStatisticsByGamePlayer(throwDetail.throwRow.ThrowerId);
-  const throwers = throwerHome ? throwersHome : throwersAway;
-  const offense = throwers.length > 1 ? thrower.offenseGroup : thrower.offenseIndividual;
-  const kills = throwers.length > 1 ? thrower.killsGroup : thrower.killsIndividual;
-  const killsCredit = thrower.killsCredit;
-  const killCredit = 1 / throwers.length;
-
-  offense.throws.increment(throwDetail.throwRow.ResultId as ThrowResult, 1);
-
-  const { builder: target } = context.getPlayerStatisticsByGamePlayer(
-    throwDetail.throwRow.TargetId,
+  const throwerInfo = context.tryGetPlayerStatisticsByGamePlayer(
+    throwDetail.throwRow.ThrowerId,
   );
-  target.defense.targets.increment(throwDetail.throwRow.ResultId as ThrowResult, 1);
-
-  if (catchResult.caught) {
-    const deaths = catchResult.deflection
-      ? thrower.deaths.deflections
-      : thrower.deaths.direct;
-    deaths.increment(EDeathType.CatchThrown, 1);
-  } else {
-    const kill = tryGetKillFromThrow(throwDetail.throwRow.ResultId);
-    if (kill) {
-      target.deaths.direct.increment(kill.deathType, 1);
-      kills.direct.increment(kill.killType, 1);
-      killsCredit.direct.increment(kill.killType, killCredit);
-      for (const throwerOther of throwers) {
-        if (throwerOther !== throwDetail.throwRow.ThrowerId) {
-          context
-            .getPlayerStatisticsByGamePlayer(throwerOther)
-            .builder.killsCredit.support.increment(kill.killType, killCredit);
-        }
-      }
+  if (throwerInfo) {
+    const throwers = throwerInfo.teamHome ? throwersHome : throwersAway;
+    const offense =
+      throwers.length > 1 ? throwerInfo.builder.offenseGroup : throwerInfo.builder.offenseIndividual;
+    offense.throws.increment(throwDetail.throwRow.ResultId as ThrowResult, 1);
+    for (const deflection of throwDetail.deflections) {
+      offense.deflections.increment(deflection.ResultId as DeflectionResult, 1);
     }
   }
 
+  const target = context.tryGetPlayerStatisticsByGamePlayer(throwDetail.throwRow.TargetId);
+  if (target) {
+    target.builder.defense.targets.increment(throwDetail.throwRow.ResultId as ThrowResult, 1);
+  }
+
   for (const deflection of throwDetail.deflections) {
-    offense.deflections.increment(deflection.ResultId as DeflectionResult, 1);
-    const { builder: receiver } = context.getPlayerStatisticsByGamePlayer(
-      deflection.ReceiverId,
-    );
-    receiver.defense.deflections.increment(deflection.ResultId as DeflectionResult, 1);
-    if (!catchResult.caught) {
-      const kill = tryGetKillFromDeflection(deflection.ResultId);
-      if (kill) {
-        receiver.deaths.deflections.increment(kill.deathType, 1);
-        kills.deflections.increment(kill.killType, 1);
-        killsCredit.deflections.increment(kill.killType, killCredit);
-        for (const throwerOther of throwers) {
-          if (throwerOther !== throwDetail.throwRow.ThrowerId) {
-            context
-              .getPlayerStatisticsByGamePlayer(throwerOther)
-              .builder.killsCredit.support.increment(kill.killType, killCredit);
-          }
-        }
-      }
+    const receiver = context.tryGetPlayerStatisticsByGamePlayer(deflection.ReceiverId);
+    if (receiver) {
+      receiver.builder.defense.deflections.increment(deflection.ResultId as DeflectionResult, 1);
     }
+  }
+}
+
+function applyEventAwards(
+  context: StatisticsContext,
+  details: ThrowDetail[],
+  awards: EventCreditAwards,
+): void {
+  const { throwersHome, throwersAway } = populateThrowers(context, details);
+
+  const groupFor = (gamePlayerId: Guid) => {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(gamePlayerId);
+    if (!resolved) return null;
+    const throwers = resolved.teamHome ? throwersHome : throwersAway;
+    return { builder: resolved.builder, group: throwers.length > 1 };
+  };
+
+  for (const kill of awards.throwerKills) {
+    const grouped = groupFor(kill.throwerId);
+    if (!grouped) continue;
+    const { builder, group } = grouped;
+    const kills = group ? builder.killsGroup : builder.killsIndividual;
+    const countBucket = kill.source === 'deflection' ? kills.deflections : kills.direct;
+    countBucket.increment(kill.killType, kill.integer);
+    const creditBucket =
+      kill.source === 'deflection'
+        ? builder.killsCredit.deflections
+        : builder.killsCredit.direct;
+    creditBucket.increment(kill.killType, kill.credit);
+  }
+
+  for (const support of awards.supportCredits) {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(support.throwerId);
+    if (!resolved) continue;
+    resolved.builder.killsCredit.support.increment(support.killType, support.credit);
+  }
+
+  for (const death of awards.targetDeaths) {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(death.targetId);
+    if (!resolved) continue;
+    const { builder } = resolved;
+    const bucket =
+      death.source === 'deflection' ? builder.deaths.deflections : builder.deaths.direct;
+    bucket.increment(death.deathType, death.integer);
+    builder.deathsCredit += death.credit;
+  }
+
+  for (const death of awards.catchThrownDeaths) {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(death.throwerId);
+    if (!resolved) continue;
+    const { builder } = resolved;
+    const bucket =
+      death.source === 'deflection' ? builder.deaths.deflections : builder.deaths.direct;
+    bucket.increment(EDeathType.CatchThrown, death.integer);
+    builder.deathsCredit += death.credit;
+  }
+
+  for (const throwerId of awards.assists) {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(throwerId);
+    if (!resolved) continue;
+    resolved.builder.teamThrowAssists += 1;
+  }
+
+  for (const multi of awards.multiKills) {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(multi.throwerId);
+    if (!resolved) continue;
+    const builder = resolved.builder;
+    if (multi.size === 2) builder.doubleKills += 1;
+    else if (multi.size === 3) builder.tripleKills += 1;
+    else builder.quadKills += 1;
+  }
+
+  for (const catchAward of awards.catches) {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(catchAward.catcherId);
+    if (!resolved) continue;
+    const builder = resolved.builder;
+    if (catchAward.source === 'deflection') builder.catchesDeflection += 1;
+    else builder.catchesDirect += 1;
+  }
+
+  for (const multi of awards.multiCatches) {
+    const resolved = context.tryGetPlayerStatisticsByGamePlayer(multi.catcherId);
+    if (!resolved) continue;
+    const builder = resolved.builder;
+    if (multi.size === 2) builder.doubleCatches += 1;
+    else if (multi.size === 3) builder.tripleCatches += 1;
+    else builder.quadCatches += 1;
   }
 }
 
@@ -329,16 +386,20 @@ function processError(
   offenderId: Guid,
   offenseId: number,
 ): void {
-  const { builder: offender } = context.getPlayerStatisticsByGamePlayer(offenderId);
+  const resolved = context.tryGetPlayerStatisticsByGamePlayer(offenderId);
+  if (!resolved) return;
+  const { builder: offender } = resolved;
   switch (offenseId) {
     case GameEventErrorOffense.LineOut:
       offender.deaths.errors.increment(EDeathError.LineOut, 1);
+      offender.deathsCredit += 1;
       break;
     case GameEventErrorOffense.WastedBall:
       offender.offenseErrors.increment(EThrowError.WastedBall, 1);
       break;
     case GameEventErrorOffense.BlockIllegal:
       offender.deaths.errors.increment(EDeathError.BlockIllegal, 1);
+      offender.deathsCredit += 1;
       break;
     default:
       throw new Error(`Error game event offense (${offenseId}) not recognized.`);
@@ -390,6 +451,7 @@ export function createStatisticsSummary(
   data: DatabaseDto,
   matchIds: Guid[],
   gameIds?: Set<Guid>,
+  policy: StatCreditPolicy = resolveLeagueStatPolicy(data),
 ): PlayerStatistics[] {
   const playerOverviews = buildPlayerOverviews(data);
   const matchOverviews = buildMatchOverviews(data);
@@ -428,8 +490,9 @@ export function createStatisticsSummary(
         if (gameEventThrow) {
           const details = throwsDetail.get(gameEvent.Id) ?? [];
           for (const detail of details) {
-            processThrow(context, detail, details);
+            incrementThrowFacts(context, detail, details);
           }
+          applyEventAwards(context, details, awardThrowEventCredit(details, policy));
           continue;
         }
 

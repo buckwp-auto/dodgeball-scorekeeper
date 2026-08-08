@@ -10,13 +10,18 @@ import {
   metricValue,
   type DisplayPlayerStats,
   type LeaderboardMetric,
+  type StatsCountingMode,
 } from '../../domain/statistics/displayStats';
 import type { EliminationTimelinePoint } from '../../domain/gameElimination';
 
 const TOP_N = 10;
 
-function chartValue(row: DisplayPlayerStats, metric: LeaderboardMetric): number | null {
-  const value = metricValue(row, metric);
+function chartValue(
+  row: DisplayPlayerStats,
+  metric: LeaderboardMetric,
+  counting: StatsCountingMode,
+): number | null {
+  const value = metricValue(row, metric, counting);
   if (value == null || !Number.isFinite(value)) return null;
   if (metric === 'hitRate') return Math.round(value * 1000) / 10;
   return value;
@@ -26,6 +31,7 @@ export function StatsCharts({
   rows,
   metric,
   minGames,
+  counting = 'counts',
   homeTeamName,
   awayTeamName,
   timeline,
@@ -33,18 +39,22 @@ export function StatsCharts({
   rows: DisplayPlayerStats[];
   metric: LeaderboardMetric;
   minGames: number;
+  counting?: StatsCountingMode;
   homeTeamName?: string;
   awayTeamName?: string;
   timeline?: EliminationTimelinePoint[];
 }) {
   const metricLabel =
     LEADERBOARD_METRICS.find((item) => item.id === metric)?.label ?? 'Kills';
-  const ranked = filterAndSortDisplayStats(rows, { metric, minGames }).slice(0, TOP_N);
+  const ranked = filterAndSortDisplayStats(rows, { metric, minGames, counting }).slice(
+    0,
+    TOP_N,
+  );
   const barPlayers = ranked
-    .map((row) => ({ name: row.playerName, value: chartValue(row, metric) }))
+    .map((row) => ({ name: row.playerName, value: chartValue(row, metric, counting) }))
     .filter((row): row is { name: string; value: number } => row.value != null);
   const throwMix = aggregateThrowMix(rows);
-  const comparison = buildSideComparison(rows);
+  const comparison = buildSideComparison(rows, counting);
 
   return (
     <Box className="sk-stats-charts" sx={{ display: 'grid', gap: 3 }}>

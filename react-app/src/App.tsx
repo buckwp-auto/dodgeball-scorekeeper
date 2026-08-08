@@ -16,6 +16,7 @@ import { GamePage } from './pages/GamePage';
 import { GameEventsPage } from './pages/GameEventsPage';
 import { MatchesPage } from './pages/MatchesPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { StatsPage } from './pages/StatsPage';
 import { TeamPage } from './pages/TeamPage';
 import { TeamsPage } from './pages/TeamsPage';
@@ -33,6 +34,7 @@ const navItems = [
   { to: '/teams', label: 'Teams' },
   { to: '/matches', label: 'Matches' },
   { to: '/stats', label: 'Stats' },
+  { to: '/settings', label: 'Settings' },
   { to: '/history', label: 'History' },
 ];
 
@@ -131,6 +133,7 @@ export function App() {
                   element={<GameEventsPage />}
                 />
                 <Route path="/stats" element={<StatsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/history" element={<HistoryPage />} />
               </Routes>
             </Box>
