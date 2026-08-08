@@ -62,7 +62,7 @@ Derived from persisted events (not a separate toggle):
 
 - Match page: optional **YouTube URL** field
 - Track Game layouts (session preference):
-  - **Tall** (`]`) — large fill-height 16:9 player; compact throw/error editor band below (all controls still visible)
+  - **Tall** (`]`) — large fill-height 16:9 player; compact throw/error editor band below (all controls still visible); keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
   - **Hide** — scoring only (timestamps pause)
 - Playback hotkeys work without focusing the embed: `Space` play/pause, `←`/`→` ±5s, `,`/`.` frame step when paused
@@ -91,7 +91,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Undo / redo last event | `-` undo, `+` redo |
 | Confirm wipe finish | `Enter` |
 | YouTube layout | `[` small/docked, `]` tall |
-| YouTube playback | `Space` play/pause, `←`/`→` ±5s |
+| YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |
 
 Same permanent map is used on Match / Game roster screens and Track Game throw/error flows. Re-pressing a player/result key toggles the selection off where applicable.

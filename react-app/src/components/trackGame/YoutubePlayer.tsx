@@ -27,6 +27,7 @@ import {
   type YoutubePlayerMode,
 } from '../../domain/youtube';
 import { HotkeyBadge } from '../HotkeyBadge';
+import { TrackGameHotkeysTooltip } from './TrackGameHotkeyHints';
 
 declare global {
   interface Window {
@@ -200,6 +201,7 @@ function PlayerChrome({
       ) : null}
       <Box sx={{ flex: 1 }} />
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        {layout === 'tall' ? <TrackGameHotkeysTooltip /> : null}
         <HotkeyBadge hotkey={YOUTUBE_LAYOUT_SMALL_HOTKEY} />
         <Button
           size="small"
