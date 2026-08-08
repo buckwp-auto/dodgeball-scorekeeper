@@ -58,6 +58,8 @@ type LeagueContextValue = {
   queueImportOverrideFlush: (prev: DatabaseDto, next: DatabaseDto) => void;
   /** Flush pending cloud writes if connected. */
   flushNow: (data: DatabaseDto) => Promise<void>;
+  /** Flush pending cloud writes using the latest known database snapshot. */
+  saveNow: () => Promise<void>;
   isDirty: boolean;
 };
 
@@ -401,6 +403,12 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     setSyncStatus('local');
   }, [flushNow, isDirty]);
 
+  const saveNow = useCallback(async () => {
+    const latest = latestDataRef.current;
+    if (!latest) return;
+    await flushNow(latest);
+  }, [flushNow]);
+
   // Poll remote while connected and clean
   useEffect(() => {
     if (!activeLeagueId || !user) return;
@@ -488,6 +496,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       notifyLocalChange,
       queueImportOverrideFlush,
       flushNow,
+      saveNow,
       isDirty,
     }),
     [
@@ -510,6 +519,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       notifyLocalChange,
       queueImportOverrideFlush,
       flushNow,
+      saveNow,
       isDirty,
     ],
   );

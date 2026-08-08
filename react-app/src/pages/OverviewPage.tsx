@@ -32,29 +32,6 @@ import {
 
 const SAMPLE_LEAGUE_URL = `${import.meta.env.BASE_URL}samples/league-six-teams.scrkpr`;
 
-function syncLabel(status: string, lastSavedAt: string | null): string {
-  switch (status) {
-    case 'local':
-      return 'Local only';
-    case 'need-auth':
-      return 'Sign in to sync';
-    case 'unsaved':
-      return 'Unsaved…';
-    case 'saving':
-      return 'Saving…';
-    case 'saved':
-      return lastSavedAt
-        ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}`
-        : 'Saved';
-    case 'quota':
-      return 'Quota exceeded';
-    case 'error':
-      return 'Sync error';
-    default:
-      return status;
-  }
-}
-
 type PendingImport = {
   raw: unknown;
   successLabel: string;
@@ -71,8 +48,6 @@ export function OverviewPage() {
     membersByLeague,
     activeLeagueId,
     canOverrideActiveLeague,
-    syncStatus,
-    lastSavedAt,
     syncError,
     refreshing,
     refreshDirectory,
@@ -203,24 +178,7 @@ export function OverviewPage() {
 
   return (
     <>
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
-      >
-        <PageHeader>Overview</PageHeader>
-        <Chip
-          size="small"
-          color={
-            syncStatus === 'error' || syncStatus === 'quota'
-              ? 'error'
-              : syncStatus === 'unsaved' || syncStatus === 'saving'
-                ? 'warning'
-                : 'default'
-          }
-          label={syncLabel(syncStatus, lastSavedAt)}
-        />
-      </Stack>
+      <PageHeader>Overview</PageHeader>
 
       <Stack spacing={3}>
         <Box>

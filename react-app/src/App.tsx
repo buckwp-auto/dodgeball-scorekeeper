@@ -20,6 +20,7 @@ import { TeamsPage } from './pages/TeamsPage';
 import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
+import { CloudSyncBar } from './components/CloudSyncBar';
 
 const drawerWidth = 200;
 
@@ -76,6 +77,8 @@ export function App() {
                 '& .MuiDrawer-paper': {
                   width: drawerWidth,
                   boxSizing: 'border-box',
+                  display: 'flex',
+                  flexDirection: 'column',
                 },
               }}
             >
@@ -84,8 +87,21 @@ export function App() {
                   Scorekeeper
                 </Typography>
               </Toolbar>
-              <Box className="sk-menu-content" sx={{ px: 1 }}>
-                <AppNav />
+              <Box
+                className="sk-menu-content"
+                sx={{
+                  px: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flexGrow: 1,
+                  minHeight: 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+                  <AppNav />
+                </Box>
+                <CloudSyncBar />
               </Box>
             </Drawer>
             <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
