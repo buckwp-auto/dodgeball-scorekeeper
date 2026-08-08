@@ -2,7 +2,8 @@
 
 ## Data & sync
 
-- Browser **session storage** for the working `.scrkpr` database; Overview import/export unchanged
+- Browser **session storage** (`SCOREKEEPER_DATA`) for the working `.scrkpr` database; Overview import/export unchanged
+- Last opened cloud league id in **localStorage** (`SCOREKEEPER_ACTIVE_LEAGUE`): auto-opens on sign-in when membership is still active; cleared on **Leave league**; kept across sign-out for the next session
 - Optional **Firebase** shared leagues (Google sign-in): directory on Overview, join requests, admin approve, per-match cloud docs, 30s idle / game-complete flush — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md)
 
 ## App shell
@@ -10,14 +11,14 @@
 - **Overview** — Google sign-in / league directory (when Firebase configured), download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
 - **Matches** — create matches, select players, download/copy match statistics CSV
-- **Track Match / Games** — add games, set on-court roster, open Track Game
+- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; opening a game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed
 
 ## Roster & match setup
 
 - **Match & game roster selection** with home/away columns
-- **Auto-select first 6 players** per side when a match or game is created / opened
+- **Auto-select first 6 players** per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster)
 - **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint
 
 ## Track Game
@@ -34,12 +35,13 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 ### Editor UX
 
-- Three-column grid (home / away / result) with team banners
+- Three-column grid (home / away / result) with slightly taller team banners separated from player rows (result column spacer keeps tops aligned)
 - Throw results shown with **MUI icons**; result can be chosen before thrower
 - **Deflections** chain on eligible results (block, hit, etc.)
 - **Catch recovery** — pick a teammate (including outs) or **None** (`M`)
 - Auto-commit when a draft is complete and dirty; **Done / Restore / Insert below / Delete**
-- **Game Complete** idle state after a finish is recorded
+- **Undo / Redo** (`-` / `+`) remove or restore the last entered event (session redo stack; cleared when a new event is committed). Distinct from `N` (delete selected) and `V` (restore draft from saved selection)
+- **Game Complete** idle state after a finish is recorded (undo/redo still work)
 - Timeline lists events (newest-oriented virtualized list); select to edit
 
 ### Live elimination
@@ -61,6 +63,7 @@ Derived from persisted events (not a separate toggle):
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
   - **Hide** — scoring only (timestamps pause)
 - Playback hotkeys work without focusing the embed: `Space` play/pause, `←`/`→` ±5s, `,`/`.` frame step when paused
+- **On open**: unfinished games seek to the last stamped event; finished games seek to **Game start** (seek is queued until the player is ready)
 - Saving an event stamps `VideoOffsetSeconds` from the player clock on **create** (edits keep the existing time); timeline times are editable (type m:ss or **From video**); select seeks
 - Every game has a **Game start** event (ordinal 1) with an editable timestamp; cannot be deleted
 - GitHub Pages–safe iframe (`origin` + referrer policy); embed failures don’t block scoring
@@ -81,7 +84,8 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Away players | `J K L ; I O` |
 | Throw results | `R T Y U G H P` |
 | Recovered None | `M` |
-| Actions | `Z` deflect, `X` done, `C` add throw, `V` restore, `B` insert below, `N` delete |
+| Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
+| Undo / redo last event | `-` undo, `+` redo |
 | Confirm wipe finish | `Enter` |
 | YouTube layout | `[` small/docked, `]` tall |
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s |
