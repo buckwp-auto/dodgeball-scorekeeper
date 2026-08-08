@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
-import { addGame, getMatchPlayers, getGamePlayers, isPlayerInMatch, isPlayerInGame } from './matchGame';
+import {
+  addGame,
+  getMatchPlayers,
+  getGamePlayers,
+  isPlayerInMatch,
+  isPlayerInGame,
+  toggleGamePlayer,
+} from './matchGame';
 import {
   AUTO_SELECT_PLAYER_LIMIT,
   autoSelectMatchRoster,
@@ -48,5 +55,18 @@ describe('roster auto-select', () => {
     expect(gameRows.length).toBe(AUTO_SELECT_PLAYER_LIMIT * 2);
     expect(isPlayerInGame(data, gameId, homePlayers[0].Id, match.Id)).toBe(true);
     expect(isPlayerInGame(data, gameId, homePlayers[6].Id, match.Id)).toBe(false);
+  });
+
+  it('does not add more players when the game already has a roster', () => {
+    const { data, match, homePlayers, awayPlayers } = seedTeamsWithManyPlayers(8, 8);
+    autoSelectMatchRoster(data, match.Id);
+    const gameId = addGame(data, match.Id);
+    // Manually select a smaller starter set
+    toggleGamePlayer(data, match.Id, gameId, homePlayers[0].Id);
+    toggleGamePlayer(data, match.Id, gameId, awayPlayers[0].Id);
+
+    expect(autoSelectGameRoster(data, match.Id, gameId)).toBe(false);
+    expect(getGamePlayers(data, gameId)).toHaveLength(2);
+    expect(isPlayerInGame(data, gameId, homePlayers[1].Id, match.Id)).toBe(false);
   });
 });

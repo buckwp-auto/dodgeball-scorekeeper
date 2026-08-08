@@ -1,5 +1,6 @@
 import type { DatabaseDto, Guid } from './types';
 import {
+  getGamePlayers,
   getMatchById,
   getMatchPlayers,
   getMatchSidePlayers,
@@ -39,6 +40,9 @@ export function autoSelectGameRoster(
   matchId: Guid,
   gameId: Guid,
 ): boolean {
+  // Preserve starters already chosen for this game across sessions
+  if (getGamePlayers(data, gameId).length > 0) return false;
+
   const matchPlayerRows = getMatchPlayers(data, matchId);
   const playerIds = [
     ...matchPlayerRows.filter((row) => row.TeamHome).slice(0, AUTO_SELECT_PLAYER_LIMIT),
