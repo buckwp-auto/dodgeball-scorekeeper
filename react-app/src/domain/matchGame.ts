@@ -131,6 +131,19 @@ export function getMatchGames(
     .filter((row): row is MatchGameListItem => row !== null);
 }
 
+/** Adjacent game in match order, or null if none. */
+export function getAdjacentGameId(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  direction: -1 | 1,
+): Guid | null {
+  const games = getMatchGames(data, matchId);
+  const index = games.findIndex((row) => row.gameId === gameId);
+  if (index < 0) return null;
+  return games[index + direction]?.gameId ?? null;
+}
+
 export function getGameIdForMatchOrdinal(
   data: DatabaseDto,
   matchId: Guid,

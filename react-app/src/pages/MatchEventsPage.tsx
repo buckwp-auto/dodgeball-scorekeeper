@@ -3,9 +3,8 @@ import { useNavigate, useParams } from 'react-router';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader, TextButton } from '../components/Ui';
 import { getMatchName } from '../domain/database';
-import { autoSelectGameRoster } from '../domain/rosterAutoSelect';
+import { addGameWithAutoRoster } from '../domain/rosterAutoSelect';
 import {
-  addGame as addGameOp,
   canNavigateToGameEvents,
   getMatchById,
   getMatchGames,
@@ -33,8 +32,7 @@ export function MatchEventsPage() {
   const onAddGame = () => {
     const { gameId } = mutate(
       (draft) => {
-        const gameId = addGameOp(draft, matchId);
-        autoSelectGameRoster(draft, matchId, gameId);
+        const gameId = addGameWithAutoRoster(draft, matchId);
         const match = getMatchById(draft, matchId);
         return {
           gameId,

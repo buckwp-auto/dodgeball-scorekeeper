@@ -4,6 +4,7 @@ import {
   addGame,
   deleteGame,
   deleteMatch,
+  getAdjacentGameId,
   getGamePlayers,
   getMatchById,
   getMatchGames,
@@ -63,6 +64,16 @@ function seedMatchWithTwoGames() {
 
   return { data, match, game1, game2, home, away };
 }
+
+describe('getAdjacentGameId', () => {
+  it('returns previous and next games in match order', () => {
+    const { data, match, game1, game2 } = seedMatchWithTwoGames();
+    expect(getAdjacentGameId(data, match.Id, game1, -1)).toBeNull();
+    expect(getAdjacentGameId(data, match.Id, game1, 1)).toBe(game2);
+    expect(getAdjacentGameId(data, match.Id, game2, -1)).toBe(game1);
+    expect(getAdjacentGameId(data, match.Id, game2, 1)).toBeNull();
+  });
+});
 
 describe('getMatchIdForGame', () => {
   it('resolves the parent match for a game', () => {

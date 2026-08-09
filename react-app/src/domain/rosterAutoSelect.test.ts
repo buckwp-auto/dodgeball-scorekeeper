@@ -10,6 +10,7 @@ import {
 } from './matchGame';
 import {
   AUTO_SELECT_PLAYER_LIMIT,
+  addGameWithAutoRoster,
   autoSelectMatchRoster,
   autoSelectGameRoster,
 } from './rosterAutoSelect';
@@ -43,6 +44,14 @@ describe('roster auto-select', () => {
       expect(isPlayerInMatch(data, match.Id, awayPlayers[i].Id)).toBe(true);
     }
     expect(isPlayerInMatch(data, match.Id, homePlayers[6].Id)).toBe(false);
+  });
+
+  it('addGameWithAutoRoster creates a game and fills starters', () => {
+    const { data, match, homePlayers } = seedTeamsWithManyPlayers(8, 8);
+    autoSelectMatchRoster(data, match.Id);
+    const gameId = addGameWithAutoRoster(data, match.Id);
+    expect(getGamePlayers(data, gameId).length).toBe(AUTO_SELECT_PLAYER_LIMIT * 2);
+    expect(isPlayerInGame(data, gameId, homePlayers[0].Id, match.Id)).toBe(true);
   });
 
   it('auto-selects game roster from match roster (first six per side)', () => {

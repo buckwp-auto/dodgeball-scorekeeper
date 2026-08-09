@@ -2,7 +2,7 @@
 
 - [x] Contrast on keyboard shortcut popover
 - [x] Delete game in a match allowed for match scorer (creator) in addition to admin
-- [ ] Navigation from roster screen for match to game to next game
+- [x] Navigation from roster screen for match to game to next game
 - [ ] Ability to add sub players to the team on the match screen
 - [ ] Video on match/game screen to see who's playing and who's subbing
 - [ ] Mark last elimination as Done before auto-advancing to game end

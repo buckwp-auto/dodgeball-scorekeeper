@@ -42,11 +42,14 @@ test.describe('Game tracking (full roster)', () => {
     await page.getByRole('button', { name: 'Done' }).click();
     await expect(page.getByText('Game Complete!')).toBeVisible();
 
-    await page.locator('.sk-menu-link').filter({ hasText: 'Overview' }).first().click();
-    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-    const resumeMatch = page.locator('.sk-resume-scoring').first();
-    await expect(resumeMatch).toContainText('Resume match');
-    await resumeMatch.click();
+    await page.getByRole('button', { name: 'Next game' }).click();
+    await expect(page.getByRole('heading', { name: 'Game', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Track Game' })).toBeVisible();
+    await page.getByRole('button', { name: 'Previous game' }).click();
+    await expect(page.getByRole('heading', { name: 'Game', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Track Game' }).click();
+    await expect(page.getByText('Game Complete!')).toBeVisible();
+    await page.getByRole('button', { name: 'Back to match' }).click();
     await expect(page.getByRole('heading', { name: 'Track Match' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
   });

@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
+import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
 import { PageHeader } from '../components/Ui';
 import {
   addDeflectionToDrafts,
@@ -81,6 +82,7 @@ export function GameEventsPage() {
   const [searchParams] = useSearchParams();
   const focusEventFromUrl = searchParams.get('event');
   const { data, mutate } = useDatabase();
+  const { goToNextGame, goToMatch } = useMatchGameNavigation(matchId, gameId);
 
   // Backfill Game Start for older saves that predate the event type
   useEffect(() => {
@@ -753,9 +755,27 @@ export function GameEventsPage() {
         ) : null}
 
         {gameCompleteIdle ? (
-          <Typography variant="h5" sx={{ mt: 4 }}>
-            Game Complete!
-          </Typography>
+          <Stack spacing={2} sx={{ mt: 4 }}>
+            <Typography variant="h5">Game Complete!</Typography>
+            <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap' }}>
+              <Button
+                type="button"
+                className="bw-button bw-button--text"
+                variant="outlined"
+                onClick={goToMatch}
+              >
+                Back to match
+              </Button>
+              <Button
+                type="button"
+                className="bw-button bw-button--text"
+                variant="contained"
+                onClick={goToNextGame}
+              >
+                Next game
+              </Button>
+            </Stack>
+          </Stack>
         ) : (
           <EditorDensityProvider density={editorCompact ? 'compact' : 'comfortable'}>
             <Stack

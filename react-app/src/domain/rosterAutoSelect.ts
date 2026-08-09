@@ -1,5 +1,6 @@
 import type { DatabaseDto, Guid } from './types';
 import {
+  addGame,
   getGamePlayers,
   getMatchById,
   getMatchPlayers,
@@ -57,4 +58,11 @@ export function autoSelectGameRoster(
     }
   }
   return changed;
+}
+
+/** Create a game and auto-select starters from the match roster. */
+export function addGameWithAutoRoster(data: DatabaseDto, matchId: Guid): Guid {
+  const gameId = addGame(data, matchId);
+  autoSelectGameRoster(data, matchId, gameId);
+  return gameId;
 }

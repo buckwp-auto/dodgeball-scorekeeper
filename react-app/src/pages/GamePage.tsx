@@ -21,12 +21,17 @@ import {
   getGameSidePlayersWithSelection,
   getMatchById,
 } from '../domain/matchGame';
+import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
 import { useDatabase } from '../state/DatabaseContext';
 
 export function GamePage() {
   const { matchId = '', gameId = '' } = useParams();
   const navigate = useNavigate();
   const { data, toggleGamePlayer, mutate } = useDatabase();
+  const { previousGameId, goToPreviousGame, goToNextGame } = useMatchGameNavigation(
+    matchId,
+    gameId,
+  );
   const match = getMatchById(data, matchId);
 
   useEffect(() => {
@@ -116,7 +121,7 @@ export function GamePage() {
           ? ` · Game over (${live.winningTeamHome ? homeTeam?.Name : awayTeam?.Name} win)`
           : ''}
       </Typography>
-      <Stack direction="row" className="button-row" sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2, flexWrap: 'wrap' }}>
         <Button
           type="button"
           className="bw-button bw-button--text"
@@ -125,6 +130,23 @@ export function GamePage() {
           onClick={() => navigate(`/matches/${matchId}/games/${gameId}/events`)}
         >
           Track Game
+        </Button>
+        <Button
+          type="button"
+          className="bw-button bw-button--text"
+          variant="outlined"
+          disabled={!previousGameId}
+          onClick={goToPreviousGame}
+        >
+          Previous game
+        </Button>
+        <Button
+          type="button"
+          className="bw-button bw-button--text"
+          variant="outlined"
+          onClick={goToNextGame}
+        >
+          Next game
         </Button>
       </Stack>
       <div className="sk-game">
