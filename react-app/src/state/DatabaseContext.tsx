@@ -32,6 +32,7 @@ import {
 } from '../domain/matchGame';
 import { autoSelectMatchRoster } from '../domain/rosterAutoSelect';
 import type { DatabaseDto, Guid, HistoryCommit } from '../domain/types';
+import { logDeleteItem } from '../cloud/logAnalytics';
 import { useLeague } from './LeagueContext';
 
 type DatabaseContextValue = {
@@ -211,6 +212,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         },
         (teamName) => `Deleted team (${teamName}).`,
       );
+      logDeleteItem('team');
     },
     [mutate],
   );
@@ -228,6 +230,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         },
         (playerName) => `Deleted player (${playerName}).`,
       );
+      logDeleteItem('player');
     },
     [mutate],
   );
@@ -256,6 +259,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         },
         (matchName) => `Deleted match (${matchName}).`,
       );
+      logDeleteItem('match');
     },
     [mutate],
   );
@@ -269,6 +273,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         },
         'Deleted game.',
       );
+      logDeleteItem('game');
     },
     [mutate],
   );

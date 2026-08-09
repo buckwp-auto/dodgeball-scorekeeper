@@ -8,6 +8,8 @@ export type FirebaseConfig = {
   storageBucket: string | undefined;
   messagingSenderId: string | undefined;
   appId: string;
+  /** Optional GA4 fallback; the JS SDK can also fetch this after Analytics is linked. */
+  measurementId: string | undefined;
 };
 
 export function readFirebaseConfig(): FirebaseConfig | null {
@@ -17,6 +19,7 @@ export function readFirebaseConfig(): FirebaseConfig | null {
   const storageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
   const messagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
   const appId = import.meta.env.VITE_FIREBASE_APP_ID;
+  const measurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID;
 
   if (!apiKey || !authDomain || !projectId || !appId) {
     return null;
@@ -29,6 +32,7 @@ export function readFirebaseConfig(): FirebaseConfig | null {
     storageBucket: storageBucket || undefined,
     messagingSenderId: messagingSenderId || undefined,
     appId,
+    measurementId: measurementId || undefined,
   };
 }
 

@@ -17,6 +17,7 @@ import {
   YoutubePlayer,
   YoutubePopoutBar,
 } from '../components/trackGame/YoutubePlayer';
+import { logDeleteItem, logVideoTimelineSeek } from '../cloud/logAnalytics';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import {
   isYoutubeControlHotkey,
@@ -352,6 +353,7 @@ export function GameEventsPage() {
       },
       'Deleted game event.',
     );
+    logDeleteItem('game_event');
     resetNewEventMode();
   }, [effectiveSelectedId, mutate, resetNewEventMode, data]);
 
@@ -432,6 +434,10 @@ export function GameEventsPage() {
       entry?.videoOffsetSeconds !== undefined
     ) {
       seekToVideoOffset(entry.videoOffsetSeconds);
+      logVideoTimelineSeek({
+        offsetSeconds: entry.videoOffsetSeconds,
+        eventType: type ?? undefined,
+      });
     }
   };
 

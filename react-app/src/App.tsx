@@ -22,6 +22,7 @@ import { TeamPage } from './pages/TeamPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { YoutubePopoutPage } from './pages/YoutubePopoutPage';
 import { YOUTUBE_POPOUT_PATH } from './domain/youtubePopout';
+import { useAnalyticsPageViews } from './hooks/useAnalyticsPageViews';
 import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
@@ -73,6 +74,7 @@ function AppNav() {
 }
 
 export function App() {
+  useAnalyticsPageViews();
   const location = useLocation();
   if (location.pathname === YOUTUBE_POPOUT_PATH) {
     return <YoutubePopoutPage />;

@@ -44,6 +44,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_APPCHECK_SITE_KEY: ${{ secrets.VITE_FIREBASE_APPCHECK_SITE_KEY }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: |
           # Prints only whether each secret is non-empty (never the value).
           python3 - <<'PY'
@@ -56,13 +57,17 @@ jobs:
             "VITE_FIREBASE_MESSAGING_SENDER_ID",
             "VITE_FIREBASE_APP_ID",
             "VITE_FIREBASE_APPCHECK_SITE_KEY",
+            "VITE_FIREBASE_MEASUREMENT_ID",
           ]
           missing = []
           for key in keys:
             value = os.environ.get(key) or ""
             status = f"set (len={len(value)})" if value else "MISSING/EMPTY"
             print(f"{key}: {status}")
-            if not value and key != "VITE_FIREBASE_APPCHECK_SITE_KEY":
+            if not value and key not in (
+              "VITE_FIREBASE_APPCHECK_SITE_KEY",
+              "VITE_FIREBASE_MEASUREMENT_ID",
+            ):
               missing.append(key)
           if missing:
             raise SystemExit(
@@ -85,6 +90,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_APPCHECK_SITE_KEY: ${{ secrets.VITE_FIREBASE_APPCHECK_SITE_KEY }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run build
 
       - name: Assemble site

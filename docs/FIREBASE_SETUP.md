@@ -26,7 +26,7 @@ You do **not** need Cloud Functions, Cloud Storage, or Blaze billing for the MVP
 
 1. Open [Firebase Console](https://console.firebase.google.com/).
 2. **Add project** → name it (e.g. `dodgeball-score`).
-3. Google Analytics: optional (off is fine for MVP).
+3. Google Analytics: optional at create time. You can link it later (see [§11](#11-google-analytics-optional)); the CLI cannot enable it.
 4. Confirm you are on the **Spark** (no billing) plan under **Usage and billing**.
 
 ---
@@ -48,6 +48,7 @@ const firebaseConfig = {
   storageBucket: "your-project.appspot.com",
   messagingSenderId: "...",
   appId: "...",
+  measurementId: "G-...", // present after Analytics is linked
 };
 ```
 
@@ -183,6 +184,7 @@ VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 VITE_FIREBASE_APPCHECK_SITE_KEY=
+VITE_FIREBASE_MEASUREMENT_ID=   # optional; G-… after linking Analytics
 ```
 
 Map 1:1 from the Firebase web config + App Check site key.
@@ -223,6 +225,36 @@ Local example: `react-app/.env.local` (gitignored).
 
 ---
 
+## 11. Google Analytics (optional)
+
+Linking Analytics **must** be done in the Firebase / Google consoles. There is no `firebase` CLI command to create a GA4 property or attach it to the project.
+
+1. Firebase Console → **Project settings → Integrations → Google Analytics → Enable / Link**.
+2. Create a new GA4 property or link an existing one. Accept the defaults unless you already have a property.
+3. After linking, Project settings → Your apps → Web app → **SDK snippet / Config** should include `measurementId` (`G-…`).
+4. Optionally print the same config from the CLI:
+
+   ```bash
+   firebase apps:sdkconfig WEB
+   ```
+
+5. Add `VITE_FIREBASE_MEASUREMENT_ID` to `.env.local` and (for Pages) a repo Actions secret of the same name. It is **optional**: the JS SDK v7.20+ can fetch `measurementId` dynamically once Analytics is linked. The env var is a fallback.
+
+The app sends:
+
+| Event | When | Params (no names / PII) |
+|-------|------|-------------------------|
+| `page_view` | Client-side route change | `page_path`, `page_name` (`overview`, `track_game`, …) |
+| `video_player_mode` | Tall / docked / hidden / popout | `from_mode`, `to_mode` |
+| `video_timeline_seek` | Timeline click that jumps the video | `offset_seconds`, `event_type` |
+| `item_deleted` | Team, player, match, game, or game event delete | `item_kind` |
+
+Analytics is **on for production builds** (`npm run build` / GitHub Pages) when Firebase is configured. Local `npm run dev` does not send events unless you set `VITE_FIREBASE_ANALYTICS=1`. Check **GA4 DebugView** or **Realtime** after a Pages deploy.
+
+Custom event parameters show in Realtime immediately. For Explorations / standard reports, register them as custom dimensions in the GA4 property (Admin → Data display → Custom definitions).
+
+---
+
 ## Out of scope for this setup
 
 - Firebase Hosting (GH Pages remains the static host)
@@ -242,3 +274,4 @@ Local example: `react-app/.env.local` (gitignored).
 | Database | Firestore → Data / Rules |
 | App Check | App Check → Apps / APIs |
 | Usage | Project settings → Usage and billing |
+| Analytics | Project settings → Integrations → Google Analytics |

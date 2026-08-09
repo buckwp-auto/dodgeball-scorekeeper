@@ -16,6 +16,7 @@ import {
   type YoutubeInPageMode,
   type YoutubePlayerMode,
 } from '../domain/youtube';
+import { logVideoPlayerMode } from '../cloud/logAnalytics';
 import { useDocumentHotkeys } from './useDocumentHotkeys';
 import { useYoutubePopoutController } from './useYoutubePopout';
 
@@ -65,6 +66,14 @@ export function useYoutubeControls(youtubeUrl: string) {
     saveYoutubePlayerMode(next);
   }, []);
 
+  const commitMode = useCallback((next: YoutubePlayerMode) => {
+    const from = modeRef.current;
+    if (from === next) return;
+    modeRef.current = next;
+    setMode(next);
+    logVideoPlayerMode(from, next);
+  }, []);
+
   const dockBack = useCallback(
     (nextMode?: YoutubeInPageMode) => {
       if (modeRef.current !== 'popout') return;
@@ -72,11 +81,10 @@ export function useYoutubeControls(youtubeUrl: string) {
       disconnectPopout();
       if (time != null && Number.isFinite(time)) setCueSeconds(time);
       const resolved = nextMode ?? dockBackModeRef.current;
-      modeRef.current = resolved;
-      setMode(resolved);
+      commitMode(resolved);
       persistInPageMode(resolved);
     },
-    [disconnectPopout, persistInPageMode, popoutHandle],
+    [commitMode, disconnectPopout, persistInPageMode, popoutHandle],
   );
 
   useEffect(() => {
@@ -97,9 +105,8 @@ export function useYoutubeControls(youtubeUrl: string) {
     }
     const opened = openPopout(videoId, startSeconds);
     if (!opened) return;
-    modeRef.current = 'popout';
-    setMode('popout');
-  }, [cueSeconds, openPopout, persistInPageMode, youtubeUrl]);
+    commitMode('popout');
+  }, [commitMode, cueSeconds, openPopout, persistInPageMode, youtubeUrl]);
 
   const setModeAndPersist = useCallback(
     (next: YoutubePlayerMode) => {
@@ -111,11 +118,10 @@ export function useYoutubeControls(youtubeUrl: string) {
         dockBack(next);
         return;
       }
-      modeRef.current = next;
-      setMode(next);
+      commitMode(next);
       persistInPageMode(next);
     },
-    [dockBack, persistInPageMode, popOut],
+    [commitMode, dockBack, persistInPageMode, popOut],
   );
 
   const readVideoOffset = useCallback(
