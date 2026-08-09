@@ -223,6 +223,7 @@ export function addMatch(
   data: DatabaseDto,
   teamIdHome: Guid,
   teamIdAway: Guid,
+  createdByUid?: string | null,
 ): MatchRow {
   const home = getTeam(data, teamIdHome);
   const away = getTeam(data, teamIdAway);
@@ -232,6 +233,7 @@ export function addMatch(
     TeamIdHome: teamIdHome,
     TeamIdAway: teamIdAway,
     Notes: null,
+    ...(createdByUid ? { CreatedByUid: createdByUid } : {}),
   });
   return match;
 }

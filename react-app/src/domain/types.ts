@@ -25,6 +25,8 @@ export type MatchRow = {
   Notes: string | null;
   /** Optional YouTube watch/share URL for match VOD. */
   YoutubeUrl?: string | null;
+  /** Cloud uid of the user who created the match (match scorer). */
+  CreatedByUid?: string | null;
 };
 
 export type MatchPlayerRow = {

@@ -27,6 +27,7 @@ import {
   CLOUD_POLL_MS,
 } from '../domain/limits';
 import type { DatabaseDto } from '../domain/types';
+import { canDeleteMatchGame } from '../domain/matchPermissions';
 import { useAuth } from './AuthContext';
 
 const ACTIVE_LEAGUE_KEY = 'SCOREKEEPER_ACTIVE_LEAGUE';
@@ -40,6 +41,8 @@ type LeagueContextValue = {
   canOverrideActiveLeague: boolean;
   /** True for local-only data, or when the signed-in user is admin of the open league. */
   canDeleteMatchesAndGames: boolean;
+  /** Local, league admin, or the signed-in user who created the match. */
+  canDeleteGame: (createdByUid?: string | null) => boolean;
   syncStatus: SyncStatus;
   lastSavedAt: string | null;
   syncError: string | null;
@@ -391,6 +394,17 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const canDeleteMatchesAndGames = !activeLeagueId || canOverrideActiveLeague;
 
+  const canDeleteGame = useCallback(
+    (createdByUid?: string | null) =>
+      canDeleteMatchGame({
+        hasActiveLeague: Boolean(activeLeagueId),
+        isLeagueAdmin: canOverrideActiveLeague,
+        userUid: user?.uid,
+        createdByUid,
+      }),
+    [activeLeagueId, canOverrideActiveLeague, user?.uid],
+  );
+
   const openLeague = useCallback(
     async (leagueId: string) => {
       const cloud = await loadCloud();
@@ -534,6 +548,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       activeLeagueId,
       canOverrideActiveLeague,
       canDeleteMatchesAndGames,
+      canDeleteGame,
       syncStatus,
       lastSavedAt,
       syncError,
@@ -558,6 +573,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       activeLeagueId,
       canOverrideActiveLeague,
       canDeleteMatchesAndGames,
+      canDeleteGame,
       syncStatus,
       lastSavedAt,
       syncError,

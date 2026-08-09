@@ -25,8 +25,10 @@ export function MatchEventsPage() {
   const { matchId = '' } = useParams();
   const navigate = useNavigate();
   const { data, mutate, deleteGame } = useDatabase();
-  const { canDeleteMatchesAndGames } = useLeague();
+  const { canDeleteGame } = useLeague();
+  const match = getMatchById(data, matchId);
   const games = getMatchGames(data, matchId);
+  const showDeleteGame = canDeleteGame(match?.CreatedByUid);
 
   const onAddGame = () => {
     const { gameId } = mutate(
@@ -85,7 +87,7 @@ export function MatchEventsPage() {
                   {`${label} — ${scoringComplete ? 'Scoring complete' : 'In progress'}`}
                 </TextButton>
                 <SeeStatsButton to={`/matches/${matchId}/games/${gameId}/stats`} />
-                {canDeleteMatchesAndGames ? (
+                {showDeleteGame ? (
                   <Button
                     size="small"
                     color="error"

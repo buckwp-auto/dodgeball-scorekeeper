@@ -33,6 +33,7 @@ import {
 import { autoSelectMatchRoster } from '../domain/rosterAutoSelect';
 import type { DatabaseDto, Guid, HistoryCommit } from '../domain/types';
 import { logDeleteItem } from '../cloud/logAnalytics';
+import { useAuth } from './AuthContext';
 import { useLeague } from './LeagueContext';
 
 type DatabaseContextValue = {
@@ -74,6 +75,7 @@ function pushCommit(
 }
 
 export function DatabaseProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const {
     notifyLocalChange,
     activeLeagueId,
@@ -239,13 +241,13 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     (teamIdHome: Guid, teamIdAway: Guid) =>
       mutate(
         (draft) => {
-          const match = addMatchOp(draft, teamIdHome, teamIdAway);
+          const match = addMatchOp(draft, teamIdHome, teamIdAway, user?.uid ?? null);
           autoSelectMatchRoster(draft, match.Id);
           return { id: match.Id, name: getMatchName(draft, match) };
         },
         ({ name }) => `Added match (${name}).`,
       ).id,
-    [mutate],
+    [mutate, user?.uid],
   );
 
   const deleteMatch = useCallback(
