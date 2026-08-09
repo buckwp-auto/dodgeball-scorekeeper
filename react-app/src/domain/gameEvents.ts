@@ -312,24 +312,48 @@ function shiftOrdinalsFrom(data: DatabaseDto, gameId: Guid, fromOrdinal: number,
   }
 }
 
+function findInsertBeforeEventIdForVideoTime(
+  data: DatabaseDto,
+  gameId: Guid,
+  videoOffsetSeconds: number,
+): Guid | null {
+  for (const event of getGameEvents(data, gameId)) {
+    if (getGameEventType(data, event.Id) === 'start') continue;
+    const offset = event.VideoOffsetSeconds;
+    if (offset == null || !Number.isFinite(offset)) continue;
+    if (offset > videoOffsetSeconds) return event.Id;
+  }
+  return null;
+}
+
 function allocateOrdinal(
   data: DatabaseDto,
   gameId: Guid,
   insertBeforeEventId: Guid | null | undefined,
+  videoOffsetSeconds?: number | null,
 ): number {
-  if (!insertBeforeEventId) {
+  let anchorId = insertBeforeEventId ?? null;
+  if (
+    !anchorId &&
+    videoOffsetSeconds != null &&
+    Number.isFinite(videoOffsetSeconds)
+  ) {
+    anchorId = findInsertBeforeEventIdForVideoTime(data, gameId, videoOffsetSeconds);
+  }
+  if (!anchorId) {
     const events = getGameEvents(data, gameId);
     return events.length === 0 ? 1 : Math.max(...events.map((row) => row.Ordinal)) + 1;
   }
-  const anchor = table<GameEventRow>(data, 'GameEvent').find((row) => row.Id === insertBeforeEventId);
+  const anchor = table<GameEventRow>(data, 'GameEvent').find((row) => row.Id === anchorId);
   if (!anchor) throw new Error('Insert anchor not found');
+  const ordinal = anchor.Ordinal;
   // Never insert before game start — place immediately after it instead
   if (getGameEventType(data, anchor.Id) === 'start') {
-    shiftOrdinalsFrom(data, gameId, anchor.Ordinal + 1, 1);
-    return anchor.Ordinal + 1;
+    shiftOrdinalsFrom(data, gameId, ordinal + 1, 1);
+    return ordinal + 1;
   }
-  shiftOrdinalsFrom(data, gameId, anchor.Ordinal, 1);
-  return anchor.Ordinal;
+  shiftOrdinalsFrom(data, gameId, ordinal, 1);
+  return ordinal;
 }
 
 function removeThrowChildren(data: DatabaseDto, gameEventId: Guid): void {
@@ -501,7 +525,12 @@ export function persistThrowGameEvent(
   pushRow(data, 'GameEvent', {
     Id: gameEventId,
     GameId: gameId,
-    Ordinal: allocateOrdinal(data, gameId, options?.insertBeforeEventId),
+    Ordinal: allocateOrdinal(
+      data,
+      gameId,
+      options?.insertBeforeEventId,
+      options?.videoOffsetSeconds,
+    ),
     VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
   });
   writeThrowsToEvent(data, gameEventId, throws);
@@ -543,7 +572,12 @@ export function persistErrorGameEvent(
   pushRow(data, 'GameEvent', {
     Id: gameEventId,
     GameId: gameId,
-    Ordinal: allocateOrdinal(data, gameId, options?.insertBeforeEventId),
+    Ordinal: allocateOrdinal(
+      data,
+      gameId,
+      options?.insertBeforeEventId,
+      options?.videoOffsetSeconds,
+    ),
     VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
   });
   pushRow(data, 'GameEventError', {
@@ -579,7 +613,12 @@ export function persistFinishGameEvent(
   pushRow(data, 'GameEvent', {
     Id: gameEventId,
     GameId: gameId,
-    Ordinal: allocateOrdinal(data, gameId, options?.insertBeforeEventId),
+    Ordinal: allocateOrdinal(
+      data,
+      gameId,
+      options?.insertBeforeEventId,
+      options?.videoOffsetSeconds,
+    ),
     VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
   });
   pushRow(data, 'GameEventFinish', {

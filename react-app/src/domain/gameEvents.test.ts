@@ -133,6 +133,50 @@ describe('game event recording', () => {
     expect(buildTimelineEntries(data, gameId, match.Id)[0].isHighlight).toBe(true);
   });
 
+  it('slots a new stamped event between earlier and later video times', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const draft = {
+      throwerGamePlayerId: homeGp.Id,
+      targetGamePlayerId: awayGp.Id,
+      resultId: ThrowResult.Hit,
+      deflections: [],
+      recoveredId: undefined,
+    };
+    const lateId = persistThrowGameEvent(data, gameId, match.Id, [draft], {
+      videoOffsetSeconds: 40,
+    });
+    const earlyId = persistThrowGameEvent(data, gameId, match.Id, [draft], {
+      videoOffsetSeconds: 10,
+    });
+    const midId = persistThrowGameEvent(data, gameId, match.Id, [draft], {
+      videoOffsetSeconds: 25,
+    });
+
+    const events = getGameEvents(data, gameId);
+    expect(events.map((row) => row.Id)).toEqual([
+      getGameStartEvent(data, gameId)!.Id,
+      earlyId,
+      midId,
+      lateId,
+    ]);
+    expect(events.map((row) => row.Ordinal)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('appends unstamped events after stamped ones', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const draft = {
+      throwerGamePlayerId: homeGp.Id,
+      targetGamePlayerId: awayGp.Id,
+      resultId: ThrowResult.Hit,
+      deflections: [],
+      recoveredId: undefined,
+    };
+    persistThrowGameEvent(data, gameId, match.Id, [draft], { videoOffsetSeconds: 10 });
+    const unstampedId = persistThrowGameEvent(data, gameId, match.Id, [draft]);
+    const events = getGameEvents(data, gameId);
+    expect(events[events.length - 1]?.Id).toBe(unstampedId);
+  });
+
   it('rejects a group whose throwers are on opposing teams', () => {
     const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
     expect(() =>

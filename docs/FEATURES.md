@@ -68,7 +68,7 @@ Derived from persisted events (not a separate toggle):
   - **Hide** — scoring only (timestamps pause)
 - Playback hotkeys work without focusing the embed: `Space` play/pause, `←`/`→` ±5s, `,`/`.` frame step when paused
 - **On open**: unfinished games start paused at the last stamped event; finished games start paused at **Game start** (no autoplay)
-- Saving an event stamps `VideoOffsetSeconds` from the player clock on **create** (edits keep the existing time); timeline times are editable (type m:ss or **From video**); select seeks
+- Saving an event stamps `VideoOffsetSeconds` from the player clock on **create** (edits keep the existing time) and **slots the event by video time** among existing timestamps (unstamped still append; Insert below still uses the selected row); timeline times are editable (type m:ss or **From video**); select seeks
 - Every game has a **Game start** event (ordinal 1) with an editable timestamp; cannot be deleted
 - GitHub Pages–safe iframe (`origin` + referrer policy); embed failures don’t block scoring
 
