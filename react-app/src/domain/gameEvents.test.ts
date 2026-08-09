@@ -20,6 +20,7 @@ import {
   persistFinishGameEvent,
   persistThrowGameEvent,
   restoreGameEventSnapshot,
+  setGameEventHighlight,
   setGameEventVideoOffset,
   undoLastGameEvent,
 } from './gameEvents';
@@ -121,6 +122,15 @@ describe('game event recording', () => {
 
     const [entry] = buildTimelineEntries(data, gameId, match.Id);
     expect(entry.videoOffsetSeconds).toBe(125.4);
+    expect(entry.isHighlight).toBe(false);
+
+    setGameEventHighlight(data, eventId, true);
+    expect(
+      (data.Tables.GameEvent as { Id: string; IsHighlight?: boolean }[]).find(
+        (row) => row.Id === eventId,
+      )?.IsHighlight,
+    ).toBe(true);
+    expect(buildTimelineEntries(data, gameId, match.Id)[0].isHighlight).toBe(true);
   });
 
   it('rejects a group whose throwers are on opposing teams', () => {
@@ -363,6 +373,10 @@ describe('undo / redo game events', () => {
       ],
       { videoOffsetSeconds: 55 },
     );
+    const throwId = getGameEvents(data, gameId).find(
+      (row) => getGameEventType(data, row.Id) === 'throw',
+    )!.Id;
+    setGameEventHighlight(data, throwId, true);
 
     const snapshot = undoLastGameEvent(data, gameId);
     expect(snapshot?.type).toBe('throw');
@@ -376,10 +390,17 @@ describe('undo / redo game events', () => {
     expect(drafts[0].recoveredId).toBe(homeGp2!.Id);
     expect(drafts[0].deflections).toHaveLength(1);
     expect(
-      (data.Tables.GameEvent as { Id: string; VideoOffsetSeconds?: number }[]).find(
-        (row) => row.Id === restoredId,
-      )?.VideoOffsetSeconds,
+      (data.Tables.GameEvent as {
+        Id: string;
+        VideoOffsetSeconds?: number;
+        IsHighlight?: boolean;
+      }[]).find((row) => row.Id === restoredId)?.VideoOffsetSeconds,
     ).toBe(55);
+    expect(
+      (data.Tables.GameEvent as { Id: string; IsHighlight?: boolean }[]).find(
+        (row) => row.Id === restoredId,
+      )?.IsHighlight,
+    ).toBe(true);
   });
 
   it('undoes a finish event', () => {

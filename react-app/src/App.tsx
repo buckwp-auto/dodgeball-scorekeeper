@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { Link, Route, Routes, useLocation } from 'react-router';
 import { HistoryPage } from './pages/HistoryPage';
+import { HighlightsPage } from './pages/HighlightsPage';
 import { MatchPage } from './pages/MatchPage';
 import { MatchEventsPage } from './pages/MatchEventsPage';
 import { GamePage } from './pages/GamePage';
@@ -36,6 +37,7 @@ const navItems = [
   { to: '/', label: 'Overview' },
   { to: '/teams', label: 'Teams' },
   { to: '/matches', label: 'Matches' },
+  { to: '/highlights', label: 'Highlights' },
   { to: '/stats', label: 'Stats' },
   { to: '/settings', label: 'Settings' },
   { to: '/history', label: 'History' },
@@ -142,6 +144,7 @@ export function App() {
                   element={<GameEventsPage />}
                 />
                 <Route path="/stats" element={<StatsPage />} />
+                <Route path="/highlights" element={<HighlightsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/history" element={<HistoryPage />} />
               </Routes>

@@ -14,6 +14,7 @@ describe('pageNameFromPath', () => {
     expect(pageNameFromPath('/matches/m1/games/g1/stats')).toBe('game_stats');
     expect(pageNameFromPath('/matches/m1/games/g1/events')).toBe('track_game');
     expect(pageNameFromPath('/stats')).toBe('stats');
+    expect(pageNameFromPath('/highlights')).toBe('highlights');
     expect(pageNameFromPath('/settings')).toBe('settings');
     expect(pageNameFromPath('/history')).toBe('history');
     expect(pageNameFromPath('/youtube-popout')).toBe('youtube_popout');

@@ -1,6 +1,6 @@
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { PageHeader } from '../components/Ui';
 import {
   addDeflectionToDrafts,
@@ -48,6 +48,7 @@ import {
   persistFinishGameEvent,
   persistThrowGameEvent,
   restoreGameEventSnapshot,
+  setGameEventHighlight,
   setGameEventVideoOffset,
   undoLastGameEvent,
   type ErrorDraft,
@@ -77,6 +78,8 @@ const emptyThrowSnapshot = () => JSON.stringify([emptyThrowDraft()]);
 
 export function GameEventsPage() {
   const { matchId = '', gameId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const focusEventFromUrl = searchParams.get('event');
   const { data, mutate } = useDatabase();
 
   // Backfill Game Start for older saves that predate the event type
@@ -123,6 +126,7 @@ export function GameEventsPage() {
   const autoCommittingRef = useRef(false);
   const autoFinishPromptedRef = useRef(false);
   const redoStackRef = useRef<GameEventSnapshot[]>([]);
+  const appliedFocusRef = useRef<string | null>(null);
 
   const youtubeUrl = match?.YoutubeUrl?.trim() || '';
   const {
@@ -162,12 +166,17 @@ export function GameEventsPage() {
     rememberLastGame(matchId, gameId);
   }, [matchId, gameId]);
 
-  const openSeekSeconds = useMemo(
-    () => (gameId ? initialVideoSeekSeconds(data, gameId) : 0),
+  const openSeekSeconds = useMemo(() => {
+    if (gameId && focusEventFromUrl) {
+      const focused = getGameEvents(data, gameId).find(
+        (row) => row.Id === focusEventFromUrl,
+      );
+      if (focused?.VideoOffsetSeconds != null) return focused.VideoOffsetSeconds;
+    }
+    return gameId ? initialVideoSeekSeconds(data, gameId) : 0;
     // Snapshot once per game open — later edits should not recreate the player
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gameId],
-  );
+  }, [gameId]);
 
   // Ignore selections that belong to another game after route changes
   const eventIdsInGame = useMemo(
@@ -403,6 +412,22 @@ export function GameEventsPage() {
     [readVideoOffset, handleCommitVideoOffset],
   );
 
+  const handleToggleHighlight = useCallback(
+    (eventId: string) => {
+      const currentlyHighlighted = Boolean(
+        timeline.find((row) => row.id === eventId)?.isHighlight,
+      );
+      mutate(
+        (draft) => {
+          setGameEventHighlight(draft, eventId, !currentlyHighlighted);
+          return null;
+        },
+        currentlyHighlighted ? 'Removed highlight.' : 'Starred highlight.',
+      );
+    },
+    [mutate, timeline],
+  );
+
   const handleInsertBelow = useCallback(() => {
     if (!effectiveSelectedId) return;
     const target = getInsertBelowTargetEventId(eventsNewestFirst, effectiveSelectedId);
@@ -440,6 +465,16 @@ export function GameEventsPage() {
       });
     }
   };
+
+  useEffect(() => {
+    if (!focusEventFromUrl || !eventIdsInGame.has(focusEventFromUrl)) return;
+    const focusKey = `${gameId}:${focusEventFromUrl}`;
+    if (appliedFocusRef.current === focusKey) return;
+    appliedFocusRef.current = focusKey;
+    handleSelectEvent(focusEventFromUrl);
+    // Select once when opening via ?event=; starring/edits should not re-focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusEventFromUrl, gameId, eventIdsInGame]);
 
   useEffect(() => {
     if (!isComplete || !isDirty || autoCommittingRef.current) return;
@@ -893,6 +928,7 @@ export function GameEventsPage() {
           canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
           onSelectEvent={handleSelectEvent}
           onDeselectEvent={handleDone}
+          onToggleHighlight={handleToggleHighlight}
           onCommitVideoOffset={handleCommitVideoOffset}
           onSetVideoOffsetFromPlayer={handleSetVideoOffsetFromPlayer}
         />

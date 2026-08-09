@@ -136,6 +136,89 @@ export function buildThrowTimelineRows(
   return rows;
 }
 
+export function buildTimelineEntry(
+  data: DatabaseDto,
+  event: GameEventRow,
+  players: GamePlayerInfo[],
+  homeName: string,
+  awayName: string,
+): TimelineEntry | null {
+  const type = getGameEventType(data, event.Id);
+  if (!type) return null;
+
+  const base = {
+    id: event.Id,
+    type,
+    videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
+    isHighlight: Boolean(event.IsHighlight),
+  };
+
+  if (type === 'start') {
+    return {
+      ...base,
+      rows: [
+        {
+          role: 'start',
+          tone: 'neutral',
+          actions: [{ kind: 'start' }],
+          segments: [{ kind: 'text', text: 'Game start' }],
+        },
+      ],
+    };
+  }
+  if (type === 'throw') {
+    return {
+      ...base,
+      rows: loadThrowDraftsFromEvent(data, event.Id).flatMap((draft) =>
+        buildThrowTimelineRows(draft, players),
+      ),
+    };
+  }
+  if (type === 'error') {
+    const draft = loadErrorDraftFromEvent(data, event.Id);
+    const offenseLabel = draft.offenseId
+      ? errorOffenseLabels[draft.offenseId]
+      : 'Error';
+    return {
+      ...base,
+      rows: [
+        {
+          role: 'error',
+          tone: 'error',
+          actions: [{ kind: 'error' }],
+          segments: [
+            {
+              kind: 'player',
+              player: playerRef(players, draft.offenderGamePlayerId),
+            },
+            { kind: 'text', text: ` — ${offenseLabel}` },
+          ],
+        },
+      ],
+    };
+  }
+
+  const draft = loadFinishDraftFromEvent(data, event.Id);
+  let finishText = 'Finish';
+  if (draft.resultId === GameEventFinishResult.Tie) finishText = 'Tie';
+  else if (draft.resultId === GameEventFinishResult.WinHome) {
+    finishText = `${homeName} win`;
+  } else if (draft.resultId === GameEventFinishResult.WinAway) {
+    finishText = `${awayName} win`;
+  }
+  return {
+    ...base,
+    rows: [
+      {
+        role: 'finish',
+        tone: 'finish',
+        actions: [{ kind: 'finish' }],
+        segments: [{ kind: 'text', text: finishText }],
+      },
+    ],
+  };
+}
+
 export function buildTimelineEntries(
   data: DatabaseDto,
   gameId: Guid,
@@ -150,79 +233,8 @@ export function buildTimelineEntries(
     ? getTeam(data, match.TeamIdAway)?.Name ?? 'Away'
     : 'Away';
 
-  return getGameEventsNewestFirst(data, gameId).map((event) => {
-    const type = getGameEventType(data, event.Id)!;
-    if (type === 'start') {
-      return {
-        id: event.Id,
-        type,
-        videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
-        rows: [
-          {
-            role: 'start',
-            tone: 'neutral',
-            actions: [{ kind: 'start' }],
-            segments: [{ kind: 'text', text: 'Game start' }],
-          },
-        ],
-      };
-    }
-    if (type === 'throw') {
-      return {
-        id: event.Id,
-        type,
-        videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
-        rows: loadThrowDraftsFromEvent(data, event.Id).flatMap((draft) =>
-          buildThrowTimelineRows(draft, players),
-        ),
-      };
-    }
-    if (type === 'error') {
-      const draft = loadErrorDraftFromEvent(data, event.Id);
-      const offenseLabel = draft.offenseId
-        ? errorOffenseLabels[draft.offenseId]
-        : 'Error';
-      return {
-        id: event.Id,
-        type,
-        videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
-        rows: [
-          {
-            role: 'error',
-            tone: 'error',
-            actions: [{ kind: 'error' }],
-            segments: [
-              {
-                kind: 'player',
-                player: playerRef(players, draft.offenderGamePlayerId),
-              },
-              { kind: 'text', text: ` — ${offenseLabel}` },
-            ],
-          },
-        ],
-      };
-    }
-
-    const draft = loadFinishDraftFromEvent(data, event.Id);
-    let finishText = 'Finish';
-    if (draft.resultId === GameEventFinishResult.Tie) finishText = 'Tie';
-    else if (draft.resultId === GameEventFinishResult.WinHome) {
-      finishText = `${homeName} win`;
-    } else if (draft.resultId === GameEventFinishResult.WinAway) {
-      finishText = `${awayName} win`;
-    }
-    return {
-      id: event.Id,
-      type,
-      videoOffsetSeconds: event.VideoOffsetSeconds ?? null,
-      rows: [
-        {
-          role: 'finish',
-          tone: 'finish',
-          actions: [{ kind: 'finish' }],
-          segments: [{ kind: 'text', text: finishText }],
-        },
-      ],
-    };
+  return getGameEventsNewestFirst(data, gameId).flatMap((event) => {
+    const entry = buildTimelineEntry(data, event, players, homeName, awayName);
+    return entry ? [entry] : [];
   });
 }

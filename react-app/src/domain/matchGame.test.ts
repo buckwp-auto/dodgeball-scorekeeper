@@ -7,6 +7,7 @@ import {
   getGamePlayers,
   getMatchById,
   getMatchGames,
+  getMatchIdForGame,
   getMatchPlayers,
   toggleGamePlayer,
   toggleMatchPlayer,
@@ -62,6 +63,15 @@ function seedMatchWithTwoGames() {
 
   return { data, match, game1, game2, home, away };
 }
+
+describe('getMatchIdForGame', () => {
+  it('resolves the parent match for a game', () => {
+    const { data, match, game1, game2 } = seedMatchWithTwoGames();
+    expect(getMatchIdForGame(data, game1)).toBe(match.Id);
+    expect(getMatchIdForGame(data, game2)).toBe(match.Id);
+    expect(getMatchIdForGame(data, 'missing')).toBeUndefined();
+  });
+});
 
 describe('deleteGame / deleteMatch', () => {
   it('removes one game and its events without touching the other', () => {
