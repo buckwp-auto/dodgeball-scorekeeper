@@ -86,7 +86,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Area | Keys |
 |------|------|
 | Home players | `A S D F W E` |
-| Away players | `J K L ; I O` |
+| Away players | `J K L ; I O` (`I` badge uses a serif face so it is distinct from `L`) |
 | Throw results | `R T Y U G H P` |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G H` |
 | Recovered None | `M` |

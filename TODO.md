@@ -9,4 +9,4 @@
 - [x] Slot timeline items in chronological (video time) order
 - [x] Team throws auto-timestamped
 - [x] Deflect hotkeys still show and get focus once opened
-- [ ] I hotkey shows serif / differentiated from L
+- [x] I hotkey shows serif / differentiated from L
