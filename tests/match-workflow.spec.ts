@@ -26,6 +26,7 @@ test.describe('Match workflow', () => {
     await addPlayer(page, 'A1');
 
     await createMatch(page, 'Home Hawks', 'Away Owls');
+    await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 0–0 Away Owls');
 
     const homeTeam = page.locator('.sk-match .sk-team').nth(0);
     await homeTeam.getByLabel('Add player').fill('Pat');

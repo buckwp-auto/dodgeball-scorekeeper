@@ -101,6 +101,13 @@ export function buildMatchSeries(
   };
 }
 
+/** Home/away game wins, e.g. `Hawks 2–1 Owls` (ties appended when present). */
+export function formatMatchSeriesScore(series: MatchSeries): string {
+  const score = `${series.homeTeam.Name} ${series.homeGameWins}–${series.awayGameWins} ${series.awayTeam.Name}`;
+  if (series.ties > 0) return `${score} (${series.ties} T)`;
+  return score;
+}
+
 export function buildTeamStandings(
   data: DatabaseDto,
   matchIds?: Guid[],

@@ -42,15 +42,19 @@ test.describe('Game tracking (full roster)', () => {
     await page.getByRole('button', { name: 'Done' }).click();
     await expect(page.getByText('Game Complete!')).toBeVisible();
 
+    await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
+
     await page.getByRole('button', { name: 'Next game' }).click();
-    await expect(page.getByRole('heading', { name: 'Game', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Game 2', exact: true })).toBeVisible();
+    await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
     await expect(page.getByRole('button', { name: 'Track Game' })).toBeVisible();
     await page.getByRole('button', { name: 'Previous game' }).click();
-    await expect(page.getByRole('heading', { name: 'Game', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Game 1', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Track Game' }).click();
     await expect(page.getByText('Game Complete!')).toBeVisible();
     await page.getByRole('button', { name: 'Back to match' }).click();
     await expect(page.getByRole('heading', { name: 'Track Match' })).toBeVisible();
+    await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
     await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
   });
 });

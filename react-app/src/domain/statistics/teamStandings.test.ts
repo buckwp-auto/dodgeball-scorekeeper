@@ -3,7 +3,11 @@ import { addMatch, addPlayer, addTeam, createEmptyDatabase } from '../database';
 import { addGame, toggleGamePlayer, toggleMatchPlayer } from '../matchGame';
 import { persistFinishGameEvent } from '../gameEvents';
 import { GameEventFinishResult } from './constants';
-import { buildMatchSeries, buildTeamStandings } from './teamStandings';
+import {
+  buildMatchSeries,
+  buildTeamStandings,
+  formatMatchSeriesScore,
+} from './teamStandings';
 
 function addFinishedGame(
   data: ReturnType<typeof createEmptyDatabase>,
@@ -30,6 +34,24 @@ function setupTwoTeamLeague() {
   toggleMatchPlayer(data, match.Id, a1.Id, false);
   return { data, home, away, h1, a1, match };
 }
+
+describe('formatMatchSeriesScore', () => {
+  it('shows 0–0 before any finished games', () => {
+    const { data, match } = setupTwoTeamLeague();
+    const series = buildMatchSeries(data, match.Id)!;
+    expect(formatMatchSeriesScore(series)).toBe('Home Hawks 0–0 Away Owls');
+  });
+
+  it('shows finished game wins and appends ties', () => {
+    const { data, match, h1, a1 } = setupTwoTeamLeague();
+    addFinishedGame(data, match.Id, h1.Id, a1.Id, GameEventFinishResult.WinHome);
+    addFinishedGame(data, match.Id, h1.Id, a1.Id, GameEventFinishResult.WinAway);
+    addFinishedGame(data, match.Id, h1.Id, a1.Id, GameEventFinishResult.Tie);
+
+    const series = buildMatchSeries(data, match.Id)!;
+    expect(formatMatchSeriesScore(series)).toBe('Home Hawks 1–1 Away Owls (1 T)');
+  });
+});
 
 describe('team standings', () => {
   it('treats equal finished game wins as a match tie', () => {

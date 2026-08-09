@@ -1,6 +1,7 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { useNavigate, useParams } from 'react-router';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
+import { MatchScoreLine } from '../components/MatchScoreLine';
 import { PageHeader, TextButton } from '../components/Ui';
 import { getMatchName } from '../domain/database';
 import { addGameWithAutoRoster } from '../domain/rosterAutoSelect';
@@ -55,6 +56,7 @@ export function MatchEventsPage() {
   return (
     <>
       <PageHeader>Track Match</PageHeader>
+      <MatchScoreLine matchId={matchId} />
       <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2 }}>
         <Button
           type="button"

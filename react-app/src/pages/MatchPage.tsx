@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router';
 import { PlayerRoster } from '../components/MatchRoster';
 import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
+import { MatchScoreLine } from '../components/MatchScoreLine';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { buildStatisticsCsvBytes } from '../domain/statisticsCsv';
@@ -161,6 +162,7 @@ export function MatchPage() {
   return (
     <>
       <PageHeader>Match</PageHeader>
+      <MatchScoreLine matchId={matchId} />
       <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2 }}>
         <Button
           type="button"

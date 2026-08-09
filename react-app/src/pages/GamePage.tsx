@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router';
 import { rememberLastGame } from '../domain/lastScoring';
 import { PlayerRoster } from '../components/MatchRoster';
 import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
+import { MatchScoreLine } from '../components/MatchScoreLine';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { getTeam } from '../domain/database';
@@ -19,6 +20,7 @@ import {
 } from '../domain/gameElimination';
 import {
   canNavigateToGameEvents,
+  getGameName,
   getGameSidePlayersWithSelection,
   getMatchById,
 } from '../domain/matchGame';
@@ -112,10 +114,12 @@ export function GamePage() {
   const homeTeam = getTeam(data, match.TeamIdHome);
   const awayTeam = getTeam(data, match.TeamIdAway);
   const canTrack = canNavigateToGameEvents(data, matchId, gameId);
+  const gameTitle = getGameName(data, matchId, gameId);
 
   return (
     <>
-      <PageHeader>Game</PageHeader>
+      <PageHeader>{gameTitle}</PageHeader>
+      <MatchScoreLine matchId={matchId} />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         On court — Home: {live.activeHomeCount} active · Away: {live.activeAwayCount} active
         {live.isGameOver

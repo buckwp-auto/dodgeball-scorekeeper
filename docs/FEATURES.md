@@ -12,7 +12,7 @@
 - **Overview** — Google sign-in / league directory (when Firebase configured), **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
 - **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
-- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills first 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster has **Previous / Next game** (Next creates a game if needed); after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
+- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills first 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster heading shows **Game N**; **match score** (home–away game wins) on match roster, Track Match, game roster, Track Game, and Game Complete; game roster has **Previous / Next game** (Next creates a game if needed); after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game
 - **Settings** — league stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only
 - **History** — commit log for local mutations
@@ -20,7 +20,7 @@
 
 ## Roster & match setup
 
-- **Match & game roster selection** with home/away columns; optional tall YouTube VOD on both roster screens
+- **Match & game roster selection** with home/away columns; game roster heading is **Game N**; optional tall YouTube VOD on both roster screens
 - **Add players on the match screen** (creates a team player and includes them on the match); mark **Sub** officially instead of a “(sub)” name suffix
 - **Auto-select first 6 players** per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
 - **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint; subs sort below starters

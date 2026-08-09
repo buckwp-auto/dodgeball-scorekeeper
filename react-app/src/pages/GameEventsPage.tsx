@@ -2,6 +2,7 @@ import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
+import { MatchScoreLine, useMatchSeriesScore } from '../components/MatchScoreLine';
 import { PageHeader } from '../components/Ui';
 import {
   addDeflectionToDrafts,
@@ -163,6 +164,7 @@ export function GameEventsPage() {
   );
   const gameFinished = gameHasFinishEvent(data, gameId);
   const gameTitle = getGameName(data, matchId, gameId);
+  const matchScore = useMatchSeriesScore(matchId);
 
   useEffect(() => {
     if (!matchId || !gameId) return;
@@ -761,6 +763,7 @@ export function GameEventsPage() {
         {editorCompact ? (
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
             {gameTitle}
+            {matchScore ? ` · ${matchScore}` : ''}
             {' · '}
             Home {live.activeHomeCount} / Away {live.activeAwayCount}
             {isGameOver
@@ -770,6 +773,7 @@ export function GameEventsPage() {
         ) : (
           <>
             <PageHeader>Track Game</PageHeader>
+            {matchId ? <MatchScoreLine matchId={matchId} /> : null}
             <Typography variant="subtitle1" color="text.secondary" gutterBottom>
               {gameTitle}
               {' · '}

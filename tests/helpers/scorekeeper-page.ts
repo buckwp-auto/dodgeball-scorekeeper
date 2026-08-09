@@ -130,7 +130,7 @@ export async function addGame(page: Page) {
   await page.getByRole('button', { name: 'Track Match' }).click();
   await expect(page.getByRole('heading', { name: 'Track Match' })).toBeVisible();
   await page.getByRole('button', { name: 'Add Game' }).click();
-  await expect(page.getByRole('heading', { name: 'Game' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Game \d+$/ })).toBeVisible();
 }
 
 export async function openMatchFromList(page: Page, matchLabel: string) {
