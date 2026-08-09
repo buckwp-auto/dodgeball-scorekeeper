@@ -16,6 +16,7 @@ import {
   loadFinishDraftFromEvent,
   loadThrowDraftsFromEvent,
   throwResultLabels,
+  type GameEventRow,
   type GameEventType,
   type GamePlayerInfo,
   type ThrowDraft,
@@ -56,6 +57,7 @@ export type TimelineEntry = {
   type: GameEventType;
   rows: TimelineRow[];
   videoOffsetSeconds?: number | null;
+  isHighlight: boolean;
 };
 
 function playerRef(

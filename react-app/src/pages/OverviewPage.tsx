@@ -221,7 +221,7 @@ export function OverviewPage() {
                     })
                   }
                 >
-                  Leave cloud league
+                  Close selected league
                 </Button>
               ) : null}
             </Stack>
@@ -352,6 +352,22 @@ export function OverviewPage() {
                                 onClick={() => navigate('/stats')}
                               >
                                 League stats
+                              </Button>
+                            ) : null}
+                            {isActive ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={busy}
+                                onClick={() =>
+                                  void runLeagueAction('leave', async () => {
+                                    await leaveLeague();
+                                    setSuccessMessage('Left cloud league (local data kept).');
+                                    setSuccessOpen(true);
+                                  })
+                                }
+                              >
+                                Close league
                               </Button>
                             ) : null}
                             {!membership || status === 'rejected' ? (

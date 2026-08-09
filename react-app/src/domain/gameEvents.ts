@@ -23,6 +23,8 @@ export type GameEventRow = {
   Ordinal: number;
   /** Seconds into the match YouTube video when this event was recorded. */
   VideoOffsetSeconds?: number | null;
+  /** Starred for the league highlight reel. */
+  IsHighlight?: boolean;
 };
 export type GameEventType = 'start' | 'throw' | 'error' | 'finish';
 
@@ -218,6 +220,17 @@ export function setGameEventVideoOffset(
     );
     if (game) game.VideoStartSeconds = videoOffsetSeconds;
   }
+}
+
+/** Star or unstar a timeline event for the league highlight reel. */
+export function setGameEventHighlight(
+  data: DatabaseDto,
+  gameEventId: Guid,
+  isHighlight: boolean,
+): void {
+  const row = table<GameEventRow>(data, 'GameEvent').find((entry) => entry.Id === gameEventId);
+  if (!row) return;
+  row.IsHighlight = isHighlight;
 }
 
 export function getGamePlayerInfos(
@@ -749,6 +762,7 @@ export function restoreGameEventSnapshot(
     GameId: event.GameId,
     Ordinal: event.Ordinal,
     VideoOffsetSeconds: event.VideoOffsetSeconds ?? null,
+    IsHighlight: event.IsHighlight ?? false,
   });
 
   if (type === 'error') {

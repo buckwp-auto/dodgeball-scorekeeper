@@ -16,6 +16,16 @@ export function getMatchById(data: DatabaseDto, matchId: Guid): MatchRow | undef
   return table<MatchRow>(data, 'Match').find((match) => match.Id === matchId);
 }
 
+export function getMatchIdForGame(data: DatabaseDto, gameId: Guid): Guid | undefined {
+  const link = table<{ MatchEventId: Guid; GameId: Guid }>(data, 'MatchEventGame').find(
+    (row) => row.GameId === gameId,
+  );
+  if (!link) return undefined;
+  return table<{ Id: Guid; MatchId: Guid }>(data, 'MatchEvent').find(
+    (row) => row.Id === link.MatchEventId,
+  )?.MatchId;
+}
+
 export function getMatchPlayers(data: DatabaseDto, matchId: Guid): MatchPlayerRow[] {
   return table<MatchPlayerRow>(data, 'MatchPlayer').filter(
     (row) => row.MatchId === matchId,

@@ -24,6 +24,7 @@ export type GameEventRow = {
   Ordinal: number;
   /** Seconds into the YouTube video when this event was recorded. */
   VideoOffsetSeconds?: number | null;
+  IsHighlight?: boolean;
 };
 export type GameEventThrowRow = { GameEventId: Guid };
 export type GameEventErrorRow = {
