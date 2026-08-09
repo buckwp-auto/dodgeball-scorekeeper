@@ -27,6 +27,13 @@ test.describe('Match workflow', () => {
 
     await createMatch(page, 'Home Hawks', 'Away Owls');
 
+    const homeTeam = page.locator('.sk-match .sk-team').nth(0);
+    await homeTeam.getByLabel('Add player').fill('Pat');
+    await homeTeam.getByRole('checkbox', { name: 'Sub' }).check();
+    await homeTeam.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(homeTeam.getByRole('button', { name: 'Pat', exact: true })).toBeVisible();
+    await expect(homeTeam.locator('.sk-player').filter({ hasText: 'Pat' }).locator('.sk-player-sub')).toBeVisible();
+
     await navigateMenu(page, 'History');
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
     await expect(page.locator('.history')).toContainText('Added team (Home Hawks)');

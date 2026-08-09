@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
 import {
   addGame,
+  addPlayerToMatchSide,
   deleteGame,
   deleteMatch,
   getAdjacentGameId,
@@ -10,6 +11,8 @@ import {
   getMatchGames,
   getMatchIdForGame,
   getMatchPlayers,
+  getMatchSidePlayersWithSelection,
+  setMatchPlayerSubstitute,
   toggleGamePlayer,
   toggleMatchPlayer,
 } from './matchGame';
@@ -64,6 +67,31 @@ function seedMatchWithTwoGames() {
 
   return { data, match, game1, game2, home, away };
 }
+
+describe('match substitutes', () => {
+  it('adds a player to the team and match roster, optionally as a sub', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const match = addMatch(data, home.Id, away.Id);
+    const starter = addPlayerToMatchSide(data, match.Id, true, 'Alex');
+    const sub = addPlayerToMatchSide(data, match.Id, true, 'Pat', true);
+
+    const rows = getMatchPlayers(data, match.Id);
+    expect(rows.find((row) => row.PlayerId === starter.Id)?.IsSubstitute).toBeFalsy();
+    expect(rows.find((row) => row.PlayerId === sub.Id)?.IsSubstitute).toBe(true);
+
+    const listed = getMatchSidePlayersWithSelection(data, match, true);
+    expect(listed.map((row) => row.player.Name)).toEqual(['Alex', 'Pat']);
+    expect(listed[0]?.substitute).toBe(false);
+    expect(listed[1]?.substitute).toBe(true);
+
+    setMatchPlayerSubstitute(data, match.Id, starter.Id, true);
+    expect(getMatchPlayers(data, match.Id).find((row) => row.PlayerId === starter.Id)?.IsSubstitute).toBe(
+      true,
+    );
+  });
+});
 
 describe('getAdjacentGameId', () => {
   it('returns previous and next games in match order', () => {

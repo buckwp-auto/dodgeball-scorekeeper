@@ -34,6 +34,8 @@ export type MatchPlayerRow = {
   MatchId: Guid;
   PlayerId: Guid;
   TeamHome: boolean;
+  /** Official bench/sub for this match (not a name suffix). */
+  IsSubstitute?: boolean;
 };
 
 export type DatabaseDto = {

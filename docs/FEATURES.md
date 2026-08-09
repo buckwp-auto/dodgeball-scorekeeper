@@ -21,8 +21,9 @@
 ## Roster & match setup
 
 - **Match & game roster selection** with home/away columns
-- **Auto-select first 6 players** per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster)
-- **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint
+- **Add players on the match screen** (creates a team player and includes them on the match); mark **Sub** officially instead of a “(sub)” name suffix
+- **Auto-select first 6 players** per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
+- **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint; subs sort below starters
 
 ## Track Game
 

@@ -291,6 +291,7 @@ export function gamePlayerIdForPlayerId(
 export type RosterRow = {
   player: { Id: string; Name: string };
   selected: boolean;
+  substitute?: boolean;
 };
 
 export function sortRosterWithEliminations<T extends RosterRow>(
@@ -301,6 +302,9 @@ export function sortRosterWithEliminations<T extends RosterRow>(
     const aOut = eliminatedPlayerIds.has(a.player.Id);
     const bOut = eliminatedPlayerIds.has(b.player.Id);
     if (aOut !== bOut) return aOut ? 1 : -1;
+    const aSub = Boolean(a.substitute);
+    const bSub = Boolean(b.substitute);
+    if (aSub !== bSub) return aSub ? 1 : -1;
     return a.player.Name.localeCompare(b.player.Name);
   });
 }

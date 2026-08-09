@@ -1,6 +1,6 @@
 import { newIdTimestamp } from './id';
 import type { DatabaseDto, Guid, MatchPlayerRow, MatchRow, PlayerRow } from './types';
-import { getPlayersForTeam } from './database';
+import { addPlayer, getPlayersForTeam } from './database';
 
 function table<T>(data: DatabaseDto, name: string): T[] {
   return data.Tables[name] as T[];
@@ -52,6 +52,7 @@ export function toggleMatchPlayer(
   matchId: Guid,
   playerId: Guid,
   teamHome: boolean,
+  options?: { isSubstitute?: boolean },
 ): void {
   const rows = table<MatchPlayerRow>(data, 'MatchPlayer');
   const index = rows.findIndex(
@@ -71,7 +72,40 @@ export function toggleMatchPlayer(
     MatchId: matchId,
     PlayerId: playerId,
     TeamHome: teamHome,
+    ...(options?.isSubstitute ? { IsSubstitute: true } : {}),
   });
+}
+
+export function setMatchPlayerSubstitute(
+  data: DatabaseDto,
+  matchId: Guid,
+  playerId: Guid,
+  isSubstitute: boolean,
+): void {
+  const row = getMatchPlayerRow(data, matchId, playerId);
+  if (!row) return;
+  if (isSubstitute) row.IsSubstitute = true;
+  else delete row.IsSubstitute;
+}
+
+export function isMatchPlayerSubstitute(row: MatchPlayerRow): boolean {
+  return Boolean(row.IsSubstitute);
+}
+
+/** Add a new team player and include them on this match roster. */
+export function addPlayerToMatchSide(
+  data: DatabaseDto,
+  matchId: Guid,
+  teamHome: boolean,
+  name: string,
+  isSubstitute = false,
+): PlayerRow {
+  const match = getMatchById(data, matchId);
+  if (!match) throw new Error('Match not found');
+  const teamId = teamHome ? match.TeamIdHome : match.TeamIdAway;
+  const player = addPlayer(data, teamId, name);
+  toggleMatchPlayer(data, matchId, player.Id, teamHome, { isSubstitute });
+  return player;
 }
 
 export function getMatchSidePlayers(
@@ -376,6 +410,7 @@ export function toggleGamePlayer(
 export type MatchSidePlayer = {
   player: PlayerRow;
   selected: boolean;
+  substitute: boolean;
 };
 
 export function getMatchSidePlayersWithSelection(
@@ -383,10 +418,17 @@ export function getMatchSidePlayersWithSelection(
   match: MatchRow,
   teamHome: boolean,
 ): MatchSidePlayer[] {
-  return getMatchSidePlayers(data, match, teamHome).map((player) => ({
-    player,
-    selected: isPlayerInMatch(data, match.Id, player.Id),
-  }));
+  const rows = getMatchPlayers(data, match.Id);
+  const byPlayerId = new Map(rows.map((row) => [row.PlayerId, row]));
+  const mapped = getMatchSidePlayers(data, match, teamHome).map((player) => {
+    const matchPlayer = byPlayerId.get(player.Id);
+    return {
+      player,
+      selected: Boolean(matchPlayer),
+      substitute: Boolean(matchPlayer?.IsSubstitute),
+    };
+  });
+  return sortMatchSidePlayers(mapped);
 }
 
 export function getGameSidePlayersWithSelection(
@@ -397,8 +439,18 @@ export function getGameSidePlayersWithSelection(
 ): MatchSidePlayer[] {
   return getMatchSidePlayersWithSelection(data, match, teamHome)
     .filter(({ selected }) => selected)
-    .map(({ player }) => ({
+    .map(({ player, substitute }) => ({
       player,
       selected: isPlayerInGame(data, gameId, player.Id, match.Id),
+      substitute,
     }));
+}
+
+export function sortMatchSidePlayers<T extends { selected: boolean; substitute: boolean }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort((a, b) => {
+    const rank = (row: T) => (row.selected ? (row.substitute ? 1 : 0) : row.substitute ? 3 : 2);
+    return rank(a) - rank(b);
+  });
 }

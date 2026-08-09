@@ -14,9 +14,11 @@ import {
 import { parseYoutubeVideoId } from '../domain/youtube';
 import { autoSelectMatchRoster } from '../domain/rosterAutoSelect';
 import {
+  addPlayerToMatchSide,
   canNavigateToMatchPage,
   getMatchById,
   getMatchSidePlayersWithSelection,
+  setMatchPlayerSubstitute,
 } from '../domain/matchGame';
 import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
@@ -28,6 +30,10 @@ export function MatchPage() {
   const { canDeleteMatchesAndGames } = useLeague();
   const match = getMatchById(data, matchId);
   const [youtubeDraft, setYoutubeDraft] = useState('');
+  const [homeAddName, setHomeAddName] = useState('');
+  const [homeAddAsSub, setHomeAddAsSub] = useState(false);
+  const [awayAddName, setAwayAddName] = useState('');
+  const [awayAddAsSub, setAwayAddAsSub] = useState(false);
 
   useEffect(() => {
     if (!matchId) return;
@@ -68,6 +74,30 @@ export function MatchPage() {
   );
 
   useDocumentHotkeys((key) => onPlayerHotkey(key), Boolean(match));
+
+  const addSidePlayer = (teamHome: boolean) => {
+    const name = (teamHome ? homeAddName : awayAddName).trim();
+    const asSub = teamHome ? homeAddAsSub : awayAddAsSub;
+    if (!name || !match) return;
+    mutate((draft) => {
+      const player = addPlayerToMatchSide(draft, matchId, teamHome, name, asSub);
+      return player.Name;
+    }, (playerName) => `Added player (${playerName}) to match.`);
+    if (teamHome) {
+      setHomeAddName('');
+      setHomeAddAsSub(false);
+    } else {
+      setAwayAddName('');
+      setAwayAddAsSub(false);
+    }
+  };
+
+  const toggleSubstitute = (playerId: string, currentlySub: boolean) => {
+    mutate((draft) => {
+      setMatchPlayerSubstitute(draft, matchId, playerId, !currentlySub);
+      return null;
+    }, '');
+  };
 
   if (!match) {
     return <PageHeader>Match</PageHeader>;
@@ -200,6 +230,19 @@ export function MatchPage() {
           players={homeRoster}
           onToggle={(playerId) => toggleMatchPlayer(matchId, playerId, true)}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
+          onToggleSubstitute={(playerId) =>
+            toggleSubstitute(
+              playerId,
+              Boolean(homeRoster.find((row) => row.player.Id === playerId)?.substitute),
+            )
+          }
+          addPlayer={{
+            name: homeAddName,
+            asSub: homeAddAsSub,
+            onNameChange: setHomeAddName,
+            onAsSubChange: setHomeAddAsSub,
+            onSubmit: () => addSidePlayer(true),
+          }}
         />
         <PlayerRoster
           side="Away Team"
@@ -207,6 +250,19 @@ export function MatchPage() {
           players={awayRoster}
           onToggle={(playerId) => toggleMatchPlayer(matchId, playerId, false)}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
+          onToggleSubstitute={(playerId) =>
+            toggleSubstitute(
+              playerId,
+              Boolean(awayRoster.find((row) => row.player.Id === playerId)?.substitute),
+            )
+          }
+          addPlayer={{
+            name: awayAddName,
+            asSub: awayAddAsSub,
+            onNameChange: setAwayAddName,
+            onAsSubChange: setAwayAddAsSub,
+            onSubmit: () => addSidePlayer(false),
+          }}
         />
       </div>
     </>

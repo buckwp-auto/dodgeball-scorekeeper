@@ -6,7 +6,9 @@ import {
   getGamePlayers,
   isPlayerInMatch,
   isPlayerInGame,
+  setMatchPlayerSubstitute,
   toggleGamePlayer,
+  toggleMatchPlayer,
 } from './matchGame';
 import {
   AUTO_SELECT_PLAYER_LIMIT,
@@ -64,6 +66,24 @@ describe('roster auto-select', () => {
     expect(gameRows.length).toBe(AUTO_SELECT_PLAYER_LIMIT * 2);
     expect(isPlayerInGame(data, gameId, homePlayers[0].Id, match.Id)).toBe(true);
     expect(isPlayerInGame(data, gameId, homePlayers[6].Id, match.Id)).toBe(false);
+  });
+
+  it('prefers non-subs when auto-selecting a game roster', () => {
+    const { data, match, homePlayers, awayPlayers } = seedTeamsWithManyPlayers(8, 8);
+    autoSelectMatchRoster(data, match.Id);
+    setMatchPlayerSubstitute(data, match.Id, homePlayers[0].Id, true);
+    setMatchPlayerSubstitute(data, match.Id, awayPlayers[0].Id, true);
+    toggleMatchPlayer(data, match.Id, homePlayers[6].Id, true);
+    toggleMatchPlayer(data, match.Id, awayPlayers[6].Id, false);
+
+    const gameId = addGame(data, match.Id);
+    autoSelectGameRoster(data, match.Id, gameId);
+
+    expect(isPlayerInGame(data, gameId, homePlayers[1].Id, match.Id)).toBe(true);
+    expect(isPlayerInGame(data, gameId, homePlayers[6].Id, match.Id)).toBe(true);
+    expect(isPlayerInGame(data, gameId, homePlayers[0].Id, match.Id)).toBe(false);
+    expect(isPlayerInGame(data, gameId, awayPlayers[0].Id, match.Id)).toBe(false);
+    expect(getGamePlayers(data, gameId).length).toBe(AUTO_SELECT_PLAYER_LIMIT * 2);
   });
 
   it('does not add more players when the game already has a roster', () => {

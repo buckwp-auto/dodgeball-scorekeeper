@@ -45,10 +45,15 @@ export function autoSelectGameRoster(
   if (getGamePlayers(data, gameId).length > 0) return false;
 
   const matchPlayerRows = getMatchPlayers(data, matchId);
-  const playerIds = [
-    ...matchPlayerRows.filter((row) => row.TeamHome).slice(0, AUTO_SELECT_PLAYER_LIMIT),
-    ...matchPlayerRows.filter((row) => !row.TeamHome).slice(0, AUTO_SELECT_PLAYER_LIMIT),
-  ].map((row) => row.PlayerId);
+  const startersThenSubs = (teamHome: boolean) => {
+    const side = matchPlayerRows.filter((row) => row.TeamHome === teamHome);
+    const starters = side.filter((row) => !row.IsSubstitute);
+    const subs = side.filter((row) => row.IsSubstitute);
+    return [...starters, ...subs].slice(0, AUTO_SELECT_PLAYER_LIMIT);
+  };
+  const playerIds = [...startersThenSubs(true), ...startersThenSubs(false)].map(
+    (row) => row.PlayerId,
+  );
 
   let changed = false;
   for (const playerId of playerIds) {

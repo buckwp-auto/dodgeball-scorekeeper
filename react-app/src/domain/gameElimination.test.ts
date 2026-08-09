@@ -187,6 +187,16 @@ describe('game live elimination state', () => {
     expect(sorted.map((row) => row.player.Id)).toEqual(['p-in', 'p-out']);
   });
 
+  it('sorts substitutes after starters, then eliminated last', () => {
+    const rows = [
+      { player: { Id: 'sub', Name: 'Amy' }, selected: true, substitute: true },
+      { player: { Id: 'out', Name: 'Zed' }, selected: true, substitute: false },
+      { player: { Id: 'start', Name: 'Bea' }, selected: true, substitute: false },
+    ];
+    const sorted = sortRosterWithEliminations(rows, new Set(['out']));
+    expect(sorted.map((row) => row.player.Id)).toEqual(['start', 'sub', 'out']);
+  });
+
   it('eliminates the target on BlockFailed and CatchFailed (hit-equivalent outs)', () => {
     const { data, match, gameId, homeGp, awayGp } = setupGameWithRoster();
     persistThrowGameEvent(data, gameId, match.Id, [
