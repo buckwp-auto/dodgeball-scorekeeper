@@ -41,7 +41,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 - Three-column grid (home / away / result) with slightly taller team banners separated from player rows (result column spacer keeps tops aligned); six player buttons stretch to the same total height as the seven result rows
 - Throw results shown with **MUI icons**; result can be chosen before thrower
-- **Deflections** chain on eligible results (block, hit, etc.)
+- **Deflections** chain on eligible results (block, hit, etc.); `Z` focuses the new row so player keys pick the receiver and `R Y U G H` set the deflection result (Dodge/Miss stay on the throw)
 - **Catch recovery** — pick a teammate (including outs) or **None** (`M`)
 - Auto-commit when a draft is complete and dirty; **Done / Restore / Insert below / Delete**
 - **Undo / Redo** (`-` / `+`) remove or restore the last entered event (session redo stack; cleared when a new event is committed). Distinct from `N` (delete selected) and `V` (restore draft from saved selection)
@@ -88,6 +88,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Home players | `A S D F W E` |
 | Away players | `J K L ; I O` |
 | Throw results | `R T Y U G H P` |
+| Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G H` |
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
 | Undo / redo last event | `-` undo, `+` redo |

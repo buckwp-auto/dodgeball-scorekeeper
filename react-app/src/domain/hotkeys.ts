@@ -1,5 +1,5 @@
-import { ThrowResult } from './statistics/constants';
-import { throwResultUiOrder } from './gameEvents';
+import { DeflectionResult, ThrowResult } from './statistics/constants';
+import { deflectionResultUiOrder, throwResultUiOrder } from './gameEvents';
 
 /** Home / left-side permanent keys */
 export const COLUMN_1_HOTKEYS = ['a', 's', 'd', 'f', 'w', 'e'] as const;
@@ -147,6 +147,25 @@ export function getThrowResultForKey(key: string): ThrowResult | null {
   );
   if (index < 0) return null;
   return throwResultUiOrder[index] ?? null;
+}
+
+/** Same keys as throw results, skipping Dodge (`T`) and Miss (`P`). */
+export function hotkeyForDeflectionResult(resultId: DeflectionResult): string | null {
+  return hotkeyForResult(resultId as unknown as ThrowResult);
+}
+
+export function getDeflectionResultForKey(key: string): DeflectionResult | null {
+  const throwResult = getThrowResultForKey(key);
+  if (throwResult === null) return null;
+  if (
+    throwResult === ThrowResult.Dodge ||
+    throwResult === ThrowResult.Miss
+  ) {
+    return null;
+  }
+  return deflectionResultUiOrder.includes(throwResult as unknown as DeflectionResult)
+    ? (throwResult as unknown as DeflectionResult)
+    : null;
 }
 
 export function getTrackGameActionForKey(key: string): TrackGameAction | null {

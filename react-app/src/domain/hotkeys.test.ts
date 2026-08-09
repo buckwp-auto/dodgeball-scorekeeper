@@ -8,11 +8,13 @@ import {
   assignColumn2Hotkey,
   buildPermanentPlayerHotkeys,
   findGamePlayerIdByHotkey,
+  getDeflectionResultForKey,
   getThrowResultForKey,
   getTrackGameActionForKey,
+  hotkeyForDeflectionResult,
   hotkeyForGamePlayer,
 } from './hotkeys';
-import { ThrowResult } from './statistics/constants';
+import { DeflectionResult, ThrowResult } from './statistics/constants';
 import { throwResultUiOrder } from './gameEvents';
 
 describe('permanent player hotkeys', () => {
@@ -50,6 +52,18 @@ describe('result hotkeys', () => {
     expect(getThrowResultForKey('r')).toBe(ThrowResult.Hit);
     expect(getThrowResultForKey('t')).toBe(ThrowResult.Dodge);
     expect(getThrowResultForKey('p')).toBe(ThrowResult.Miss);
+  });
+
+  it('maps r y u g h to deflection results and skips dodge/miss', () => {
+    expect(getDeflectionResultForKey('r')).toBe(DeflectionResult.Hit);
+    expect(getDeflectionResultForKey('y')).toBe(DeflectionResult.Block);
+    expect(getDeflectionResultForKey('u')).toBe(DeflectionResult.BlockFailed);
+    expect(getDeflectionResultForKey('g')).toBe(DeflectionResult.Catch);
+    expect(getDeflectionResultForKey('h')).toBe(DeflectionResult.CatchFailed);
+    expect(getDeflectionResultForKey('t')).toBeNull();
+    expect(getDeflectionResultForKey('p')).toBeNull();
+    expect(hotkeyForDeflectionResult(DeflectionResult.Hit)).toBe('r');
+    expect(hotkeyForDeflectionResult(DeflectionResult.Block)).toBe('y');
   });
 });
 

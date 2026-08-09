@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addDeflectionToDrafts,
   applyPlayerHotkeyToThrowDrafts,
+  focusedDeflectionIndex,
   resolveGroupThrowingHome,
 } from '../components/trackGame/ThrowEditor';
 import type { GamePlayerInfo, ThrowDraft } from './gameEvents';
 import { emptyThrowDraft } from './gameEvents';
-import { ThrowResult } from './statistics/constants';
+import { DeflectionResult, ThrowResult } from './statistics/constants';
 import { RECOVERED_NONE_HOTKEY } from './hotkeys';
 
 const players: GamePlayerInfo[] = [
@@ -88,6 +90,62 @@ describe('applyPlayerHotkeyToThrowDrafts permanent keys', () => {
     const recoverOut = applyPlayerHotkeyToThrowDrafts(drafts, players, 'k');
     // Zoe is permanently K (Ned=j, Zoe=k) and selectable for recovery while out
     expect(recoverOut?.[0].recoveredId).toBe('a-zoe');
+  });
+
+  it('focuses a pending deflection and routes receiver plus result keys there', () => {
+    const drafts: ThrowDraft[] = [
+      {
+        ...emptyThrowDraft(),
+        throwerGamePlayerId: 'h-amy',
+        targetGamePlayerId: 'a-ned',
+        resultId: ThrowResult.Hit,
+      },
+    ];
+    const opened = addDeflectionToDrafts(drafts);
+    expect(focusedDeflectionIndex(opened[0])).toBe(0);
+    expect(opened[0].deflections).toEqual([
+      { receiverGamePlayerId: '', resultId: DeflectionResult.Hit },
+    ]);
+
+    // Defending Zoe (K) becomes the receiver; thrower/target stay put
+    const withReceiver = applyPlayerHotkeyToThrowDrafts(opened, players, 'k');
+    expect(withReceiver?.[0].deflections[0].receiverGamePlayerId).toBe('a-zoe');
+    expect(withReceiver?.[0].throwerGamePlayerId).toBe('h-amy');
+    expect(withReceiver?.[0].targetGamePlayerId).toBe('a-ned');
+
+    // Y is Block on the deflection, not Dodge on the throw
+    const withBlock = applyPlayerHotkeyToThrowDrafts(opened, players, 'y');
+    expect(withBlock?.[0].deflections[0].resultId).toBe(DeflectionResult.Block);
+    expect(withBlock?.[0].resultId).toBe(ThrowResult.Hit);
+
+    // T (Dodge) still changes the throw result and is not a deflection result
+    const dodgeThrow = applyPlayerHotkeyToThrowDrafts(opened, players, 't');
+    expect(dodgeThrow?.[0].resultId).toBe(ThrowResult.Dodge);
+    expect(dodgeThrow?.[0].deflections).toEqual([]);
+  });
+
+  it('keeps result keys on the last deflection after a receiver is chosen', () => {
+    const drafts: ThrowDraft[] = [
+      {
+        ...emptyThrowDraft(),
+        throwerGamePlayerId: 'h-amy',
+        targetGamePlayerId: 'a-ned',
+        resultId: ThrowResult.Hit,
+        deflections: [
+          { receiverGamePlayerId: 'a-zoe', resultId: DeflectionResult.Hit },
+        ],
+      },
+    ];
+    expect(focusedDeflectionIndex(drafts[0])).toBe(0);
+
+    const catchDeflect = applyPlayerHotkeyToThrowDrafts(drafts, players, 'g');
+    expect(catchDeflect?.[0].deflections[0].resultId).toBe(DeflectionResult.Catch);
+    expect(catchDeflect?.[0].resultId).toBe(ThrowResult.Hit);
+
+    // Defending Ned (J) goes back to toggling the throw target
+    const retarget = applyPlayerHotkeyToThrowDrafts(drafts, players, 'j');
+    expect(retarget?.[0].targetGamePlayerId).toBe('');
+    expect(retarget?.[0].deflections[0].receiverGamePlayerId).toBe('a-zoe');
   });
 });
 

@@ -19,7 +19,9 @@ import {
 import {
   buildPermanentPlayerHotkeys,
   findGamePlayerIdByHotkey,
+  getDeflectionResultForKey,
   getThrowResultForKey,
+  hotkeyForDeflectionResult,
   hotkeyForGamePlayer,
   hotkeyForResult,
   RECOVERED_NONE_HOTKEY,
@@ -138,6 +140,37 @@ function withToggledRecovery(
   };
 }
 
+/** Last pending deflection, else the last row once one exists (after `Z`). */
+export function focusedDeflectionIndex(draft: ThrowDraft): number {
+  if (
+    !throwResultAllowsDeflections(draft.resultId) ||
+    draft.deflections.length === 0
+  ) {
+    return -1;
+  }
+  const pending = draft.deflections.findIndex((row) => !row.receiverGamePlayerId);
+  if (pending >= 0) return pending;
+  return draft.deflections.length - 1;
+}
+
+function withDeflectionResult(
+  draft: ThrowDraft,
+  index: number,
+  resultId: DeflectionResult,
+): ThrowDraft {
+  let next = draft.deflections.map((row, i) =>
+    i === index ? { ...row, resultId } : row,
+  );
+  if (resultId === DeflectionResult.Catch) {
+    next = next.map((row, i) =>
+      i !== index && row.resultId === DeflectionResult.Catch
+        ? { ...row, resultId: DeflectionResult.Hit }
+        : row,
+    );
+  }
+  return { ...draft, deflections: next };
+}
+
 function SingleThrowEditor({
   draft,
   players,
@@ -202,6 +235,7 @@ function SingleThrowEditor({
   const pendingThrower = !draft.throwerGamePlayerId;
   const pendingTarget = showTarget && !draft.targetGamePlayerId;
   const pendingResult = draft.resultId === null;
+  const deflectionFocusIndex = focusedDeflectionIndex(draft);
 
   const setThrower = (gamePlayerId: string) => {
     onChange(withThrower(draft, gamePlayerId));
@@ -456,6 +490,7 @@ function SingleThrowEditor({
               <EditorChoiceStack pending={!deflection.receiverGamePlayerId}>
                 {deflection.receiverGamePlayerId ? (
                   <EditorChipButton
+                    hotkey={hotkeyForGamePlayer(hotkeys, deflection.receiverGamePlayerId)}
                     playerId={
                       defendingPlayers.find(
                         (row) => row.gamePlayerId === deflection.receiverGamePlayerId,
@@ -481,25 +516,14 @@ function SingleThrowEditor({
                   ))
                 )}
               </EditorChoiceStack>
-              <EditorChoiceStack>
+              <EditorChoiceStack pending={index === deflectionFocusIndex && !deflection.receiverGamePlayerId}>
                 {deflectionResultUiOrder.map((resultId) => (
                   <EditorChoiceButton
                     key={resultId}
+                    hotkey={hotkeyForDeflectionResult(resultId)}
                     selected={deflection.resultId === resultId}
                     startIcon={renderResultIcon(resultId as unknown as ThrowResult)}
-                    onClick={() => {
-                      let next = draft.deflections.map((row, i) =>
-                        i === index ? { ...row, resultId } : row,
-                      );
-                      if (resultId === DeflectionResult.Catch) {
-                        next = next.map((row, i) =>
-                          i !== index && row.resultId === DeflectionResult.Catch
-                            ? { ...row, resultId: DeflectionResult.Hit }
-                            : row,
-                        );
-                      }
-                      onChange({ ...draft, deflections: next });
-                    }}
+                    onClick={() => onChange(withDeflectionResult(draft, index, resultId))}
                   >
                     {deflectionResultLabels[resultId]}
                   </EditorChoiceButton>
@@ -632,6 +656,12 @@ export function applyPlayerHotkeyToThrowDrafts(
   const patch = (next: ThrowDraft): ThrowDraft[] =>
     drafts.map((row, i) => (i === last ? next : row));
 
+  const deflectionIndex = focusedDeflectionIndex(draft);
+  const deflectionResultId = getDeflectionResultForKey(key);
+  if (deflectionIndex >= 0 && deflectionResultId !== null) {
+    return patch(withDeflectionResult(draft, deflectionIndex, deflectionResultId));
+  }
+
   const resultId = getThrowResultForKey(key);
   if (resultId !== null) {
     return patch(withResult(draft, draft.resultId === resultId ? null : resultId));
@@ -649,6 +679,17 @@ export function applyPlayerHotkeyToThrowDrafts(
   if (!gamePlayerId) return null;
   const hit = players.find((row) => row.gamePlayerId === gamePlayerId);
   if (!hit) return null;
+
+  const pendingDeflection =
+    deflectionIndex >= 0 && !draft.deflections[deflectionIndex].receiverGamePlayerId;
+  if (pendingDeflection && hit.teamHome !== throwingHome) {
+    return patch({
+      ...draft,
+      deflections: draft.deflections.map((row, i) =>
+        i === deflectionIndex ? { ...row, receiverGamePlayerId: hit.gamePlayerId } : row,
+      ),
+    });
+  }
 
   // Catch recovery: defending teammates (including out) are selectable
   if (throwDraftNeedsRecovered(draft) && isRecoveredCandidate(draft, hit, throwingHome)) {
