@@ -33,6 +33,21 @@ service cloud.firestore {
       return value is string && value.size() <= max;
     }
 
+    function imageRefOrNull(value) {
+      return value == null
+        || (
+          value is map
+          && value.keys().hasOnly(['kind', 'url', 'storagePath', 'contentType', 'updatedAt'])
+          && value.keys().hasAll(['kind', 'url'])
+          && value.kind in ['external', 'storage']
+          && stringLen(value.url, 2048)
+          && value.url.matches('^https://.+')
+          && (!('storagePath' in value) || stringLen(value.storagePath, 512))
+          && (!('contentType' in value) || stringLen(value.contentType, 100))
+          && (!('updatedAt' in value) || stringLen(value.updatedAt, 40))
+        );
+    }
+
     match /rateLimits/{uid}/hours/{bucket} {
       allow read: if isSelf(uid);
       allow create: if isSelf(uid)
@@ -59,7 +74,11 @@ service cloud.firestore {
         && stringLen(request.resource.data.adminDisplayName, 80)
         && stringLen(request.resource.data.adminEmail, 254)
         && stringLen(request.resource.data.createdAt, 40);
-      allow update, delete: if false;
+      allow update: if leagueAdmin(leagueId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['logo', 'banner'])
+        && (!('logo' in request.resource.data) || imageRefOrNull(request.resource.data.logo))
+        && (!('banner' in request.resource.data) || imageRefOrNull(request.resource.data.banner));
+      allow delete: if false;
 
       match /members/{uid} {
         allow read: if isSelf(uid) || leagueAdmin(leagueId);

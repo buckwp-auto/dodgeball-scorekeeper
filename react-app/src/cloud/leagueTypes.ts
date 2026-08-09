@@ -1,3 +1,4 @@
+import type { ImageRef } from '../domain/imageRef';
 import type { Guid } from '../domain/types';
 import type { MatchTableName, RosterTableName } from './tablePartitions';
 
@@ -11,6 +12,8 @@ export type LeagueMeta = {
   adminUid: string;
   adminDisplayName: string;
   adminEmail: string;
+  logo?: ImageRef | null;
+  banner?: ImageRef | null;
 };
 
 export type LeagueMember = {

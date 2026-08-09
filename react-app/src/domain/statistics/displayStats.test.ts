@@ -20,6 +20,7 @@ import {
   formatPct,
   formatRate,
   formatRecord,
+  leaderboardRank,
   metricValue,
   statsPageTitle,
   type DisplayPlayerStats,
@@ -373,5 +374,29 @@ describe('buildDisplayStats', () => {
         { metric: 'Deaths', home: 0, away: 1 },
       ]),
     );
+  });
+
+  it('assigns competition ranks with ties sharing place', () => {
+    const stub = (id: string, name: string, kills: number): DisplayPlayerStats =>
+      ({
+        playerId: id,
+        playerName: name,
+        kills,
+        killsCredit: kills,
+        hitRate: null,
+      }) as DisplayPlayerStats;
+    const rows = [stub('a', 'Alex', 5), stub('b', 'Blake', 5), stub('c', 'Casey', 3)];
+    expect(leaderboardRank(rows, 'a', 'kills')).toEqual({
+      rank: 1,
+      total: 3,
+      value: 5,
+    });
+    expect(leaderboardRank(rows, 'b', 'kills')?.rank).toBe(1);
+    expect(leaderboardRank(rows, 'c', 'kills')).toEqual({
+      rank: 3,
+      total: 3,
+      value: 3,
+    });
+    expect(leaderboardRank(rows, 'a', 'hitRate')).toBeNull();
   });
 });

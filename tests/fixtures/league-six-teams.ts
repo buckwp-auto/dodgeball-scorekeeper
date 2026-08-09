@@ -112,6 +112,31 @@ export const GAMES_PER_MATCH = 4;
 /** Active lineup size per side; rotates across games within a match. */
 export const PLAYERS_PER_GAME_SIDE = 4;
 
+/** Real @minnesotadodgeball VODs — assigned round-robin to demo matches. */
+export const DEMO_YOUTUBE_URLS = [
+  'https://www.youtube.com/watch?v=9XBnadGg_C0',
+  'https://www.youtube.com/watch?v=FWQLzRGACCg',
+  'https://www.youtube.com/watch?v=k02lYgSxHH0',
+  'https://www.youtube.com/watch?v=bxif3AS1oZU',
+  'https://www.youtube.com/watch?v=AQmCAOpljnU',
+  'https://www.youtube.com/watch?v=AnDTvS_1VGs',
+  'https://www.youtube.com/watch?v=azPIDImiKx4',
+  'https://www.youtube.com/watch?v=-jfE3Gz20_M',
+  'https://www.youtube.com/watch?v=7I6QEF2pi4k',
+  'https://www.youtube.com/watch?v=PZdANwOZpkE',
+  'https://www.youtube.com/watch?v=VnHDKeDQKXU',
+  'https://www.youtube.com/watch?v=YKHUlu9eixY',
+] as const;
+
+type ImageRef = { kind: 'external'; url: string };
+
+function sampleImage(style: 'shapes' | 'adventurer', seed: string): ImageRef {
+  return {
+    kind: 'external',
+    url: `https://api.dicebear.com/7.x/${style}/png?seed=${encodeURIComponent(seed)}&size=256`,
+  };
+}
+
 /** Mirrors GameEventFinishResult / ThrowResult / DeflectionResult. */
 const FINISH_WIN_HOME = 1;
 const FINISH_WIN_AWAY = 2;
@@ -239,6 +264,27 @@ function applyThrowToEliminated(
   }
 }
 
+function countNewEliminations(
+  eliminated: Set<Guid>,
+  throwRow: { ThrowerId: Guid; TargetId: Guid; ResultId: number; RecoveredId: Guid | null },
+  deflections: { ReceiverId: Guid; ResultId: number }[],
+): number {
+  const next = new Set(eliminated);
+  applyThrowToEliminated(next, throwRow, deflections);
+  return next.size - eliminated.size;
+}
+
+function throwIsHighlight(
+  resultId: number,
+  deflections: { receiverId: Guid; resultId: number }[],
+  newOuts: number,
+): boolean {
+  if (resultId === ThrowResult.Catch) return true;
+  if (deflections.some((row) => row.resultId === DeflectionResult.Catch)) return true;
+  if (deflections.length > 0) return true;
+  return newOuts >= 2;
+}
+
 function appendThrowEvent(
   tables: DatabaseDto['Tables'],
   nextId: () => Guid,
@@ -249,12 +295,23 @@ function appendThrowEvent(
   resultId: number,
   recoveredId: Guid | null,
   deflections: { receiverId: Guid; resultId: number }[],
+  options?: { isHighlight?: boolean; videoOffsetSeconds?: number },
 ): void {
   const gameEventId = nextId();
-  (tables.GameEvent as { Id: Guid; GameId: Guid; Ordinal: number }[]).push({
+  (tables.GameEvent as {
+    Id: Guid;
+    GameId: Guid;
+    Ordinal: number;
+    IsHighlight?: boolean;
+    VideoOffsetSeconds?: number;
+  }[]).push({
     Id: gameEventId,
     GameId: gameId,
     Ordinal: ordinal,
+    ...(options?.isHighlight ? { IsHighlight: true } : {}),
+    ...(options?.videoOffsetSeconds != null
+      ? { VideoOffsetSeconds: options.videoOffsetSeconds }
+      : {}),
   });
   (tables.GameEventThrow as { GameEventId: Guid }[]).push({ GameEventId: gameEventId });
   const throwId = nextId();
@@ -349,6 +406,17 @@ function writeGameEventHistory(
       resultId = ThrowResult.Hit;
     }
 
+    const throwRow = {
+      ThrowerId: throwerId,
+      TargetId: targetId,
+      ResultId: resultId,
+      RecoveredId: recoveredId,
+    };
+    const deflectionRows = deflections.map((row) => ({
+      ReceiverId: row.receiverId,
+      ResultId: row.resultId,
+    }));
+    const newOuts = countNewEliminations(eliminated, throwRow, deflectionRows);
     appendThrowEvent(
       tables,
       nextId,
@@ -359,6 +427,10 @@ function writeGameEventHistory(
       resultId,
       recoveredId,
       deflections,
+      {
+        isHighlight: throwIsHighlight(resultId, deflections, newOuts),
+        videoOffsetSeconds: ordinal * 12,
+      },
     );
     applyThrowToEliminated(
       eliminated,
@@ -394,6 +466,7 @@ function writeGameEventHistory(
         ThrowResult.Hit,
         null,
         [],
+        { videoOffsetSeconds: ordinal * 12 },
       );
       eliminated.add(targetId);
       ordinal += 1;
@@ -439,15 +512,22 @@ export function buildLeagueSixTeamsDatabase(): DatabaseDto {
     }
     const teamId = nextId();
     teamIds.push(teamId);
-    (tables.Team as { Id: Guid; Name: string }[]).push({ Id: teamId, Name: team.name });
+    (tables.Team as { Id: Guid; Name: string; Notes: null; Image: ImageRef }[]).push({
+      Id: teamId,
+      Name: team.name,
+      Notes: null,
+      Image: sampleImage('shapes', team.name),
+    });
 
     const roster: Guid[] = [];
     for (const playerName of team.players) {
       const playerId = nextId();
       roster.push(playerId);
-      (tables.Player as { Id: Guid; Name: string }[]).push({
+      (tables.Player as { Id: Guid; Name: string; Notes: null; Image: ImageRef }[]).push({
         Id: playerId,
         Name: playerName,
+        Notes: null,
+        Image: sampleImage('adventurer', playerName),
       });
       (tables.TeamPlayer as { Id: Guid; TeamId: Guid; PlayerId: Guid }[]).push({
         Id: nextId(),
@@ -458,12 +538,20 @@ export function buildLeagueSixTeamsDatabase(): DatabaseDto {
     playersByTeam.push(roster);
   }
 
-  for (const [homeIdx, awayIdx] of LEAGUE_MATCH_PAIRINGS) {
+  LEAGUE_MATCH_PAIRINGS.forEach(([homeIdx, awayIdx], matchIndex) => {
     const matchId = nextId();
-    (tables.Match as { Id: Guid; TeamIdHome: Guid; TeamIdAway: Guid }[]).push({
+    (tables.Match as {
+      Id: Guid;
+      TeamIdHome: Guid;
+      TeamIdAway: Guid;
+      Notes: null;
+      YoutubeUrl: string;
+    }[]).push({
       Id: matchId,
       TeamIdHome: teamIds[homeIdx],
       TeamIdAway: teamIds[awayIdx],
+      Notes: null,
+      YoutubeUrl: DEMO_YOUTUBE_URLS[matchIndex % DEMO_YOUTUBE_URLS.length],
     });
 
     const matchPlayerBySide: { home: Map<number, Guid>; away: Map<number, Guid> } = {
@@ -537,7 +625,7 @@ export function buildLeagueSixTeamsDatabase(): DatabaseDto {
         (homeIdx + 1) * 1000 + (awayIdx + 1) * 100 + gameIndex * 17 + 42,
       );
     }
-  }
+  });
 
   return { Tables: tables };
 }
@@ -552,6 +640,6 @@ export function leagueSixTeamsFixturePath(): string {
   return path.join(process.cwd(), 'tests', 'fixtures', LEAGUE_SIX_TEAMS_FIXTURE);
 }
 
-if (require.main === module) {
+if (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) {
   writeFileSync(leagueSixTeamsFixturePath(), leagueSixTeamsScrkprJson(), 'utf-8');
 }

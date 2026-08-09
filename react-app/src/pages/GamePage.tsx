@@ -159,6 +159,7 @@ export function GamePage() {
         <PlayerRoster
           side="Home Team"
           teamName={homeTeam?.Name ?? 'Home'}
+          teamImage={homeTeam?.Image}
           players={homeRoster}
           onToggle={(playerId) => toggleGamePlayer(matchId, gameId, playerId)}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
@@ -167,6 +168,7 @@ export function GamePage() {
         <PlayerRoster
           side="Away Team"
           teamName={awayTeam?.Name ?? 'Away'}
+          teamImage={awayTeam?.Image}
           players={awayRoster}
           onToggle={(playerId) => toggleGamePlayer(matchId, gameId, playerId)}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}

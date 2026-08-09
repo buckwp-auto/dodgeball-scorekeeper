@@ -6,6 +6,7 @@ describe('pageNameFromPath', () => {
     expect(pageNameFromPath('/')).toBe('overview');
     expect(pageNameFromPath('/teams')).toBe('teams');
     expect(pageNameFromPath('/teams/abc')).toBe('team');
+    expect(pageNameFromPath('/players/p1')).toBe('player');
     expect(pageNameFromPath('/matches')).toBe('matches');
     expect(pageNameFromPath('/matches/m1')).toBe('match');
     expect(pageNameFromPath('/matches/m1/stats')).toBe('match_stats');

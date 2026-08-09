@@ -16,9 +16,9 @@ Related: [`firestore.rules`](../firestore.rules), [`react-app/.env.example`](../
 | Cloud Firestore | Leagues, members, roster, matches, rate limits |
 | App Check (reCAPTCHA) | Reduce abuse of the public web API key |
 | Web app config → Vite env | Client can talk to Firebase |
-| Deployed `firestore.rules` | Auth, membership, string limits, 100 writes/hour |
+| Deployed `firestore.rules` | Auth, membership, string limits, 100 writes/hour, admin-only league logo/banner |
 
-You do **not** need Cloud Functions, Cloud Storage, or Blaze billing for the MVP.
+You do **not** need Cloud Functions, Cloud Storage, or Blaze billing for the MVP. League logo/banner are optional https URLs on `LeagueMeta` (admin update only).
 
 ---
 
@@ -159,6 +159,7 @@ Confirm the deployed rules match the plan before inviting real users:
 
 - [ ] **No unauthenticated writes** (and no public writes to league data)
 - [ ] **League metadata** readable by any signed-in user (directory)
+- [ ] **League logo/banner** updatable only by admin (`logo` / `banner` ImageRef or null; identity fields unchanged)
 - [ ] **Roster + matches** read/write only if `members/{uid}.status == 'active'`
 - [ ] Users can create **only their own** member doc as `pending` (cannot set `active` / `admin` themselves)
 - [ ] Only **adminUid** can approve/reject members
@@ -260,7 +261,7 @@ Custom event parameters show in Realtime immediately. For Explorations / standar
 - Firebase Hosting (GH Pages remains the static host)
 - Cloud Functions / email on join request
 - Blaze plan / billing alerts (add later if you leave Spark)
-- Cloud Storage
+- Cloud Storage (Phase 1 uses paste-only https image URLs on `LeagueMeta` + roster rows)
 
 ---
 

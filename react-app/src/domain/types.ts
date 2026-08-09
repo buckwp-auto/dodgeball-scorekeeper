@@ -1,15 +1,19 @@
+import type { ImageRef } from './imageRef';
+
 export type Guid = string;
 
 export type TeamRow = {
   Id: Guid;
   Name: string;
   Notes: string | null;
+  Image?: ImageRef | null;
 };
 
 export type PlayerRow = {
   Id: Guid;
   Name: string;
   Notes: string | null;
+  Image?: ImageRef | null;
 };
 
 export type TeamPlayerRow = {

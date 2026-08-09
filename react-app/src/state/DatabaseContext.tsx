@@ -22,6 +22,8 @@ import {
   renameTeam as renameTeamOp,
   saveToSession,
   serializeDatabase,
+  setPlayerImage as setPlayerImageOp,
+  setTeamImage as setTeamImageOp,
 } from '../domain/database';
 import {
   deleteGame as deleteGameOp,
@@ -43,6 +45,8 @@ type DatabaseContextValue = {
   addPlayer: (teamId: Guid, name: string) => void;
   renameTeam: (teamId: Guid, name: string) => void;
   renamePlayer: (playerId: Guid, name: string) => void;
+  setTeamImage: (teamId: Guid, url: string | null) => void;
+  setPlayerImage: (playerId: Guid, url: string | null) => void;
   deleteTeam: (teamId: Guid) => void;
   deletePlayer: (playerId: Guid) => void;
   addMatch: (teamIdHome: Guid, teamIdAway: Guid) => Guid;
@@ -201,6 +205,32 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setTeamImage = useCallback(
+    (teamId: Guid, url: string | null) => {
+      mutate(
+        (draft) => setTeamImageOp(draft, teamId, url).Name,
+        (teamName) =>
+          url?.trim()
+            ? `Updated team image (${teamName}).`
+            : `Cleared team image (${teamName}).`,
+      );
+    },
+    [mutate],
+  );
+
+  const setPlayerImage = useCallback(
+    (playerId: Guid, url: string | null) => {
+      mutate(
+        (draft) => setPlayerImageOp(draft, playerId, url).Name,
+        (playerName) =>
+          url?.trim()
+            ? `Updated player image (${playerName}).`
+            : `Cleared player image (${playerName}).`,
+      );
+    },
+    [mutate],
+  );
+
   const deleteTeam = useCallback(
     (teamId: Guid) => {
       mutate(
@@ -351,6 +381,8 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       addPlayer,
       renameTeam,
       renamePlayer,
+      setTeamImage,
+      setPlayerImage,
       deleteTeam,
       deletePlayer,
       addMatch,
@@ -369,6 +401,8 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       addPlayer,
       renameTeam,
       renamePlayer,
+      setTeamImage,
+      setPlayerImage,
       deleteTeam,
       deletePlayer,
       addMatch,

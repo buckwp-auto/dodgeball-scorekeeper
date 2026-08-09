@@ -1,5 +1,6 @@
 import {
   Box,
+  Link as MuiLink,
   Table,
   TableBody,
   TableCell,
@@ -11,6 +12,8 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
+import { playerHref } from '../../domain/playerProfile';
 import {
   LEADERBOARD_METRICS,
   displayedDeaths,
@@ -121,6 +124,7 @@ export function StatsPlayerTable({
   showMultiKills,
   showMultiCatches,
   showDeflectionCatches,
+  hideFilters = false,
 }: {
   rows: DisplayPlayerStats[];
   metric: LeaderboardMetric;
@@ -132,6 +136,7 @@ export function StatsPlayerTable({
   showMultiKills: boolean;
   showMultiCatches: boolean;
   showDeflectionCatches: boolean;
+  hideFilters?: boolean;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>(metricSortKey[metric]);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -153,6 +158,7 @@ export function StatsPlayerTable({
   };
 
   const visible = useMemo(() => {
+    if (hideFilters) return rows;
     const filtered = filterAndSortDisplayStats(rows, {
       metric,
       minGames,
@@ -160,7 +166,7 @@ export function StatsPlayerTable({
       counting,
     });
     return [...filtered].sort((a, b) => compareRows(a, b, sortKey, sortDirection, counting));
-  }, [rows, metric, minGames, sortKey, sortDirection, counting]);
+  }, [rows, metric, minGames, sortKey, sortDirection, counting, hideFilters]);
 
   const header = (key: SortKey, label: string, align: 'left' | 'center' = 'center') => (
     <TableCell align={align} sortDirection={sortKey === key ? sortDirection : false}>
@@ -176,40 +182,42 @@ export function StatsPlayerTable({
 
   return (
     <Box className="sk-stats-players">
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 2,
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          mb: 2,
-        }}
-      >
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={metric}
-          onChange={onMetric}
-          className="sk-stats-metric"
+      {hideFilters ? null : (
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            mb: 2,
+          }}
         >
-          {LEADERBOARD_METRICS.map((item) => (
-            <ToggleButton key={item.id} value={item.id}>
-              {item.label}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-        <TextField
-          label="Min games"
-          type="number"
-          size="small"
-          value={minGames}
-          onChange={(event) =>
-            onMinGamesChange(Math.max(0, Number.parseInt(event.target.value, 10) || 0))
-          }
-          slotProps={{ htmlInput: { min: 0 } }}
-          sx={{ width: 120 }}
-        />
-      </Box>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={metric}
+            onChange={onMetric}
+            className="sk-stats-metric"
+          >
+            {LEADERBOARD_METRICS.map((item) => (
+              <ToggleButton key={item.id} value={item.id}>
+                {item.label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <TextField
+            label="Min games"
+            type="number"
+            size="small"
+            value={minGames}
+            onChange={(event) =>
+              onMinGamesChange(Math.max(0, Number.parseInt(event.target.value, 10) || 0))
+            }
+            slotProps={{ htmlInput: { min: 0 } }}
+            sx={{ width: 120 }}
+          />
+        </Box>
+      )}
       {visible.length === 0 ? (
         <p>No player statistics for this filter.</p>
       ) : (
@@ -242,7 +250,15 @@ export function StatsPlayerTable({
               {visible.map((row) => (
                 <TableRow key={row.playerId}>
                   <TableCell>{row.teamName}</TableCell>
-                  <TableCell>{row.playerName}</TableCell>
+                  <TableCell>
+                    <MuiLink
+                      component={Link}
+                      to={playerHref(row.playerId)}
+                      underline="hover"
+                    >
+                      {row.playerName}
+                    </MuiLink>
+                  </TableCell>
                   <TableCell align="center">{row.gamesPlayed}</TableCell>
                   <TableCell align="center">
                     {formatRecord(row.gamesWon, row.gamesLost, row.gamesTied)}

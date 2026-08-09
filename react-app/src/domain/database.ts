@@ -1,5 +1,6 @@
 import { ENTITY_TABLE_NAMES } from './tableNames';
 import { newIdTimestamp } from './id';
+import { imageRefFromExternalUrl } from './imageRef';
 import {
   MAX_NOTES,
   MAX_PLAYER_NAME,
@@ -64,6 +65,20 @@ export function getTeams(data: DatabaseDto): TeamRow[] {
 
 export function getTeam(data: DatabaseDto, teamId: Guid): TeamRow | undefined {
   return table<TeamRow>(data, 'Team').find((team) => team.Id === teamId);
+}
+
+export function getPlayer(data: DatabaseDto, playerId: Guid): PlayerRow | undefined {
+  return table<PlayerRow>(data, 'Player').find((player) => player.Id === playerId);
+}
+
+export function getTeamForPlayer(
+  data: DatabaseDto,
+  playerId: Guid,
+): TeamRow | undefined {
+  const link = table<TeamPlayerRow>(data, 'TeamPlayer').find(
+    (row) => row.PlayerId === playerId,
+  );
+  return link ? getTeam(data, link.TeamId) : undefined;
 }
 
 export function getPlayersForTeam(data: DatabaseDto, teamId: Guid): PlayerRow[] {
@@ -152,6 +167,38 @@ export function renamePlayer(
   if (!name) throw new Error('Player name required');
   assertMaxLength(name, MAX_PLAYER_NAME, 'Player name');
   player.Name = name;
+  return player;
+}
+
+export function setTeamImage(
+  data: DatabaseDto,
+  teamId: Guid,
+  url: string | null,
+): TeamRow {
+  const team = getTeam(data, teamId);
+  if (!team) throw new Error('Team not found');
+  if (url == null || !url.trim()) {
+    delete team.Image;
+    return team;
+  }
+  team.Image = imageRefFromExternalUrl(url);
+  return team;
+}
+
+export function setPlayerImage(
+  data: DatabaseDto,
+  playerId: Guid,
+  url: string | null,
+): PlayerRow {
+  const player = table<PlayerRow>(data, 'Player').find(
+    (row) => row.Id === playerId,
+  );
+  if (!player) throw new Error('Player not found');
+  if (url == null || !url.trim()) {
+    delete player.Image;
+    return player;
+  }
+  player.Image = imageRefFromExternalUrl(url);
   return player;
 }
 

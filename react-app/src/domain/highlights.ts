@@ -36,6 +36,36 @@ export function highlightEventHref(
   return `/matches/${matchId}/games/${gameId}/events?event=${encodeURIComponent(eventId)}`;
 }
 
+export function timelineEntryInvolvesPlayer(
+  entry: TimelineEntry,
+  playerId: Guid,
+): boolean {
+  return entry.rows.some((row) =>
+    row.segments.some(
+      (segment) => segment.kind === 'player' && segment.player.playerId === playerId,
+    ),
+  );
+}
+
+export function getPlayerHighlightGroups(
+  data: DatabaseDto,
+  playerId: Guid,
+): LeagueHighlightMatchGroup[] {
+  return getLeagueHighlightGroups(data)
+    .map((match) => ({
+      ...match,
+      games: match.games
+        .map((game) => ({
+          ...game,
+          highlights: game.highlights.filter((highlight) =>
+            timelineEntryInvolvesPlayer(highlight.entry, playerId),
+          ),
+        }))
+        .filter((game) => game.highlights.length > 0),
+    }))
+    .filter((match) => match.games.length > 0);
+}
+
 export function getLeagueHighlightGroups(
   data: DatabaseDto,
 ): LeagueHighlightMatchGroup[] {

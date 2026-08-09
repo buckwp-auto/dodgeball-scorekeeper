@@ -19,6 +19,7 @@ import { MatchesPage } from './pages/MatchesPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StatsPage } from './pages/StatsPage';
+import { PlayerPage } from './pages/PlayerPage';
 import { TeamPage } from './pages/TeamPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { YoutubePopoutPage } from './pages/YoutubePopoutPage';
@@ -130,6 +131,7 @@ export function App() {
                 <Route path="/" element={<OverviewPage />} />
                 <Route path="/teams" element={<TeamsPage />} />
                 <Route path="/teams/:teamId" element={<TeamPage />} />
+                <Route path="/players/:playerId" element={<PlayerPage />} />
                 <Route path="/matches" element={<MatchesPage />} />
                 <Route path="/matches/:matchId" element={<MatchPage />} />
                 <Route path="/matches/:matchId/stats" element={<StatsPage />} />

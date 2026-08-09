@@ -101,4 +101,27 @@ describe('leagueSplitMerge', () => {
     expect((roster.Team as unknown[]).length).toBeGreaterThan(0);
     expect((roster.Player as unknown[]).length).toBeGreaterThan(0);
   });
+
+  it('seeds demo photos, VODs, and catch/deflection/double-kill highlights', () => {
+    const data = loadSixTeamFixture();
+    const teams = data.Tables.Team as { Image?: { kind: string; url: string } }[];
+    const players = data.Tables.Player as { Image?: { kind: string; url: string } }[];
+    const matches = data.Tables.Match as { YoutubeUrl?: string }[];
+    const events = data.Tables.GameEvent as { IsHighlight?: boolean }[];
+
+    expect(teams.every((team) => team.Image?.kind === 'external' && team.Image.url.startsWith('https://'))).toBe(
+      true,
+    );
+    expect(
+      players.every((player) => player.Image?.kind === 'external' && player.Image.url.startsWith('https://')),
+    ).toBe(true);
+    expect(
+      matches.every(
+        (match) =>
+          typeof match.YoutubeUrl === 'string' &&
+          match.YoutubeUrl.startsWith('https://www.youtube.com/watch?v='),
+      ),
+    ).toBe(true);
+    expect(events.some((event) => event.IsHighlight)).toBe(true);
+  });
 });

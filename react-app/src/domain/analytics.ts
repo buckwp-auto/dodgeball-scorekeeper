@@ -30,6 +30,7 @@ export function pageNameFromPath(pathname: string): string {
   if (path === '/settings') return 'settings';
   if (path === '/history') return 'history';
   if (/^\/teams\/[^/]+$/.test(path)) return 'team';
+  if (/^\/players\/[^/]+$/.test(path)) return 'player';
   if (/^\/matches\/[^/]+\/stats$/.test(path)) return 'match_stats';
   if (/^\/matches\/[^/]+\/events$/.test(path)) return 'match_events';
   if (/^\/matches\/[^/]+\/games\/[^/]+\/stats$/.test(path)) return 'game_stats';

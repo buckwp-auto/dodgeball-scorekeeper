@@ -22,9 +22,11 @@ import {
 } from '@mui/material';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { EntityAvatar } from '../components/EntityAvatar';
 import { ResumeScoringCta } from '../components/ResumeScoringButton';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader } from '../components/Ui';
+import { imageSrc } from '../domain/imageRef';
 import { getMatches } from '../domain/database';
 import { MAX_LEAGUE_NAME } from '../domain/limits';
 import { useAuth } from '../state/AuthContext';
@@ -182,9 +184,27 @@ export function OverviewPage() {
     }
   };
 
+  const bannerSrc = imageSrc(activeLeague?.banner);
+
   return (
     <>
       <PageHeader>Overview</PageHeader>
+      {bannerSrc ? (
+        <Box
+          component="img"
+          src={bannerSrc}
+          alt=""
+          referrerPolicy="no-referrer"
+          sx={{
+            display: 'block',
+            width: '100%',
+            maxHeight: 120,
+            objectFit: 'cover',
+            borderRadius: 1,
+            mb: 2,
+          }}
+        />
+      ) : null}
 
       <Stack spacing={3}>
         <ResumeScoringCta />
@@ -316,7 +336,20 @@ export function OverviewPage() {
                     const canOpen = status === 'active';
                     return (
                       <TableRow key={league.id} selected={isActive}>
-                        <TableCell>{league.name}</TableCell>
+                        <TableCell>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ alignItems: 'center' }}
+                          >
+                            <EntityAvatar
+                              name={league.name}
+                              image={league.logo}
+                              size={28}
+                            />
+                            <span>{league.name}</span>
+                          </Stack>
+                        </TableCell>
                         <TableCell>{league.adminDisplayName || league.adminEmail}</TableCell>
                         <TableCell>
                           {status ?? (storedLeagueId === league.id ? '—' : 'none')}

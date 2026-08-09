@@ -1,11 +1,14 @@
 import { Box, Button, Checkbox, Chip, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
+import type { ImageRef } from '../domain/imageRef';
 import { HotkeyBadge } from './HotkeyBadge';
+import { EntityAvatar } from './EntityAvatar';
 import { TextButton } from './Ui';
 import { MAX_PLAYER_NAME } from '../domain/limits';
 
 export function PlayerRoster({
   side,
   teamName,
+  teamImage,
   players,
   onToggle,
   hotkeyForPlayerId,
@@ -15,7 +18,12 @@ export function PlayerRoster({
 }: {
   side: 'Home Team' | 'Away Team';
   teamName: string;
-  players: { player: { Id: string; Name: string }; selected: boolean; substitute?: boolean }[];
+  teamImage?: ImageRef | null;
+  players: {
+    player: { Id: string; Name: string; Image?: ImageRef | null };
+    selected: boolean;
+    substitute?: boolean;
+  }[];
   onToggle: (playerId: string) => void;
   hotkeyForPlayerId?: (playerId: string) => string | null;
   eliminatedPlayerIds?: ReadonlySet<string>;
@@ -35,9 +43,17 @@ export function PlayerRoster({
           {side}
         </Typography>
       </Box>
-      <Typography className="sk-banner" variant="subtitle1" color="primary" gutterBottom>
-        {teamName}
-      </Typography>
+      <Stack
+        direction="row"
+        spacing={1}
+        className="sk-banner"
+        sx={{ alignItems: 'center', mb: 1 }}
+      >
+        <EntityAvatar name={teamName} image={teamImage} size={28} />
+        <Typography variant="subtitle1" color="primary">
+          {teamName}
+        </Typography>
+      </Stack>
       {players.map(({ player, selected, substitute }) => {
         const eliminated = eliminatedPlayerIds?.has(player.Id) ?? false;
         return (
@@ -54,6 +70,7 @@ export function PlayerRoster({
           >
             <Typography aria-hidden>{selected ? '■' : '□'}</Typography>
             <HotkeyBadge hotkey={hotkeyForPlayerId?.(player.Id) ?? null} />
+            <EntityAvatar name={player.Name} image={player.Image} size={24} />
             <Box sx={{ flex: 1 }}>
               <TextButton expand onClick={() => onToggle(player.Id)}>
                 {eliminated ? `${player.Name} (out)` : player.Name}

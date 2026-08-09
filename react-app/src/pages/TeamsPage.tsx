@@ -1,6 +1,7 @@
 import { Button, Stack, TextField } from '@mui/material';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { EntityAvatar } from '../components/EntityAvatar';
 import { FormOneLine, PageHeader, TextButton } from '../components/Ui';
 import {
   getTeams,
@@ -106,6 +107,7 @@ export function TeamsPage() {
                     spacing={1}
                     sx={{ alignItems: 'center', flexWrap: 'wrap' }}
                   >
+                    <EntityAvatar name={team.Name} image={team.Image} size={28} />
                     <TextButton onClick={() => navigate(`/teams/${team.Id}`)}>
                       {team.Name}
                     </TextButton>

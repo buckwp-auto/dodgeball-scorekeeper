@@ -13,7 +13,9 @@ import {
   Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import { ImageUrlField } from '../components/ImageUrlField';
 import { PageHeader } from '../components/Ui';
+import { imageRefFromExternalUrl } from '../domain/imageRef';
 import { resolveLeagueStatPolicy, setLeagueSettings } from '../domain/leagueSettings';
 import {
   matchingStatCreditPreset,
@@ -51,12 +53,21 @@ function presetFromSelect(value: string): StatCreditPresetId | 'custom' {
 
 export function SettingsPage() {
   const { data, mutate } = useDatabase();
-  const { activeLeagueId, canDeleteMatchesAndGames } = useLeague();
+  const {
+    activeLeagueId,
+    canDeleteMatchesAndGames,
+    canOverrideActiveLeague,
+    leagues,
+    updateLeagueImages,
+  } = useLeague();
   const canEdit = canDeleteMatchesAndGames;
+  const activeLeague = leagues.find((league) => league.id === activeLeagueId);
+  const canEditImages = Boolean(activeLeagueId && canOverrideActiveLeague);
   const saved = useMemo(() => resolveLeagueStatPolicy(data), [data]);
   const savedKey = JSON.stringify(saved);
   const [draft, setDraft] = useState<StatCreditPolicy>(saved);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(JSON.parse(savedKey) as StatCreditPolicy);
@@ -85,6 +96,19 @@ export function SettingsPage() {
     setSavedMessage('Saved. Stats recalculate from existing games immediately.');
   };
 
+  const saveLeagueImage = async (field: 'logo' | 'banner', url: string | null) => {
+    try {
+      setImageError(null);
+      const ref = url ? imageRefFromExternalUrl(url) : null;
+      await updateLeagueImages({ [field]: ref });
+      setSavedMessage(
+        field === 'logo' ? 'League logo updated.' : 'League banner updated.',
+      );
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Image update failed');
+    }
+  };
+
   return (
     <>
       <PageHeader>Settings</PageHeader>
@@ -103,6 +127,34 @@ export function SettingsPage() {
         <Alert severity="success" sx={{ mb: 2 }}>
           {savedMessage}
         </Alert>
+      ) : null}
+      {imageError ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {imageError}
+        </Alert>
+      ) : null}
+
+      {canEditImages && activeLeague ? (
+        <Stack spacing={2} sx={{ mb: 3, maxWidth: 720 }}>
+          <Typography variant="h6">League images</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Paste https URLs for the league logo (directory) and optional banner (Overview).
+            File upload comes later with Cloud Storage.
+          </Typography>
+          <ImageUrlField
+            label="Logo URL"
+            name={activeLeague.name}
+            image={activeLeague.logo}
+            onSave={(url) => void saveLeagueImage('logo', url)}
+          />
+          <ImageUrlField
+            label="Banner URL"
+            name={activeLeague.name}
+            image={activeLeague.banner}
+            size={56}
+            onSave={(url) => void saveLeagueImage('banner', url)}
+          />
+        </Stack>
       ) : null}
 
       <Stack spacing={3} sx={{ maxWidth: 720 }} className="sk-settings">

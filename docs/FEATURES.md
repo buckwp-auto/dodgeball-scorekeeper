@@ -6,21 +6,22 @@
 - Last opened cloud league id in **localStorage** (`SCOREKEEPER_ACTIVE_LEAGUE`): auto-opens on sign-in when membership is still active; cleared on **Leave league**; kept across sign-out for the next session
 - Last scoring target in **localStorage** (`SCOREKEEPER_LAST_SCORING`): **Resume game** / **Resume match** in the drawer and on Overview — jumps to the in-progress game, or to Track Match after a finish is recorded; hidden if the match/game is gone
 - Optional **Firebase** shared leagues (Google sign-in): directory on Overview, join requests, admin approve, per-match cloud docs, 30s idle / game-complete flush — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md)
+- Optional **https image URLs** (`ImageRef`: display URL now, storage path later): team logos and player photos in the `.scrkpr` roster; cloud league **logo / banner** on `LeagueMeta` (admin paste-only; no Cloud Storage yet)
 
 ## App shell
 
-- **Overview** — Google sign-in / league directory (when Firebase configured), **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)**, sync status chip; admin-only confirm to replace an open cloud league from import
-- **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match)
+- **Overview** — Google sign-in / league directory (when Firebase configured) with league logos and an optional slim banner when a league is open, **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)** (six teams with photos, Minnesota Dodgeball VODs, and starred catches/deflections/double-kills), sync status chip; admin-only confirm to replace an open cloud league from import
+- **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match); paste https logo / photo URLs (thumbnails + initials fallback); player name opens **Player** (`/players/:id`) with a large photo, league stats row, ranks (kills / catches / hit%), starred highlights they appear in, and links to games played
 - **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
 - **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills first 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster heading shows **Game N**; **match score** (home–away game wins) on match roster, Track Match, game roster, Track Game, and Game Complete; game roster has **Previous / Next game** (Next creates a game if needed); after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game
-- **Settings** — league stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only
+- **Settings** — league stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
 ## Roster & match setup
 
-- **Match & game roster selection** with home/away columns; game roster heading is **Game N**; optional tall YouTube VOD on both roster screens
+- **Match & game roster selection** with home/away columns; game roster heading is **Game N**; team logos on banners and player photos on rows; optional tall YouTube VOD on both roster screens
 - **Add players on the match screen** (creates a team player and includes them on the match); mark **Sub** officially instead of a “(sub)” name suffix
 - **Auto-select first 6 players** per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
 - **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint; subs sort below starters
@@ -101,8 +102,8 @@ Same permanent map is used on Match / Game roster screens and Track Game throw/e
 
 ## Statistics & interop
 
-- In-app **Stats** pages: league (`/stats`), match (`/matches/:id/stats`), game (`/matches/:id/games/:id/stats`)
-- Entry points: drawer **Stats**, Overview **League stats**, Matches/Match **See stats**, Track Match per-game **See stats**
+- In-app **Stats** pages: league (`/stats`), match (`/matches/:id/stats`), game (`/matches/:id/games/:id/stats`); player names link to the player page
+- Entry points: drawer **Stats**, Overview **League stats**, Matches/Match **See stats**, Track Match per-game **See stats**, Team roster player names
 - Sortable **player table** with leaderboard toggles (Kills, Catches, K/D, Hit%, Games won) and min-games filter
 - **Counts vs Credit** toggle (session): integer involvement vs league-weighted kill/death credit
 - Optional columns when the league policy enables them: assists, double/triple/quad kills, multi-catches, deflection catches

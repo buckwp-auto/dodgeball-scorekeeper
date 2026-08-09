@@ -9,6 +9,10 @@ import {
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import {
+  parseImageRef,
+  type ImageRef,
+} from '../domain/imageRef';
+import {
   MAX_DISPLAY_NAME,
   MAX_EMAIL,
   MAX_LEAGUE_NAME,
@@ -76,6 +80,8 @@ export async function listLeagues(db: Firestore): Promise<LeagueMeta[]> {
         adminUid: String(data.adminUid ?? ''),
         adminDisplayName: String(data.adminDisplayName ?? ''),
         adminEmail: String(data.adminEmail ?? ''),
+        logo: parseImageRef(data.logo),
+        banner: parseImageRef(data.banner),
       } satisfies LeagueMeta;
     })
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -197,6 +203,23 @@ export async function requestJoinLeague(
     requestedAt: now,
     joinedAt: null,
   });
+  await batch.commit();
+}
+
+export async function updateLeagueImages(
+  db: Firestore,
+  user: User,
+  leagueId: string,
+  images: { logo?: ImageRef | null; banner?: ImageRef | null },
+): Promise<void> {
+  const patch: Record<string, ImageRef | null> = {};
+  if ('logo' in images) patch.logo = images.logo ?? null;
+  if ('banner' in images) patch.banner = images.banner ?? null;
+  if (Object.keys(patch).length === 0) return;
+
+  const batch = writeBatch(db);
+  await appendRateLimitToBatch(db, batch, user.uid);
+  batch.update(doc(db, 'leagues', leagueId), patch);
   await batch.commit();
 }
 

@@ -142,6 +142,34 @@ export function buildDisplayStats(
   return summary.map((row) => toDisplayPlayer(row, extras, sideByPlayer));
 }
 
+export type LeaderboardRank = {
+  rank: number;
+  total: number;
+  value: number | null;
+};
+
+/** Competition rank (ties share the best place) among rows with a non-null metric. */
+export function leaderboardRank(
+  rows: DisplayPlayerStats[],
+  playerId: Guid,
+  metric: LeaderboardMetric,
+  counting: StatsCountingMode = 'counts',
+): LeaderboardRank | null {
+  const eligible = rows.filter((row) => metricValue(row, metric, counting) != null);
+  const sorted = [...eligible].sort((a, b) =>
+    compareMetric(a, b, metric, 'desc', counting),
+  );
+  const index = sorted.findIndex((row) => row.playerId === playerId);
+  if (index < 0) return null;
+  const value = metricValue(sorted[index], metric, counting);
+  let rank = index + 1;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (metricValue(sorted[i], metric, counting) === value) rank = i + 1;
+    else break;
+  }
+  return { rank, total: eligible.length, value };
+}
+
 export function filterAndSortDisplayStats(
   rows: DisplayPlayerStats[],
   options: {

@@ -4,7 +4,11 @@ import {
   persistThrowGameEvent,
   setGameEventHighlight,
 } from './gameEvents';
-import { getLeagueHighlightGroups, highlightEventHref } from './highlights';
+import {
+  getLeagueHighlightGroups,
+  getPlayerHighlightGroups,
+  highlightEventHref,
+} from './highlights';
 import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import { ThrowResult } from './statistics/constants';
 
@@ -80,7 +84,7 @@ function seedTwoMatchLeague() {
     ],
     { videoOffsetSeconds: 12 },
   );
-  persistThrowGameEvent(
+  const throwB1 = persistThrowGameEvent(
     data,
     gameB1,
     matchB.Id,
@@ -96,7 +100,20 @@ function seedTwoMatchLeague() {
     { videoOffsetSeconds: 8 },
   );
 
-  return { data, matchA, matchB, gameA1, gameA2, gameB1, throwA1, throwA2 };
+  return {
+    data,
+    matchA,
+    matchB,
+    gameA1,
+    gameA2,
+    gameB1,
+    throwA1,
+    throwA2,
+    throwB1,
+    alex,
+    casey,
+    drew,
+  };
 }
 
 describe('league highlights', () => {
@@ -123,6 +140,21 @@ describe('league highlights', () => {
     expect(getLeagueHighlightGroups(data)).toHaveLength(1);
     setGameEventHighlight(data, throwA1, false);
     expect(getLeagueHighlightGroups(data)).toEqual([]);
+  });
+
+  it('filters highlights to events that mention a player', () => {
+    const { data, throwA1, throwB1, alex, casey, drew } = seedTwoMatchLeague();
+    setGameEventHighlight(data, throwA1, true);
+    setGameEventHighlight(data, throwB1, true);
+
+    const eventIds = (playerId: string) =>
+      getPlayerHighlightGroups(data, playerId).flatMap((match) =>
+        match.games.flatMap((game) => game.highlights.map((row) => row.eventId)),
+      );
+
+    expect(eventIds(alex.Id)).toEqual(expect.arrayContaining([throwA1, throwB1]));
+    expect(eventIds(casey.Id)).toEqual([throwA1]);
+    expect(eventIds(drew.Id)).toEqual([throwB1]);
   });
 
   it('builds a deep link to the game timeline event', () => {

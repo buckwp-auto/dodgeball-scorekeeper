@@ -1,6 +1,8 @@
 import { Button, Stack, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { EntityAvatar } from '../components/EntityAvatar';
+import { ImageUrlField } from '../components/ImageUrlField';
 import { FormOneLine, PageHeader, TextButton } from '../components/Ui';
 import {
   getPlayersForTeam,
@@ -21,6 +23,8 @@ export function TeamPage() {
     deletePlayer,
     renameTeam,
     deleteTeam,
+    setTeamImage,
+    setPlayerImage,
   } = useDatabase();
   const [playerName, setPlayerName] = useState('');
   const [editingTeam, setEditingTeam] = useState(false);
@@ -119,6 +123,7 @@ export function TeamPage() {
           spacing={1}
           sx={{ alignItems: 'center', mb: 2, flexWrap: 'wrap' }}
         >
+          <EntityAvatar name={team.Name} image={team.Image} size={40} />
           <Typography variant="h6">{team.Name}</Typography>
           <Button
             size="small"
@@ -135,6 +140,22 @@ export function TeamPage() {
           </Button>
         </Stack>
       )}
+      <Stack sx={{ mb: 2, maxWidth: 720 }}>
+        <ImageUrlField
+          label="Team logo URL"
+          name={team.Name}
+          image={team.Image}
+          showAvatar={false}
+          onSave={(url) => {
+            try {
+              setTeamImage(teamId, url);
+              setError(null);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Image update failed');
+            }
+          }}
+        />
+      </Stack>
 
       <FormOneLine
         label="Player Name"
@@ -190,29 +211,51 @@ export function TeamPage() {
                     </Button>
                   </Stack>
                 ) : (
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-                  >
-                    <TextButton>{player.Name}</TextButton>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setEditingPlayerId(player.Id);
-                        setPlayerEditName(player.Name);
-                        setError(null);
+                  <Stack spacing={1}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                    >
+                      <EntityAvatar name={player.Name} image={player.Image} size={28} />
+                      <TextButton onClick={() => navigate(`/players/${player.Id}`)}>
+                        {player.Name}
+                      </TextButton>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setEditingPlayerId(player.Id);
+                          setPlayerEditName(player.Name);
+                          setError(null);
+                        }}
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => onDeletePlayer(player.Id, player.Name)}
+                      >
+                        Delete
+                      </Button>
+                    </Stack>
+                    <ImageUrlField
+                      label="Player photo URL"
+                      name={player.Name}
+                      image={player.Image}
+                      size={28}
+                      showAvatar={false}
+                      onSave={(url) => {
+                        try {
+                          setPlayerImage(player.Id, url);
+                          setError(null);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : 'Image update failed',
+                          );
+                        }
                       }}
-                    >
-                      Rename
-                    </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={() => onDeletePlayer(player.Id, player.Name)}
-                    >
-                      Delete
-                    </Button>
+                    />
                   </Stack>
                 )}
               </td>

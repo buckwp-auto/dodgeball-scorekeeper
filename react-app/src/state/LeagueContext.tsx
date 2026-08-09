@@ -22,6 +22,7 @@ import type {
   LeagueMeta,
   SyncStatus,
 } from '../cloud/leagueTypes';
+import type { ImageRef } from '../domain/imageRef';
 import {
   CLOUD_FLUSH_IDLE_MS,
   CLOUD_POLL_MS,
@@ -52,6 +53,10 @@ type LeagueContextValue = {
   requestJoin: (leagueId: string) => Promise<void>;
   approveMember: (leagueId: string, uid: string) => Promise<void>;
   rejectMember: (leagueId: string, uid: string) => Promise<void>;
+  updateLeagueImages: (images: {
+    logo?: ImageRef | null;
+    banner?: ImageRef | null;
+  }) => Promise<void>;
   openLeague: (leagueId: string) => Promise<DatabaseDto>;
   leaveLeague: () => Promise<void>;
   /** Called by DatabaseProvider after local mutations. */
@@ -265,6 +270,18 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       await refreshDirectory();
     },
     [user, refreshDirectory],
+  );
+
+  const updateLeagueImages = useCallback(
+    async (images: { logo?: ImageRef | null; banner?: ImageRef | null }) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      const leagueId = activeLeagueId;
+      if (!leagueId) throw new Error('Open a cloud league first');
+      await cloud.api.updateLeagueImages(cloud.db, user, leagueId, images);
+      await refreshDirectory();
+    },
+    [user, activeLeagueId, refreshDirectory],
   );
 
   const flushNow = useCallback(
@@ -558,6 +575,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       requestJoin,
       approveMember,
       rejectMember,
+      updateLeagueImages,
       openLeague,
       leaveLeague,
       notifyLocalChange,
@@ -583,6 +601,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       requestJoin,
       approveMember,
       rejectMember,
+      updateLeagueImages,
       openLeague,
       leaveLeague,
       notifyLocalChange,

@@ -6,6 +6,9 @@ export const MAX_PLAYER_NAME = 80;
 export const MAX_DISPLAY_NAME = 80;
 export const MAX_NOTES = 500;
 export const MAX_EMAIL = 254;
+export const MAX_IMAGE_URL = 2048;
+export const MAX_STORAGE_PATH = 512;
+export const MAX_IMAGE_CONTENT_TYPE = 100;
 
 export const WRITES_PER_HOUR = 100;
 export const CLOUD_FLUSH_IDLE_MS = 30_000;
