@@ -1,4 +1,4 @@
-import { getMatchName, getMatches } from './database';
+import { getMatchName, getMatches, getPlayersForTeam, getTeams } from './database';
 import {
   getMatchGames,
   isPlayerInGame,
@@ -8,6 +8,31 @@ import type { DatabaseDto, Guid } from './types';
 
 export function playerHref(playerId: Guid): string {
   return `/players/${playerId}`;
+}
+
+export type PlayerDirectoryRow = {
+  playerId: Guid;
+  playerName: string;
+  teamName: string;
+};
+
+export function listPlayersForDirectory(data: DatabaseDto): PlayerDirectoryRow[] {
+  const rows: PlayerDirectoryRow[] = [];
+  for (const team of getTeams(data)) {
+    for (const player of getPlayersForTeam(data, team.Id)) {
+      rows.push({
+        playerId: player.Id,
+        playerName: player.Name,
+        teamName: team.Name,
+      });
+    }
+  }
+  return rows.sort(
+    (a, b) =>
+      a.playerName.localeCompare(b.playerName) ||
+      a.teamName.localeCompare(b.teamName) ||
+      a.playerId.localeCompare(b.playerId),
+  );
 }
 
 export type PlayerGameAppearance = {

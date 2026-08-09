@@ -26,6 +26,11 @@ test.describe('In-app stats', () => {
     await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('15 games');
     await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('2 matches');
     await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('20 throws');
+    await expect(page.locator('.sk-stats-leaderboard-podium')).toBeVisible();
+    await expect(page.locator('.sk-stats-leaderboard-table')).toBeVisible();
+    await expect(page.locator('.sk-stats-leaderboard-table tbody tr')).toHaveCount(5);
+    await page.getByRole('button', { name: 'Catch %' }).click();
+    await expect(page.locator('.sk-stats-leaderboard-table')).toContainText('Catch %');
 
     await navigateMenu(page, 'League Stat Settings');
     await expect(page.getByRole('heading', { name: 'League Stat Settings' })).toBeVisible();
@@ -33,19 +38,26 @@ test.describe('In-app stats', () => {
     await expect(page.getByLabel('Min matches')).toHaveValue('2');
     await expect(page.getByLabel('Min throws')).toHaveValue('20');
     await expect(page.getByLabel('Min targets')).toHaveValue('20');
-    await page.getByRole('switch', { name: 'Require minimum games' }).click();
-    await page.getByRole('switch', { name: 'Require minimum matches' }).click();
-    await page.getByRole('switch', { name: 'Require minimum throws and targets' }).click();
-    await page.getByRole('button', { name: 'Save league stat settings' }).click();
-    await expect(page.getByText('Saved. Stats recalculate from existing games immediately.')).toBeVisible();
+  });
 
+  test('stats dropdowns navigate to match, game, and player pages', async ({
+    page,
+  }) => {
+    await loadSampleLeague(page);
     await navigateMenu(page, 'Stats');
-    await page.getByRole('tab', { name: 'Leaderboards' }).click();
-    await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('none');
-    await expect(page.locator('.sk-stats-leaderboard-podium')).toBeVisible();
-    await expect(page.locator('.sk-stats-leaderboard-table')).toBeVisible();
-    await page.getByRole('button', { name: 'Catch %' }).click();
-    await expect(page.locator('.sk-stats-leaderboard-table')).toContainText('Catch %');
+    await expect(page.locator('.sk-stats-scope')).toBeVisible();
+
+    await page.getByLabel('Match').click();
+    await page.getByRole('option', { name: / vs\. / }).first().click();
+    await expect(page.getByRole('heading', { name: /Match stats/ })).toBeVisible();
+
+    await page.getByLabel('Game').click();
+    await page.getByRole('option', { name: 'Game 1', exact: true }).click();
+    await expect(page.getByRole('heading', { name: /Game 1 stats/ })).toBeVisible();
+
+    await page.getByLabel('Player').click();
+    await page.getByRole('option', { name: /Frodo Baggins/ }).click();
+    await expect(page.getByRole('heading', { name: 'Frodo Baggins', level: 1 })).toBeVisible();
   });
 
   test('opens match stats from the matches list', async ({ page }) => {

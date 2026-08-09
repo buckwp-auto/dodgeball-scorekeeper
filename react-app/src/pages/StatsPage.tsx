@@ -6,6 +6,7 @@ import { StatsCharts } from '../components/stats/StatsCharts';
 import { StatsHeatmap } from '../components/stats/StatsHeatmap';
 import { StatsLeaderboard } from '../components/stats/StatsLeaderboard';
 import { StatsPlayerTable } from '../components/stats/StatsPlayerTable';
+import { StatsScopeNav } from '../components/stats/StatsScopeNav';
 import { StatsStandingsTable } from '../components/stats/StatsStandingsTable';
 import { PageHeader } from '../components/Ui';
 import { getMatchName } from '../domain/database';
@@ -136,12 +137,18 @@ export function StatsPage() {
   };
 
   if (!valid) {
-    return <PageHeader>Stats</PageHeader>;
+    return (
+      <>
+        <PageHeader>Stats</PageHeader>
+        <StatsScopeNav data={data} scope={{ kind: 'league' }} />
+      </>
+    );
   }
 
   return (
     <>
       <PageHeader>{title}</PageHeader>
+      {scope ? <StatsScopeNav data={data} scope={scope} /> : null}
       {canDownloadCsv ? (
         <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2 }}>
           <Button

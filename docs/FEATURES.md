@@ -10,11 +10,11 @@
 
 ## App shell
 
-- **Overview** — Google sign-in / league directory (when Firebase configured) with league logos and an optional slim banner when a league is open, **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)** (six teams with photos, Minnesota Dodgeball VODs, and starred catches/deflections/double-kills), sync status chip; admin-only confirm to replace an open cloud league from import
+- **Overview** — Google sign-in / league directory (when Firebase configured) with league logos and an optional slim banner when a league is open, **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)** (six teams with photos, Minnesota Dodgeball VODs, starred catches/deflections/double-kills, and 12 games per match so highlight minimums are met), sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match); paste https logo / photo URLs (thumbnails + initials fallback); player name opens **Player** (`/players/:id`) with a large photo, league stats row (including Caught% / Catch% / Elu% / Eff% / Net / VOR / WAR), ranks (kills / catches / hit%), starred highlights they appear in, and links to games played
 - **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
 - **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills first 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster heading shows **Game N**; **match score** (home–away game wins) on match roster, Track Match, game roster, Track Game, and Game Complete; game roster has **Previous / Next game** (Next creates a game if needed); after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
-- **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game
+- **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game; Match / Game / Player dropdowns jump between those views and player pages
 - **League Stat Settings** — highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on) plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
@@ -103,6 +103,7 @@ Same permanent map is used on Match / Game roster screens and Track Game throw/e
 ## Statistics & interop
 
 - In-app **Stats** pages: league (`/stats`), match (`/matches/:id/stats`), game (`/matches/:id/games/:id/stats`); player names link to the player page
+- Stats page **Match / Game / Player** dropdowns jump to league totals, a match, a game, or a player page
 - Entry points: drawer **Stats**, Overview **League stats**, Matches/Match **See stats**, Track Match per-game **See stats**, Team roster player names
 - Sortable **player table** with leaderboard toggles (Kills, Catches, K/D, Hit%, Games won) and min-games filter; also **Caught%**, **Catch%**, **Elu%**, **Eff%**, **Net**, **VOR**, and **WAR**
 - League stats **Leaderboards** tab: top 5 graphic per highlight stat (1st avatar center, 2nd left, 3rd right) — Caught%, Catch%, Elusiveness%, Efficiency%, Net score, VOR, WAR; uses **League Stat Settings** minimums (default 15 games, 2 matches, 20 throws & targets)

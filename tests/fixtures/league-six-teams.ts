@@ -108,7 +108,8 @@ export const LEAGUE_MATCH_PAIRINGS: readonly (readonly [number, number])[] = [
 ];
 
 export const PLAYERS_PER_TEAM = 8;
-export const GAMES_PER_MATCH = 4;
+/** 12 games × 4 matches → 24 GP per player with the 4-on-4 rotation (clears the 15-game highlight minimum). */
+export const GAMES_PER_MATCH = 12;
 /** Active lineup size per side; rotates across games within a match. */
 export const PLAYERS_PER_GAME_SIDE = 4;
 
@@ -495,7 +496,7 @@ function writeGameEventHistory(
 }
 
 /**
- * Six-team league: 8 players per team, 12 matches (four per team), four completed games
+ * Six-team league: 8 players per team, 12 matches (four per team), 12 completed games
  * per match with rotating lineups drawn from each team's match roster.
  */
 export function buildLeagueSixTeamsDatabase(): DatabaseDto {
