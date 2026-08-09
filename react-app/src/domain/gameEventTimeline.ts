@@ -26,6 +26,7 @@ import {
   toneForThrowResult,
   type TimelineRowTone,
 } from './timelineColors';
+import { formatVideoTime } from './youtube';
 
 export type TimelinePlayerRef = {
   gamePlayerId: Guid;
@@ -217,6 +218,16 @@ export function buildTimelineEntry(
       },
     ],
   };
+}
+
+/** Time chip for a timeline row; throw rows in a team throw share the event stamp. */
+export function timelineRowVideoTimeLabel(
+  entry: TimelineEntry,
+  rowIndex: number,
+): string | undefined {
+  const row = entry.rows[rowIndex];
+  if (!row || row.role === 'deflection') return undefined;
+  return formatVideoTime(entry.videoOffsetSeconds ?? null) || undefined;
 }
 
 export function buildTimelineEntries(

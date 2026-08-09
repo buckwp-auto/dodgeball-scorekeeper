@@ -512,13 +512,20 @@ export function GameEventsPage() {
     autoCommittingRef.current = true;
     try {
       const videoOffsetSeconds = readVideoOffset();
+      const existingOffset = effectiveSelectedId
+        ? timeline.find((row) => row.id === effectiveSelectedId)?.videoOffsetSeconds
+        : undefined;
+      const stampFromPlayer =
+        !effectiveSelectedId ||
+        (visibleTab === 'throw' &&
+          (existingOffset === null || existingOffset === undefined));
       const eventId = mutate(
         (draft) => {
           const options = {
             gameEventId: effectiveSelectedId ?? undefined,
             insertBeforeEventId,
-            // Stamp player time only on create — edits keep existing timestamps
-            ...(effectiveSelectedId ? {} : { videoOffsetSeconds }),
+            // Stamp on create, or when adding to an unstamped team throw
+            ...(stampFromPlayer ? { videoOffsetSeconds } : {}),
           };
           if (visibleTab === 'throw') {
             return persistThrowGameEvent(draft, gameId, matchId, throwDrafts, options);
@@ -570,6 +577,7 @@ export function GameEventsPage() {
     matchId,
     currentDraftPayload,
     readVideoOffset,
+    timeline,
   ]);
 
   const gameCompleteIdle =

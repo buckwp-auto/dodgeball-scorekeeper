@@ -7,6 +7,6 @@
 - [x] Video on match/game screen to see who's playing and who's subbing
 - [x] Mark last elimination as Done before auto-advancing to game end
 - [x] Slot timeline items in chronological (video time) order
-- [ ] Team throws auto-timestamped
+- [x] Team throws auto-timestamped
 - [ ] Deflect hotkeys still show and get focus once opened
 - [ ] I hotkey shows serif / differentiated from L

@@ -3,14 +3,14 @@ import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import { useMemo, type ReactNode } from 'react';
-import type {
-  TimelineAction,
-  TimelineEntry,
-  TimelinePlayerRef,
-  TimelineRow,
-  TimelineSegment,
+import {
+  timelineRowVideoTimeLabel,
+  type TimelineAction,
+  type TimelineEntry,
+  type TimelinePlayerRef,
+  type TimelineRow,
+  type TimelineSegment,
 } from '../../domain/gameEventTimeline';
-import { formatVideoTime } from '../../domain/youtube';
 import { rowBackgroundForTone } from '../../domain/timelineColors';
 import { getTimelineActionIcon } from '../../domain/throwResultIcons';
 import { PlayerPill } from './PlayerPill';
@@ -353,10 +353,7 @@ export function GameEventsTimeline({
         }
         const row = item.entry.rows[item.rowIndex];
         const selected = selectedEventId === item.entry.id;
-        const videoTimeLabel =
-          item.rowIndex === 0
-            ? formatVideoTime(item.entry.videoOffsetSeconds ?? null) || undefined
-            : undefined;
+        const videoTimeLabel = timelineRowVideoTimeLabel(item.entry, item.rowIndex);
         return (
           <TimelineEventRow
             key={`${item.entry.id}-row-${item.rowIndex}`}

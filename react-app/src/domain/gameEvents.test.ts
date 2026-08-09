@@ -8,7 +8,7 @@ import {
   ThrowResult,
 } from './statistics/constants';
 import { getStatisticsSummaryCsvText } from './statistics/statisticsFormatService';
-import { buildTimelineEntries } from './gameEventTimeline';
+import { buildTimelineEntries, timelineRowVideoTimeLabel } from './gameEventTimeline';
 import {
   ensureGameStartEvent,
   gameHasFinishEvent,
@@ -256,6 +256,46 @@ describe('game event recording', () => {
     );
     expect(row?.VideoOffsetSeconds).toBe(10);
   });
+
+  it('stamps an unstamped team throw when the second ball is saved with a time', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    const eventId = persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+        {
+          throwerGamePlayerId: homeGp2!.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { gameEventId: eventId, videoOffsetSeconds: 18 },
+    );
+    expect(
+      (data.Tables.GameEvent as { Id: string; VideoOffsetSeconds?: number | null }[]).find(
+        (row) => row.Id === eventId,
+      )?.VideoOffsetSeconds,
+    ).toBe(18);
+  });
 });
 
 describe('buildTimelineEntries', () => {
@@ -325,6 +365,36 @@ describe('buildTimelineEntries', () => {
     const [entry] = buildTimelineEntries(data, gameId, match.Id);
     expect(entry.rows[0].tone).toBe('hit');
     expect(flattenText(entry.rows[0].segments)).toContain('a Failed Block');
+  });
+
+  it('shows the event timestamp on every throw row of a team throw', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+        {
+          throwerGamePlayerId: homeGp2!.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Miss,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 95 },
+    );
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(entry.rows).toHaveLength(2);
+    expect(timelineRowVideoTimeLabel(entry, 0)).toBe('1:35');
+    expect(timelineRowVideoTimeLabel(entry, 1)).toBe('1:35');
   });
 });
 
