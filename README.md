@@ -48,3 +48,11 @@ GITHUB_PAGES=true GITHUB_REPOSITORY=willbuck/dodgeball-score npm run build:gh-pa
 
 - **`npm run test:interop`** — vitest CSV parity vs `tests/fixtures/*.golden.csv`, plus Playwright fixture load/CSV download
 - Golden fixtures were captured from the original WASM scorekeeper; the app remains format-compatible
+
+## Contributing
+
+PRs welcome — including drafts from [Cursor](https://cursor.com/), [Claude Code](https://code.claude.com/docs/en/overview), or [Codex](https://developers.openai.com/codex).
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, agent prompts, fork/branch PR workflow
+- [docs/CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md) — layout, naming, MUI, tests, Firestore limits
+- [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md) — brief for Cursor, Codex, and Claude Code

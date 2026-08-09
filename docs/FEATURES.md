@@ -134,3 +134,4 @@ First-hitter mode uses `Throw.Ordinal` (order in the team throw). List the first
 - UI under `react-app/src/pages/` and `react-app/src/components/` (including `stats/` and `trackGame/`)
 - Unit tests: Vitest; e2e: Playwright in `tests/`
 - Deployable as a static SPA (including GitHub Pages)
+- Contributor style: [CODE_CONVENTIONS.md](./CODE_CONVENTIONS.md); how to send a PR: [CONTRIBUTING.md](../CONTRIBUTING.md)
