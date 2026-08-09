@@ -34,7 +34,11 @@ export function isYoutubeControlHotkey(key: string): boolean {
   return YOUTUBE_CONTROL_HOTKEYS.has(key);
 }
 
-export function useYoutubeControls(youtubeUrl: string) {
+export function useYoutubeControls(
+  youtubeUrl: string,
+  options?: { enableLayoutHotkeys?: boolean },
+) {
+  const enableLayoutHotkeys = options?.enableLayoutHotkeys ?? true;
   const localPlayerRef = useRef<YoutubePlayerHandle | null>(null);
   const [mode, setMode] = useState<YoutubePlayerMode>(() =>
     loadYoutubePlayerMode(),
@@ -145,9 +149,11 @@ export function useYoutubeControls(youtubeUrl: string) {
       }
 
       if (key === YOUTUBE_LAYOUT_SMALL_HOTKEY) {
+        if (!enableLayoutHotkeys) return;
         event.preventDefault();
         setModeAndPersist('docked');
       } else if (key === YOUTUBE_LAYOUT_TALL_HOTKEY) {
+        if (!enableLayoutHotkeys) return;
         event.preventDefault();
         setModeAndPersist('tall');
       } else if (key === YOUTUBE_PLAY_PAUSE_HOTKEY) {
@@ -171,7 +177,7 @@ export function useYoutubeControls(youtubeUrl: string) {
         }
       }
     },
-    [activePlayer, hasYoutube, mode, setModeAndPersist],
+    [activePlayer, enableLayoutHotkeys, hasYoutube, mode, setModeAndPersist],
   );
 
   useDocumentHotkeys(handleHotkey, hasYoutube, { capture: true });

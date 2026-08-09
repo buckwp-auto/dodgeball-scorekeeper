@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { rememberLastGame } from '../domain/lastScoring';
 import { PlayerRoster } from '../components/MatchRoster';
+import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { getTeam } from '../domain/database';
@@ -149,6 +150,7 @@ export function GamePage() {
           Next game
         </Button>
       </Stack>
+      <RosterYoutubePlayer youtubeUrl={match.YoutubeUrl?.trim() || ''} />
       <div className="sk-game">
         <PlayerRoster
           side="Home Team"

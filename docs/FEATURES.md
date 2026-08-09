@@ -20,7 +20,7 @@
 
 ## Roster & match setup
 
-- **Match & game roster selection** with home/away columns
+- **Match & game roster selection** with home/away columns; optional tall YouTube VOD on both roster screens
 - **Add players on the match screen** (creates a team player and includes them on the match); mark **Sub** officially instead of a “(sub)” name suffix
 - **Auto-select first 6 players** per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
 - **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint; subs sort below starters
@@ -61,7 +61,7 @@ Derived from persisted events (not a separate toggle):
 
 ### YouTube match VOD
 
-- Match page: optional **YouTube URL** field
+- Match page: optional **YouTube URL** field; **tall VOD player** on Match and Game roster screens (playback hotkeys, no Track Game action tooltip) so you can see who is playing vs subbing
 - Track Game layouts (session preference):
   - **Tall** (`]`) — large fill-height 16:9 player; compact throw/error editor band below (all controls still visible); keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it

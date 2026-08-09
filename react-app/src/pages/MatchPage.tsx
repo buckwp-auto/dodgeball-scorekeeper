@@ -2,6 +2,7 @@ import { Button, Stack, TextField } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { PlayerRoster } from '../components/MatchRoster';
+import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
@@ -216,13 +217,14 @@ export function MatchPage() {
           error={!youtubeValid}
           helperText={
             youtubeValid
-              ? 'Used on Track Game to play the match VOD and stamp event times.'
+              ? 'Used here and on Track Game to play the match VOD and stamp event times.'
               : 'Enter a valid YouTube watch, share, or embed URL.'
           }
           size="small"
           fullWidth
         />
       </Stack>
+      <RosterYoutubePlayer youtubeUrl={match.YoutubeUrl?.trim() || ''} />
       <div className="sk-match">
         <PlayerRoster
           side="Home Team"

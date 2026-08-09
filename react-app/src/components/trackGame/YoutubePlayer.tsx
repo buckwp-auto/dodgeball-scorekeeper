@@ -118,6 +118,7 @@ function PlayerChrome({
   onHide,
   onPopOut,
   onDockBack,
+  showTrackGameHints = true,
 }: {
   ready: boolean;
   playing: boolean;
@@ -132,6 +133,7 @@ function PlayerChrome({
   onHide?: () => void;
   onPopOut?: () => void;
   onDockBack?: () => void;
+  showTrackGameHints?: boolean;
 }) {
   return (
     <Stack
@@ -199,7 +201,7 @@ function PlayerChrome({
       ) : null}
       <Box sx={{ flex: 1 }} />
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        {layout === 'tall' || layout === 'popoutWindow' ? (
+        {showTrackGameHints && (layout === 'tall' || layout === 'popoutWindow') ? (
           <TrackGameHotkeysTooltip />
         ) : null}
         {onPopOut ? (
@@ -262,6 +264,8 @@ export const YoutubePlayer = forwardRef<
     onPopOut?: () => void;
     onDockBack?: () => void;
     popoutBlocked?: boolean;
+    showTrackGameHints?: boolean;
+    allowLayoutToggle?: boolean;
   }
 >(function YoutubePlayer(
   {
@@ -273,6 +277,8 @@ export const YoutubePlayer = forwardRef<
     onPopOut,
     onDockBack,
     popoutBlocked = false,
+    showTrackGameHints = true,
+    allowLayoutToggle = true,
   },
   ref,
 ) {
@@ -555,11 +561,14 @@ export const YoutubePlayer = forwardRef<
       onSeekBy={seekBy}
       onStepFrame={stepFrame}
       onSetLayout={
-        isPopoutWindow ? undefined : (next) => onModeChange(next)
+        isPopoutWindow || !allowLayoutToggle
+          ? undefined
+          : (next) => onModeChange(next)
       }
       onHide={isPopoutWindow ? undefined : () => onModeChange('hidden')}
       onPopOut={isPopoutWindow ? undefined : onPopOut}
       onDockBack={onDockBack}
+      showTrackGameHints={showTrackGameHints}
     />
   );
 
