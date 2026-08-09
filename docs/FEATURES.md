@@ -74,7 +74,8 @@ Derived from persisted events (not a separate toggle):
 
 ### Finish after team wipe
 
-- Automatically switches to the **Finish** tab with the surviving team pre-selected
+- Last elimination stays on the **Throw** tab — press **Done** (`X`) before advancing to Finish
+- Finish then opens with the surviving team pre-selected
 - **Enter** (or Done) confirms; wipe prompt does not auto-commit the finish
 - Then lands on **Game Complete** with timeline still visible
 
@@ -90,7 +91,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
 | Undo / redo last event | `-` undo, `+` redo |
-| Confirm wipe finish | `Enter` |
+| Confirm wipe finish | `X` Done after last out, then `Enter` |
 | YouTube layout | `[` small/docked, `]` tall |
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |

@@ -113,6 +113,8 @@ export function GameEventsPage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [insertBeforeEventId, setInsertBeforeEventId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('throw');
+  /** Team wipe detected; stay on Throw until Done opens the finish prompt. */
+  const [wipeAwaitingDone, setWipeAwaitingDone] = useState(false);
   /** Team-wipe finish prompt: winner pre-selected, Enter confirms (no auto-commit). */
   const [pendingWipeFinish, setPendingWipeFinish] = useState(false);
 
@@ -126,7 +128,6 @@ export function GameEventsPage() {
   const [editVideoOffsetSeconds, setEditVideoOffsetSeconds] = useState<number | null>(null);
 
   const autoCommittingRef = useRef(false);
-  const autoFinishPromptedRef = useRef(false);
   const redoStackRef = useRef<GameEventSnapshot[]>([]);
   const appliedFocusRef = useRef<string | null>(null);
 
@@ -289,7 +290,7 @@ export function GameEventsPage() {
     );
     rememberLastMatch(matchId);
     redoStackRef.current = [];
-    autoFinishPromptedRef.current = false;
+    setWipeAwaitingDone(false);
     setPendingWipeFinish(false);
     setSelectedEventId(null);
     setInsertBeforeEventId(null);
@@ -304,22 +305,48 @@ export function GameEventsPage() {
     !effectiveSelectedId &&
     isFinishDraftComplete(finishDraft);
 
+  const openWipeFinishPrompt = useCallback(() => {
+    const resultId = finishResultForLiveWinner(live.winningTeamHome);
+    if (resultId === null) return;
+    const nextDraft: FinishDraft = { resultId };
+    setSelectedEventId(null);
+    setInsertBeforeEventId(null);
+    setActiveTab('finish');
+    setWipeAwaitingDone(false);
+    setPendingWipeFinish(true);
+    setThrowDrafts([emptyThrowDraft()]);
+    setErrorDraft(emptyErrorDraft());
+    setFinishDraft(nextDraft);
+    setSavedSnapshot(JSON.stringify(nextDraft));
+  }, [live.winningTeamHome]);
+
   const handleDone = useCallback(() => {
+    if (wipeAwaitingDone && !gameFinished) {
+      openWipeFinishPrompt();
+      return;
+    }
     if (awaitingFinishConfirm) {
       confirmFinishEvent();
       return;
     }
     resetNewEventMode();
-  }, [awaitingFinishConfirm, confirmFinishEvent, resetNewEventMode]);
+  }, [
+    wipeAwaitingDone,
+    gameFinished,
+    openWipeFinishPrompt,
+    awaitingFinishConfirm,
+    confirmFinishEvent,
+    resetNewEventMode,
+  ]);
 
   // Full UI reset when switching games (route params change without remount)
   useEffect(() => {
-    autoFinishPromptedRef.current = false;
     autoCommittingRef.current = false;
     redoStackRef.current = [];
     setSelectedEventId(null);
     setInsertBeforeEventId(null);
     setActiveTab('throw');
+    setWipeAwaitingDone(false);
     setPendingWipeFinish(false);
     const freshThrows = [emptyThrowDraft()];
     setThrowDrafts(freshThrows);
@@ -330,25 +357,23 @@ export function GameEventsPage() {
 
   useEffect(() => {
     if (!isGameOver || gameFinished) {
-      autoFinishPromptedRef.current = false;
+      setWipeAwaitingDone(false);
       setPendingWipeFinish(false);
       return;
     }
-    if (autoFinishPromptedRef.current) return;
+    if (wipeAwaitingDone || pendingWipeFinish || visibleTab === 'finish') return;
     const resultId = finishResultForLiveWinner(live.winningTeamHome);
     if (resultId === null) return;
-
-    autoFinishPromptedRef.current = true;
-    const nextDraft: FinishDraft = { resultId };
-    setSelectedEventId(null);
-    setInsertBeforeEventId(null);
-    setActiveTab('finish');
-    setPendingWipeFinish(true);
-    setThrowDrafts([emptyThrowDraft()]);
-    setErrorDraft(emptyErrorDraft());
-    setFinishDraft(nextDraft);
-    setSavedSnapshot(JSON.stringify(nextDraft));
-  }, [isGameOver, live.winningTeamHome, gameFinished]);
+    setFinishDraft({ resultId });
+    setWipeAwaitingDone(true);
+  }, [
+    isGameOver,
+    live.winningTeamHome,
+    gameFinished,
+    wipeAwaitingDone,
+    pendingWipeFinish,
+    visibleTab,
+  ]);
 
   const handleRestore = useCallback(() => {
     loadDraftsForSelection(effectiveSelectedId);
@@ -748,6 +773,12 @@ export function GameEventsPage() {
           </>
         )}
 
+        {wipeAwaitingDone && !gameFinished ? (
+          <Typography color="warning.main" sx={{ mb: editorCompact ? 1 : 2 }}>
+            All players on one team are out — press Done to finish.
+          </Typography>
+        ) : null}
+
         {awaitingFinishConfirm ? (
           <Typography color="warning.main" sx={{ mb: editorCompact ? 1 : 2 }}>
             All players on one team are out — confirm the winner with Enter.
@@ -798,6 +829,10 @@ export function GameEventsPage() {
                         size={editorCompact ? 'small' : 'medium'}
                         variant={visibleTab === tab ? 'contained' : 'text'}
                         onClick={() => {
+                          if (tab === 'finish' && isGameOver && !gameFinished) {
+                            openWipeFinishPrompt();
+                            return;
+                          }
                           setPendingWipeFinish(false);
                           setActiveTab(tab);
                         }}
@@ -816,6 +851,12 @@ export function GameEventsPage() {
                   {lockedTab === 'start' ? 'Game start' : lockedTab}
                 </Typography>
               )}
+
+              {wipeAwaitingDone && !lockedTab ? (
+                <Button size="small" onClick={handleDone}>
+                  Done
+                </Button>
+              ) : null}
 
               {lockedTab ? (
                 <>
