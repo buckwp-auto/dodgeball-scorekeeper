@@ -20,6 +20,32 @@ test.describe('In-app stats', () => {
     await expect(page.locator('.sk-stats-standings')).toContainText('The Fellowship');
     await page.getByRole('tab', { name: 'Players' }).click();
     await expect(page.locator('.sk-stats-table')).toContainText('Frodo Baggins');
+    await expect(page.locator('.sk-stats-table')).toContainText('Elu%');
+    await page.getByRole('tab', { name: 'Leaderboards' }).click();
+    await expect(page.locator('.sk-stats-leaderboard')).toBeVisible();
+    await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('15 games');
+    await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('2 matches');
+    await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('20 throws');
+
+    await navigateMenu(page, 'League Stat Settings');
+    await expect(page.getByRole('heading', { name: 'League Stat Settings' })).toBeVisible();
+    await expect(page.getByLabel('Min games')).toHaveValue('15');
+    await expect(page.getByLabel('Min matches')).toHaveValue('2');
+    await expect(page.getByLabel('Min throws')).toHaveValue('20');
+    await expect(page.getByLabel('Min targets')).toHaveValue('20');
+    await page.getByRole('switch', { name: 'Require minimum games' }).click();
+    await page.getByRole('switch', { name: 'Require minimum matches' }).click();
+    await page.getByRole('switch', { name: 'Require minimum throws and targets' }).click();
+    await page.getByRole('button', { name: 'Save league stat settings' }).click();
+    await expect(page.getByText('Saved. Stats recalculate from existing games immediately.')).toBeVisible();
+
+    await navigateMenu(page, 'Stats');
+    await page.getByRole('tab', { name: 'Leaderboards' }).click();
+    await expect(page.locator('.sk-stats-leaderboard-qualifiers')).toContainText('none');
+    await expect(page.locator('.sk-stats-leaderboard-podium')).toBeVisible();
+    await expect(page.locator('.sk-stats-leaderboard-table')).toBeVisible();
+    await page.getByRole('button', { name: 'Catch %' }).click();
+    await expect(page.locator('.sk-stats-leaderboard-table')).toContainText('Catch %');
   });
 
   test('opens match stats from the matches list', async ({ page }) => {

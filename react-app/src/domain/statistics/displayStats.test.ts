@@ -16,12 +16,15 @@ import {
   buildDisplayStats,
   buildSideComparison,
   filterAndSortDisplayStats,
+  efficiencyRate,
   formatCountValue,
   formatPct,
+  formatPct1,
   formatRate,
   formatRecord,
   leaderboardRank,
   metricValue,
+  netScore,
   statsPageTitle,
   type DisplayPlayerStats,
 } from './displayStats';
@@ -180,6 +183,16 @@ describe('buildDisplayStats', () => {
     expect(drew.recoveries).toBe(1);
     expect(alex.deaths).toBe(1);
     expect(casey.catchRate).toBeCloseTo(0.5);
+    expect(alex.throws).toBe(2);
+    expect(alex.catchesThrown).toBe(1);
+    expect(alex.caughtRate).toBeCloseTo(0.5);
+    expect(alex.kills).toBe(1);
+    expect(efficiencyRate(alex)).toBeCloseTo(0.5);
+    expect(casey.targets).toBe(2);
+    expect(casey.targetHits).toBe(1);
+    expect(casey.elusivenessRate).toBeCloseTo(0.5);
+    expect(netScore(alex)).toBe(-2);
+    expect(netScore(casey)).toBe(1);
   });
 
   it('counts a deflection catch on the receiver', () => {
@@ -201,6 +214,10 @@ describe('buildDisplayStats', () => {
     const rows = buildDisplayStats(data, { kind: 'match', matchId: match.Id });
     expect(byName(rows, 'Drew')?.catches).toBe(1);
     expect(byName(rows, 'Casey')?.recoveries).toBe(1);
+    expect(byName(rows, 'Alex')?.catchesThrown).toBe(1);
+    expect(byName(rows, 'Alex')?.caughtRate).toBe(1);
+    expect(byName(rows, 'Drew')?.targets).toBe(1);
+    expect(byName(rows, 'Drew')?.elusivenessRate).toBe(1);
   });
 
   it('restricts game scope to one game', () => {
@@ -319,6 +336,8 @@ describe('buildDisplayStats', () => {
     expect(formatRate(Number.POSITIVE_INFINITY)).toBe('∞');
     expect(formatRate(1.5)).toBe('1.50');
     expect(formatPct(0.67)).toBe('67%');
+    expect(formatPct1(0.846)).toBe('84.6%');
+    expect(formatPct1(null)).toBe('—');
     expect(formatRecord(3, 1, 0)).toBe('3-1');
     expect(formatRecord(2, 2, 1)).toBe('2-2-1');
     expect(formatCountValue(2)).toBe('2');

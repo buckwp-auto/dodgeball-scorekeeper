@@ -19,11 +19,14 @@ import {
   displayedDeaths,
   displayedKd,
   displayedKills,
+  efficiencyRate,
   filterAndSortDisplayStats,
   formatCountValue,
   formatPct,
+  formatPct1,
   formatRate,
   formatRecord,
+  netScore,
   type DisplayPlayerStats,
   type LeaderboardMetric,
   type StatsCountingMode,
@@ -45,7 +48,14 @@ type SortKey =
   | 'quadCatches'
   | 'catchesDeflection'
   | 'recoveries'
-  | 'throws';
+  | 'throws'
+  | 'caughtRate'
+  | 'catchRate'
+  | 'elusivenessRate'
+  | 'efficiencyRate'
+  | 'netScore'
+  | 'vor'
+  | 'war';
 
 const metricSortKey: Record<LeaderboardMetric, SortKey> = {
   kills: 'kills',
@@ -110,6 +120,20 @@ function compareRows(
       return cmp(a.hitRate, b.hitRate);
     case 'throws':
       return cmp(a.throws, b.throws);
+    case 'caughtRate':
+      return cmp(a.caughtRate, b.caughtRate);
+    case 'catchRate':
+      return cmp(a.catchRate, b.catchRate);
+    case 'elusivenessRate':
+      return cmp(a.elusivenessRate, b.elusivenessRate);
+    case 'efficiencyRate':
+      return cmp(efficiencyRate(a, counting), efficiencyRate(b, counting));
+    case 'netScore':
+      return cmp(netScore(a, counting), netScore(b, counting));
+    case 'vor':
+      return cmp(a.vor, b.vor);
+    case 'war':
+      return cmp(a.war, b.war);
   }
 }
 
@@ -154,7 +178,9 @@ export function StatsPlayerTable({
       return;
     }
     setSortKey(key);
-    setSortDirection(key === 'team' || key === 'player' ? 'asc' : 'desc');
+    setSortDirection(
+      key === 'team' || key === 'player' || key === 'caughtRate' ? 'asc' : 'desc',
+    );
   };
 
   const visible = useMemo(() => {
@@ -244,6 +270,13 @@ export function StatsPlayerTable({
                 {header('recoveries', 'Recoveries')}
                 {header('hitRate', 'Hit%')}
                 {header('throws', 'Throws')}
+                {header('caughtRate', 'Caught%')}
+                {header('catchRate', 'Catch%')}
+                {header('elusivenessRate', 'Elu%')}
+                {header('efficiencyRate', 'Eff%')}
+                {header('netScore', 'Net')}
+                {header('vor', 'VOR')}
+                {header('war', 'WAR')}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -290,6 +323,17 @@ export function StatsPlayerTable({
                   <TableCell align="center">{row.recoveries}</TableCell>
                   <TableCell align="center">{formatPct(row.hitRate)}</TableCell>
                   <TableCell align="center">{row.throws}</TableCell>
+                  <TableCell align="center">{formatPct1(row.caughtRate)}</TableCell>
+                  <TableCell align="center">{formatPct1(row.catchRate)}</TableCell>
+                  <TableCell align="center">{formatPct1(row.elusivenessRate)}</TableCell>
+                  <TableCell align="center">
+                    {formatPct1(efficiencyRate(row, counting))}
+                  </TableCell>
+                  <TableCell align="center">
+                    {formatCountValue(netScore(row, counting))}
+                  </TableCell>
+                  <TableCell align="center">{formatRate(row.vor)}</TableCell>
+                  <TableCell align="center">{formatRate(row.war)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

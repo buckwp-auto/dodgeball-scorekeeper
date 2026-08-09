@@ -19,7 +19,7 @@ import {
   highlightEventHref,
 } from '../domain/highlights';
 import { imageSrc } from '../domain/imageRef';
-import { resolveLeagueStatPolicy } from '../domain/leagueSettings';
+import { resolveHighlightQualifiers, resolveLeagueStatPolicy } from '../domain/leagueSettings';
 import { getPlayerGamesPlayed } from '../domain/playerProfile';
 import {
   buildDisplayStats,
@@ -30,6 +30,7 @@ import {
   saveStatsCountingMode,
   type StatsCountingMode,
 } from '../domain/statistics/displayStats';
+import { attachVorWar } from '../domain/statistics/highlightStats';
 import { useDatabase } from '../state/DatabaseContext';
 
 export function PlayerPage() {
@@ -43,7 +44,11 @@ export function PlayerPage() {
   const player = getPlayer(data, playerId);
   const team = player ? getTeamForPlayer(data, player.Id) : undefined;
   const photoSrc = imageSrc(player?.Image);
-  const leagueRows = useMemo(() => buildDisplayStats(data, { kind: 'league' }), [data]);
+  const qualifiers = useMemo(() => resolveHighlightQualifiers(data), [data]);
+  const leagueRows = useMemo(
+    () => attachVorWar(buildDisplayStats(data, { kind: 'league' }), counting, qualifiers),
+    [data, counting, qualifiers],
+  );
   const stats = leagueRows.find((row) => row.playerId === playerId);
   const policy = useMemo(() => resolveLeagueStatPolicy(data), [data]);
   const games = useMemo(

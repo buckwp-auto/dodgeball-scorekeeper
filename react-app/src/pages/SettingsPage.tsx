@@ -10,13 +10,20 @@ import {
   Slider,
   Stack,
   Switch,
+  TextField,
   Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { ImageUrlField } from '../components/ImageUrlField';
 import { PageHeader } from '../components/Ui';
 import { imageRefFromExternalUrl } from '../domain/imageRef';
-import { resolveLeagueStatPolicy, setLeagueSettings } from '../domain/leagueSettings';
+import {
+  normalizeHighlightQualifiers,
+  resolveHighlightQualifiers,
+  resolveLeagueStatPolicy,
+  setLeagueSettings,
+  type HighlightQualifierSettings,
+} from '../domain/leagueSettings';
 import {
   matchingStatCreditPreset,
   normalizeStatCreditPolicy,
@@ -63,23 +70,38 @@ export function SettingsPage() {
   const canEdit = canDeleteMatchesAndGames;
   const activeLeague = leagues.find((league) => league.id === activeLeagueId);
   const canEditImages = Boolean(activeLeagueId && canOverrideActiveLeague);
-  const saved = useMemo(() => resolveLeagueStatPolicy(data), [data]);
-  const savedKey = JSON.stringify(saved);
-  const [draft, setDraft] = useState<StatCreditPolicy>(saved);
+  const savedPolicy = useMemo(() => resolveLeagueStatPolicy(data), [data]);
+  const savedQualifiers = useMemo(() => resolveHighlightQualifiers(data), [data]);
+  const savedKey = JSON.stringify({ policy: savedPolicy, qualifiers: savedQualifiers });
+  const [draft, setDraft] = useState<StatCreditPolicy>(savedPolicy);
+  const [qualifiers, setQualifiers] =
+    useState<HighlightQualifierSettings>(savedQualifiers);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
 
   useEffect(() => {
-    setDraft(JSON.parse(savedKey) as StatCreditPolicy);
+    const parsed = JSON.parse(savedKey) as {
+      policy: StatCreditPolicy;
+      qualifiers: HighlightQualifierSettings;
+    };
+    setDraft(parsed.policy);
+    setQualifiers(parsed.qualifiers);
   }, [savedKey]);
 
   const preset = matchingStatCreditPreset(draft);
   const dirty =
     JSON.stringify(normalizeStatCreditPolicy(draft)) !==
-    JSON.stringify(normalizeStatCreditPolicy(saved));
+      JSON.stringify(normalizeStatCreditPolicy(savedPolicy)) ||
+    JSON.stringify(normalizeHighlightQualifiers(qualifiers)) !==
+      JSON.stringify(normalizeHighlightQualifiers(savedQualifiers));
 
   const update = (patch: Partial<StatCreditPolicy>) => {
     setDraft((current) => normalizeStatCreditPolicy({ ...current, ...patch }));
+    setSavedMessage(null);
+  };
+
+  const updateQualifiers = (patch: Partial<HighlightQualifierSettings>) => {
+    setQualifiers((current) => normalizeHighlightQualifiers({ ...current, ...patch }));
     setSavedMessage(null);
   };
 
@@ -91,8 +113,8 @@ export function SettingsPage() {
 
   const save = () => {
     mutate((draftData) => {
-      setLeagueSettings(draftData, draft);
-    }, 'Updated league stat credit settings.');
+      setLeagueSettings(draftData, draft, qualifiers);
+    }, 'Updated league stat settings.');
     setSavedMessage('Saved. Stats recalculate from existing games immediately.');
   };
 
@@ -111,15 +133,15 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader>Settings</PageHeader>
+      <PageHeader>League Stat Settings</PageHeader>
       <Typography variant="body1" sx={{ mb: 2, maxWidth: 720 }}>
-        Configure how this league awards kill credit for team throws, deflections, multi-kills,
-        and catches. Changing settings does not edit scored events — leaderboards and CSV
-        recalculate from the games already recorded.
+        Configure highlight-leaderboard minimums and how this league awards kill credit for team
+        throws, deflections, multi-kills, and catches. Changing settings does not edit scored
+        events — leaderboards and CSV recalculate from the games already recorded.
       </Typography>
       {activeLeagueId && !canEdit ? (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Only the league admin can change stat credit settings. You can still view the current
+          Only the league admin can change league stat settings. You can still view the current
           policy.
         </Alert>
       ) : null}
@@ -158,6 +180,112 @@ export function SettingsPage() {
       ) : null}
 
       <Stack spacing={3} sx={{ maxWidth: 720 }} className="sk-settings">
+        <Box className="sk-settings-qualifiers">
+          <Typography variant="h6">Leaderboard minimums</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Players must meet every enabled threshold to appear on league highlight leaderboards
+            (Caught%, Catch%, Elusiveness%, Efficiency%, Net, VOR, WAR) and to receive VOR/WAR.
+            Defaults are on: 15 games, 2 matches, 20 throws and 20 targets.
+          </Typography>
+          <Stack spacing={2}>
+            <FormControlLabel
+              disabled={!canEdit}
+              control={
+                <Switch
+                  checked={qualifiers.minGamesEnabled}
+                  onChange={(event) =>
+                    updateQualifiers({ minGamesEnabled: event.target.checked })
+                  }
+                />
+              }
+              label="Require minimum games"
+            />
+            <TextField
+              label="Min games"
+              type="number"
+              size="small"
+              disabled={!canEdit || !qualifiers.minGamesEnabled}
+              value={qualifiers.minGames}
+              onChange={(event) =>
+                updateQualifiers({
+                  minGames: Number.parseInt(event.target.value, 10) || 0,
+                })
+              }
+              slotProps={{ htmlInput: { min: 0, max: 999 } }}
+              sx={{ width: 160 }}
+            />
+            <FormControlLabel
+              disabled={!canEdit}
+              control={
+                <Switch
+                  checked={qualifiers.minMatchesEnabled}
+                  onChange={(event) =>
+                    updateQualifiers({ minMatchesEnabled: event.target.checked })
+                  }
+                />
+              }
+              label="Require minimum matches"
+            />
+            <TextField
+              label="Min matches"
+              type="number"
+              size="small"
+              disabled={!canEdit || !qualifiers.minMatchesEnabled}
+              value={qualifiers.minMatches}
+              onChange={(event) =>
+                updateQualifiers({
+                  minMatches: Number.parseInt(event.target.value, 10) || 0,
+                })
+              }
+              slotProps={{ htmlInput: { min: 0, max: 999 } }}
+              sx={{ width: 160 }}
+            />
+            <FormControlLabel
+              disabled={!canEdit}
+              control={
+                <Switch
+                  checked={qualifiers.minVolumeEnabled}
+                  onChange={(event) =>
+                    updateQualifiers({ minVolumeEnabled: event.target.checked })
+                  }
+                />
+              }
+              label="Require minimum throws and targets"
+            />
+            <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
+              <TextField
+                label="Min throws"
+                type="number"
+                size="small"
+                disabled={!canEdit || !qualifiers.minVolumeEnabled}
+                value={qualifiers.minThrows}
+                onChange={(event) =>
+                  updateQualifiers({
+                    minThrows: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
+                slotProps={{ htmlInput: { min: 0, max: 9999 } }}
+                sx={{ width: 160 }}
+              />
+              <TextField
+                label="Min targets"
+                type="number"
+                size="small"
+                disabled={!canEdit || !qualifiers.minVolumeEnabled}
+                value={qualifiers.minTargets}
+                onChange={(event) =>
+                  updateQualifiers({
+                    minTargets: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
+                slotProps={{ htmlInput: { min: 0, max: 9999 } }}
+                sx={{ width: 160 }}
+              />
+            </Stack>
+          </Stack>
+        </Box>
+
+        <Typography variant="h6">Stat credit</Typography>
         <FormControl fullWidth disabled={!canEdit}>
           <InputLabel id="sk-stat-preset-label">Preset</InputLabel>
           <Select
@@ -336,7 +464,7 @@ export function SettingsPage() {
             disabled={!dirty}
             onClick={save}
           >
-            Save settings
+            Save league stat settings
           </Button>
         ) : null}
       </Stack>

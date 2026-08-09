@@ -3,6 +3,7 @@ import { getGameName, getMatchById, getMatchPlayers } from '../matchGame';
 import { throwResultLabels, throwResultUiOrder } from '../gameEvents';
 import type { DatabaseDto, Guid } from '../types';
 import {
+  DeflectionResult,
   ECompetitionOutcome,
   EDeathError,
   EThrowError,
@@ -81,8 +82,12 @@ export type DisplayPlayerStats = {
   throwHits: number;
   throwCounts: Partial<Record<ThrowResult, number>>;
   targets: number;
+  /** Incoming Hit + failed block (target or deflection receiver). */
+  targetHits: number;
   catches: number;
   catchesDeflection: number;
+  /** Direct + deflection catches against this thrower. */
+  catchesThrown: number;
   recoveries: number;
   wastedBalls: number;
   lineOuts: number;
@@ -91,6 +96,13 @@ export type DisplayPlayerStats = {
   kdCredit: number | null;
   hitRate: number | null;
   catchRate: number | null;
+  /** Catches thrown / throws. Lower is better. */
+  caughtRate: number | null;
+  /** (targeted − hit) / targeted. */
+  elusivenessRate: number | null;
+  /** Equal-weight z-scores vs median; null until `attachVorWar`. */
+  vor: number | null;
+  war: number | null;
 };
 
 export type ThrowMixSlice = {
@@ -284,6 +296,32 @@ export function formatPct(value: number | null): string {
   return `${Math.round(value * 100)}%`;
 }
 
+/** One-decimal percent for highlight stats (e.g. 84.6%). */
+export function formatPct1(value: number | null): string {
+  if (value == null) return '—';
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+export function efficiencyRate(
+  row: DisplayPlayerStats,
+  counting: StatsCountingMode = 'counts',
+): number | null {
+  if (row.throws <= 0) return null;
+  return displayedKills(row, counting) / row.throws;
+}
+
+export function netScore(
+  row: DisplayPlayerStats,
+  counting: StatsCountingMode = 'counts',
+): number {
+  return (
+    2 * row.catches +
+    displayedKills(row, counting) -
+    displayedDeaths(row, counting) -
+    2 * row.catchesThrown
+  );
+}
+
 export function formatCountValue(value: number): string {
   if (Number.isInteger(value)) return String(value);
   return value.toFixed(2);
@@ -317,9 +355,21 @@ function toDisplayPlayer(
     row.offenseThrowsIndividual,
     row.offenseThrowsGroup,
   );
+  const deflectionThrown = mergeDeflectionCounts(
+    row.offenseDeflectionsIndividual,
+    row.offenseDeflectionsGroup,
+  );
   const throws = totalOf(row.offenseThrowsIndividual, row.offenseThrowsGroup);
   const throwHits = throwCounts[ThrowResult.Hit] ?? 0;
   const targets = totalOf(row.defenseTargets, row.defenseDeflections);
+  const targetHits =
+    (row.defenseTargets.get(ThrowResult.Hit) ?? 0) +
+    (row.defenseTargets.get(ThrowResult.BlockFailed) ?? 0) +
+    (row.defenseDeflections.get(DeflectionResult.Hit) ?? 0) +
+    (row.defenseDeflections.get(DeflectionResult.BlockFailed) ?? 0);
+  const catchesThrown =
+    (throwCounts[ThrowResult.Catch] ?? 0) +
+    (deflectionThrown[DeflectionResult.Catch] ?? 0);
   const kills = totalOf(
     row.killsDirectIndividual,
     row.killsDirectGroup,
@@ -360,8 +410,10 @@ function toDisplayPlayer(
     throwHits,
     throwCounts,
     targets,
+    targetHits,
     catches,
     catchesDeflection: row.catchesDeflection,
+    catchesThrown,
     recoveries: extra.recoveries,
     wastedBalls: row.offenseErrors.get(EThrowError.WastedBall) ?? 0,
     lineOuts: row.deathsErrors.get(EDeathError.LineOut) ?? 0,
@@ -370,6 +422,10 @@ function toDisplayPlayer(
     kdCredit: rateOrInfinite(killsCredit, row.deathsCredit),
     hitRate: throws > 0 ? throwHits / throws : null,
     catchRate: targets > 0 ? catches / targets : null,
+    caughtRate: throws > 0 ? catchesThrown / throws : null,
+    elusivenessRate: targets > 0 ? (targets - targetHits) / targets : null,
+    vor: null,
+    war: null,
   };
 }
 
@@ -391,6 +447,20 @@ function mergeThrowCounts(
 ): Partial<Record<ThrowResult, number>> {
   const counts: Partial<Record<ThrowResult, number>> = {};
   for (const resultId of enumValues(ThrowResult) as ThrowResult[]) {
+    let total = 0;
+    for (const agg of aggregates) {
+      total += agg.get(resultId) ?? 0;
+    }
+    if (total > 0) counts[resultId] = total;
+  }
+  return counts;
+}
+
+function mergeDeflectionCounts(
+  ...aggregates: StatisticAggregates<DeflectionResult, number>[]
+): Partial<Record<DeflectionResult, number>> {
+  const counts: Partial<Record<DeflectionResult, number>> = {};
+  for (const resultId of enumValues(DeflectionResult) as DeflectionResult[]) {
     let total = 0;
     for (const agg of aggregates) {
       total += agg.get(resultId) ?? 0;

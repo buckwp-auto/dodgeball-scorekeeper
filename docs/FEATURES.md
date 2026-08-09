@@ -11,11 +11,11 @@
 ## App shell
 
 - **Overview** — Google sign-in / league directory (when Firebase configured) with league logos and an optional slim banner when a league is open, **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)** (six teams with photos, Minnesota Dodgeball VODs, and starred catches/deflections/double-kills), sync status chip; admin-only confirm to replace an open cloud league from import
-- **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match); paste https logo / photo URLs (thumbnails + initials fallback); player name opens **Player** (`/players/:id`) with a large photo, league stats row, ranks (kills / catches / hit%), starred highlights they appear in, and links to games played
+- **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match); paste https logo / photo URLs (thumbnails + initials fallback); player name opens **Player** (`/players/:id`) with a large photo, league stats row (including Caught% / Catch% / Elu% / Eff% / Net / VOR / WAR), ranks (kills / catches / hit%), starred highlights they appear in, and links to games played
 - **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
 - **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills first 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster heading shows **Game N**; **match score** (home–away game wins) on match roster, Track Match, game roster, Track Game, and Game Complete; game roster has **Previous / Next game** (Next creates a game if needed); after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game
-- **Settings** — league stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
+- **League Stat Settings** — highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on) plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
@@ -104,12 +104,14 @@ Same permanent map is used on Match / Game roster screens and Track Game throw/e
 
 - In-app **Stats** pages: league (`/stats`), match (`/matches/:id/stats`), game (`/matches/:id/games/:id/stats`); player names link to the player page
 - Entry points: drawer **Stats**, Overview **League stats**, Matches/Match **See stats**, Track Match per-game **See stats**, Team roster player names
-- Sortable **player table** with leaderboard toggles (Kills, Catches, K/D, Hit%, Games won) and min-games filter
-- **Counts vs Credit** toggle (session): integer involvement vs league-weighted kill/death credit
+- Sortable **player table** with leaderboard toggles (Kills, Catches, K/D, Hit%, Games won) and min-games filter; also **Caught%**, **Catch%**, **Elu%**, **Eff%**, **Net**, **VOR**, and **WAR**
+- League stats **Leaderboards** tab: top 5 graphic per highlight stat (1st avatar center, 2nd left, 3rd right) — Caught%, Catch%, Elusiveness%, Efficiency%, Net score, VOR, WAR; uses **League Stat Settings** minimums (default 15 games, 2 matches, 20 throws & targets)
+- **Counts vs Credit** toggle (session): integer involvement vs league-weighted kill/death credit; Efficiency / Net / VOR / WAR follow the toggle
 - Optional columns when the league policy enables them: assists, double/triple/quad kills, multi-catches, deflection catches
 - **Team standings** (game W-L-T + match W-L from finished games) and match series scoreboard
 - Charts (`@mui/x-charts`): throw-result mix, top-N bars, home vs away, game elimination timeline; thrower→target heatmap on match/game
-- Display metrics (catches, recoveries, rates) sit on top of the engine — **golden CSV unchanged** under the default Legacy policy
+- Display metrics (catches, recoveries, rates, VOR/WAR) sit on top of the engine — **golden CSV unchanged** under the default Legacy policy
+- Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (hit = incoming Hit or failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − eliminations − 2×catches thrown; **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
 - Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page
 - Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events
 - **Golden fixture** tests vs original WASM/scorekeeper CSV output
@@ -117,7 +119,7 @@ Same permanent map is used on Match / Game roster screens and Track Game throw/e
 
 ## Stat credit policy
 
-League-scoped settings (`LeagueSettings` table, synced with roster) control how stats award team throws and deflections. Default is **Legacy** (today’s engine) so existing `.scrkpr` files and golden CSV stay stable until a league opts in.
+League-scoped settings (`LeagueSettings` table, synced with roster) control highlight-leaderboard minimums and how stats award team throws and deflections. Default credit policy is **Legacy** (today’s engine) so existing `.scrkpr` files and golden CSV stay stable until a league opts in. Highlight minimums default to **15 games**, **2 matches**, and **20 throws & targets** (each can be turned off or retuned on **League Stat Settings**).
 
 | Preset | Behavior |
 |--------|----------|

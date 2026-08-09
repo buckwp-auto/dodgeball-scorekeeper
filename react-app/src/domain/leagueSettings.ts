@@ -8,6 +8,37 @@ import {
   type TeamThrowKillCreditMode,
 } from './statistics/statCreditPolicy';
 
+export type HighlightQualifierSettings = {
+  minGamesEnabled: boolean;
+  minGames: number;
+  minMatchesEnabled: boolean;
+  minMatches: number;
+  minVolumeEnabled: boolean;
+  minThrows: number;
+  minTargets: number;
+};
+
+export const DEFAULT_HIGHLIGHT_QUALIFIERS: HighlightQualifierSettings = {
+  minGamesEnabled: true,
+  minGames: 15,
+  minMatchesEnabled: true,
+  minMatches: 2,
+  minVolumeEnabled: true,
+  minThrows: 20,
+  minTargets: 20,
+};
+
+/** All qualifier switches off — useful in tests and when a league opts out. */
+export const DISABLED_HIGHLIGHT_QUALIFIERS: HighlightQualifierSettings = {
+  minGamesEnabled: false,
+  minGames: DEFAULT_HIGHLIGHT_QUALIFIERS.minGames,
+  minMatchesEnabled: false,
+  minMatches: DEFAULT_HIGHLIGHT_QUALIFIERS.minMatches,
+  minVolumeEnabled: false,
+  minThrows: DEFAULT_HIGHLIGHT_QUALIFIERS.minThrows,
+  minTargets: DEFAULT_HIGHLIGHT_QUALIFIERS.minTargets,
+};
+
 export type LeagueSettingsRow = {
   Id: Guid;
   PolicyVersion?: number;
@@ -20,6 +51,13 @@ export type LeagueSettingsRow = {
   CountDeflectionCatchesSeparately?: boolean;
   TrackMultiKills?: boolean;
   TrackMultiCatches?: boolean;
+  HighlightMinGamesEnabled?: boolean;
+  HighlightMinGames?: number;
+  HighlightMinMatchesEnabled?: boolean;
+  HighlightMinMatches?: number;
+  HighlightMinVolumeEnabled?: boolean;
+  HighlightMinThrows?: number;
+  HighlightMinTargets?: number;
 };
 
 function table<T>(data: DatabaseDto, name: string): T[] {
@@ -65,16 +103,108 @@ export function settingsRowFromPolicy(id: Guid, policy: StatCreditPolicy): Leagu
   };
 }
 
+export function normalizeHighlightQualifiers(
+  input: Partial<HighlightQualifierSettings> | null | undefined,
+): HighlightQualifierSettings {
+  const source = input ?? {};
+  return {
+    minGamesEnabled: readBoolean(source.minGamesEnabled, DEFAULT_HIGHLIGHT_QUALIFIERS.minGamesEnabled),
+    minGames: clampCount(source.minGames, DEFAULT_HIGHLIGHT_QUALIFIERS.minGames, 999),
+    minMatchesEnabled: readBoolean(
+      source.minMatchesEnabled,
+      DEFAULT_HIGHLIGHT_QUALIFIERS.minMatchesEnabled,
+    ),
+    minMatches: clampCount(source.minMatches, DEFAULT_HIGHLIGHT_QUALIFIERS.minMatches, 999),
+    minVolumeEnabled: readBoolean(
+      source.minVolumeEnabled,
+      DEFAULT_HIGHLIGHT_QUALIFIERS.minVolumeEnabled,
+    ),
+    minThrows: clampCount(source.minThrows, DEFAULT_HIGHLIGHT_QUALIFIERS.minThrows, 9999),
+    minTargets: clampCount(source.minTargets, DEFAULT_HIGHLIGHT_QUALIFIERS.minTargets, 9999),
+  };
+}
+
+export function qualifiersFromSettingsRow(
+  row: LeagueSettingsRow | null | undefined,
+): HighlightQualifierSettings {
+  if (!row || !rowHasHighlightQualifiers(row)) return { ...DEFAULT_HIGHLIGHT_QUALIFIERS };
+  return normalizeHighlightQualifiers({
+    minGamesEnabled: row.HighlightMinGamesEnabled,
+    minGames: row.HighlightMinGames,
+    minMatchesEnabled: row.HighlightMinMatchesEnabled,
+    minMatches: row.HighlightMinMatches,
+    minVolumeEnabled: row.HighlightMinVolumeEnabled,
+    minThrows: row.HighlightMinThrows,
+    minTargets: row.HighlightMinTargets,
+  });
+}
+
+export function settingsRowFromQualifiers(
+  qualifiers: HighlightQualifierSettings,
+): Pick<
+  LeagueSettingsRow,
+  | 'HighlightMinGamesEnabled'
+  | 'HighlightMinGames'
+  | 'HighlightMinMatchesEnabled'
+  | 'HighlightMinMatches'
+  | 'HighlightMinVolumeEnabled'
+  | 'HighlightMinThrows'
+  | 'HighlightMinTargets'
+> {
+  const normalized = normalizeHighlightQualifiers(qualifiers);
+  return {
+    HighlightMinGamesEnabled: normalized.minGamesEnabled,
+    HighlightMinGames: normalized.minGames,
+    HighlightMinMatchesEnabled: normalized.minMatchesEnabled,
+    HighlightMinMatches: normalized.minMatches,
+    HighlightMinVolumeEnabled: normalized.minVolumeEnabled,
+    HighlightMinThrows: normalized.minThrows,
+    HighlightMinTargets: normalized.minTargets,
+  };
+}
+
 export function resolveLeagueStatPolicy(data: DatabaseDto): StatCreditPolicy {
   return policyFromSettingsRow(getLeagueSettingsRow(data));
+}
+
+export function resolveHighlightQualifiers(data: DatabaseDto): HighlightQualifierSettings {
+  return qualifiersFromSettingsRow(getLeagueSettingsRow(data));
 }
 
 export function setLeagueSettings(
   data: DatabaseDto,
   policy: StatCreditPolicy,
+  qualifiers?: HighlightQualifierSettings,
 ): LeagueSettingsRow {
   const existing = getLeagueSettingsRow(data);
-  const row = settingsRowFromPolicy(existing?.Id ?? newIdTimestamp(), policy);
+  const resolvedQualifiers = qualifiers
+    ? normalizeHighlightQualifiers(qualifiers)
+    : qualifiersFromSettingsRow(existing);
+  const row: LeagueSettingsRow = {
+    ...settingsRowFromPolicy(existing?.Id ?? newIdTimestamp(), policy),
+    ...settingsRowFromQualifiers(resolvedQualifiers),
+  };
   data.Tables.LeagueSettings = [row];
   return row;
+}
+
+function rowHasHighlightQualifiers(row: LeagueSettingsRow): boolean {
+  return (
+    row.HighlightMinGamesEnabled != null ||
+    row.HighlightMinGames != null ||
+    row.HighlightMinMatchesEnabled != null ||
+    row.HighlightMinMatches != null ||
+    row.HighlightMinVolumeEnabled != null ||
+    row.HighlightMinThrows != null ||
+    row.HighlightMinTargets != null
+  );
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function clampCount(value: unknown, fallback: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(0, Math.round(value)));
 }

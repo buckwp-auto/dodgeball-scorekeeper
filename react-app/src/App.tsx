@@ -40,7 +40,7 @@ const navItems = [
   { to: '/matches', label: 'Matches' },
   { to: '/highlights', label: 'Highlights' },
   { to: '/stats', label: 'Stats' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/settings', label: 'League Stat Settings' },
   { to: '/history', label: 'History' },
 ];
 

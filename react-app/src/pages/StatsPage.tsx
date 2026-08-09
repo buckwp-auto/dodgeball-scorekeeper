@@ -4,13 +4,14 @@ import { useParams } from 'react-router';
 import { MatchSeriesScoreboard } from '../components/stats/MatchSeriesScoreboard';
 import { StatsCharts } from '../components/stats/StatsCharts';
 import { StatsHeatmap } from '../components/stats/StatsHeatmap';
+import { StatsLeaderboard } from '../components/stats/StatsLeaderboard';
 import { StatsPlayerTable } from '../components/stats/StatsPlayerTable';
 import { StatsStandingsTable } from '../components/stats/StatsStandingsTable';
 import { PageHeader } from '../components/Ui';
 import { getMatchName } from '../domain/database';
 import { buildEliminationTimeline } from '../domain/gameElimination';
 import { getMatchById, getMatchGames } from '../domain/matchGame';
-import { resolveLeagueStatPolicy } from '../domain/leagueSettings';
+import { resolveHighlightQualifiers, resolveLeagueStatPolicy } from '../domain/leagueSettings';
 import {
   buildDisplayStats,
   loadStatsCountingMode,
@@ -21,6 +22,7 @@ import {
   type StatsCountingMode,
   type StatsScope,
 } from '../domain/statistics/displayStats';
+import { attachVorWar } from '../domain/statistics/highlightStats';
 import { getStatisticsSummaryCsv } from '../domain/statistics/statisticsFormatService';
 import { buildTargetHeatmap } from '../domain/statistics/targetHeatmap';
 import {
@@ -30,7 +32,7 @@ import {
 import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
 
-type StatsTab = 'standings' | 'players' | 'charts';
+type StatsTab = 'standings' | 'players' | 'charts' | 'leaderboards';
 
 export function StatsPage() {
   const { matchId, gameId } = useParams();
@@ -56,9 +58,13 @@ export function StatsPage() {
     return true;
   }, [data, scope]);
 
+  const qualifiers = useMemo(() => resolveHighlightQualifiers(data), [data]);
   const rows = useMemo(
-    () => (scope && valid ? buildDisplayStats(data, scope) : []),
-    [data, scope, valid],
+    () =>
+      scope && valid
+        ? attachVorWar(buildDisplayStats(data, scope), counting, qualifiers)
+        : [],
+    [data, scope, valid, counting, qualifiers],
   );
   const policy = useMemo(() => resolveLeagueStatPolicy(data), [data]);
   const showAssists =
@@ -103,7 +109,11 @@ export function StatsPage() {
         : 'Stats';
 
   const showStandings = scope?.kind !== 'game';
-  const activeTab = showStandings || tab !== 'standings' ? tab : 'players';
+  const showLeaderboards = scope?.kind === 'league';
+  const activeTab =
+    (!showStandings && tab === 'standings') || (!showLeaderboards && tab === 'leaderboards')
+      ? 'players'
+      : tab;
   const canDownloadCsv = Boolean(scope && valid && scope.kind !== 'game' && rows.length > 0);
 
   const downloadCsv = () => {
@@ -153,9 +163,10 @@ export function StatsPage() {
       >
         {showStandings ? <Tab value="standings" label="Standings" /> : null}
         <Tab value="players" label="Players" />
+        {showLeaderboards ? <Tab value="leaderboards" label="Leaderboards" /> : null}
         <Tab value="charts" label="Charts" />
       </Tabs>
-      {activeTab === 'players' || activeTab === 'charts' ? (
+      {activeTab === 'players' || activeTab === 'charts' || activeTab === 'leaderboards' ? (
         <ToggleButtonGroup
           exclusive
           size="small"
@@ -183,6 +194,16 @@ export function StatsPage() {
           showMultiKills={showMultiKills}
           showMultiCatches={showMultiCatches}
           showDeflectionCatches={showDeflectionCatches}
+        />
+      ) : null}
+      {activeTab === 'leaderboards' ? (
+        <StatsLeaderboard
+          rows={rows}
+          counting={counting}
+          qualifiers={qualifiers}
+          leagueName={leagueName}
+          leagueLogo={leagues.find((league) => league.id === activeLeagueId)?.logo}
+          data={data}
         />
       ) : null}
       {activeTab === 'charts' ? (
