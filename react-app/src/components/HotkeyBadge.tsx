@@ -7,7 +7,14 @@ export function HotkeyBadge({ hotkey }: { hotkey: string | null }) {
     <Chip
       size="small"
       label={formatHotkeyLabel(hotkey)}
-      sx={{ minWidth: 28, height: 22, fontWeight: 700 }}
+      sx={{
+        minWidth: 28,
+        height: 22,
+        fontWeight: 700,
+        bgcolor: 'grey.100',
+        color: 'grey.900',
+        '& .MuiChip-label': { color: 'grey.900' },
+      }}
       className="sk-hotkey-badge"
     />
   );

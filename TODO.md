@@ -1,6 +1,6 @@
 # Scoring UX backlog
 
-- [ ] Contrast on keyboard shortcut popover
+- [x] Contrast on keyboard shortcut popover
 - [ ] Delete game in a match allowed for match scorer (creator) in addition to admin
 - [ ] Navigation from roster screen for match to game to next game
 - [ ] Ability to add sub players to the team on the match screen

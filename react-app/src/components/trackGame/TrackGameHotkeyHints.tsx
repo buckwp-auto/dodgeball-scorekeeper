@@ -21,7 +21,9 @@ function Hint({
       {hotkeys.map((hotkey) => (
         <HotkeyBadge key={hotkey} hotkey={hotkey} />
       ))}
-      <Typography variant="caption">{label}</Typography>
+      <Typography variant="caption" sx={{ color: 'inherit' }}>
+        {label}
+      </Typography>
     </Stack>
   );
 }
@@ -98,6 +100,7 @@ export function TrackGameHotkeysTooltip() {
           sx: {
             maxWidth: 460,
             bgcolor: 'grey.900',
+            color: 'grey.50',
             border: 1,
             borderColor: 'grey.700',
             p: 1.25,
@@ -107,7 +110,7 @@ export function TrackGameHotkeysTooltip() {
       title={
         <Stack spacing={1.25} className="sk-youtube-hotkeys-tooltip">
           <Stack spacing={0.5}>
-            <Typography variant="caption" sx={{ fontWeight: 700, opacity: 0.75 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: 'grey.200' }}>
               Playback
             </Typography>
             <Stack
@@ -119,7 +122,7 @@ export function TrackGameHotkeysTooltip() {
             </Stack>
           </Stack>
           <Stack spacing={0.5}>
-            <Typography variant="caption" sx={{ fontWeight: 700, opacity: 0.75 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: 'grey.200' }}>
               Actions
             </Typography>
             <Stack
