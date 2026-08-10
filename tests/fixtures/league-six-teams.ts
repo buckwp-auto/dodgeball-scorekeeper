@@ -7,10 +7,11 @@ function fixtureId(sequence: number): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
-/** Six franchises; each roster is eight named characters. */
+/** Six franchises; each roster is eight named characters with a distinct DiceBear style. */
 export const LEAGUE_TEAMS = [
   {
     name: 'The Fellowship',
+    avatarStyle: 'adventurer',
     players: [
       'Frodo Baggins',
       'Samwise Gamgee',
@@ -24,6 +25,7 @@ export const LEAGUE_TEAMS = [
   },
   {
     name: 'Rebel Alliance',
+    avatarStyle: 'pixel-art',
     players: [
       'Luke Skywalker',
       'Leia Organa',
@@ -37,6 +39,7 @@ export const LEAGUE_TEAMS = [
   },
   {
     name: 'Order of the Phoenix',
+    avatarStyle: 'lorelei',
     players: [
       'Harry Potter',
       'Hermione Granger',
@@ -50,6 +53,7 @@ export const LEAGUE_TEAMS = [
   },
   {
     name: "Earth's Mightiest",
+    avatarStyle: 'avataaars',
     players: [
       'Tony Stark',
       'Steve Rogers',
@@ -63,6 +67,7 @@ export const LEAGUE_TEAMS = [
   },
   {
     name: 'Hawkins Crew',
+    avatarStyle: 'open-peeps',
     players: [
       'Eleven',
       'Mike Wheeler',
@@ -76,6 +81,7 @@ export const LEAGUE_TEAMS = [
   },
   {
     name: 'Dunder Mifflin',
+    avatarStyle: 'micah',
     players: [
       'Michael Scott',
       'Jim Halpert',
@@ -130,8 +136,9 @@ export const DEMO_YOUTUBE_URLS = [
 ] as const;
 
 type ImageRef = { kind: 'external'; url: string };
+type DicebearStyle = (typeof LEAGUE_TEAMS)[number]['avatarStyle'] | 'shapes';
 
-function sampleImage(style: 'shapes' | 'adventurer', seed: string): ImageRef {
+function sampleImage(style: DicebearStyle, seed: string): ImageRef {
   return {
     kind: 'external',
     url: `https://api.dicebear.com/7.x/${style}/png?seed=${encodeURIComponent(seed)}&size=256`,
@@ -528,7 +535,7 @@ export function buildLeagueSixTeamsDatabase(): DatabaseDto {
         Id: playerId,
         Name: playerName,
         Notes: null,
-        Image: sampleImage('adventurer', playerName),
+        Image: sampleImage(team.avatarStyle, playerName),
       });
       (tables.TeamPlayer as { Id: Guid; TeamId: Guid; PlayerId: Guid }[]).push({
         Id: nextId(),
