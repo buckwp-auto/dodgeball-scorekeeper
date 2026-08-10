@@ -35,6 +35,48 @@ test.describe('Match workflow', () => {
     await expect(homeTeam.getByRole('button', { name: 'Pat', exact: true })).toBeVisible();
     await expect(homeTeam.locator('.sk-player').filter({ hasText: 'Pat' }).locator('.sk-player-sub')).toBeVisible();
 
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'H1' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('A');
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'Pat' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('S');
+    await expect(
+      page
+        .locator('.sk-match .sk-team')
+        .nth(1)
+        .locator('.sk-player')
+        .filter({ hasText: 'A1' })
+        .locator('.sk-hotkey-badge'),
+    ).toHaveText('J');
+
+    await page.keyboard.press('s');
+    await expect(page.getByRole('button', { name: 'Track Match' })).toBeEnabled();
+    await page.keyboard.press('a');
+    await expect(page.getByRole('button', { name: 'Track Match' })).toBeDisabled();
+    await page.keyboard.press('a');
+    await expect(page.getByRole('button', { name: 'Track Match' })).toBeEnabled();
+
+    await page.getByRole('button', { name: 'Track Match' }).click();
+    await page.getByRole('button', { name: 'Add Game' }).click();
+    await expect(page.getByRole('heading', { name: /^Game \d+$/ })).toBeVisible();
+    await expect(
+      page
+        .locator('.sk-game .sk-team')
+        .nth(0)
+        .locator('.sk-player')
+        .filter({ hasText: 'H1' })
+        .locator('.sk-hotkey-badge'),
+    ).toHaveText('A');
+    await expect(
+      page
+        .locator('.sk-game .sk-team')
+        .nth(1)
+        .locator('.sk-player')
+        .filter({ hasText: 'A1' })
+        .locator('.sk-hotkey-badge'),
+    ).toHaveText('J');
+
     await navigateMenu(page, 'History');
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
     await expect(page.locator('.history')).toContainText('Added team (Home Hawks)');

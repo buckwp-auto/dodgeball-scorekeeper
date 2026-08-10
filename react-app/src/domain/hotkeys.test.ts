@@ -4,10 +4,16 @@ import {
   COLUMN_2_HOTKEYS,
   RECOVERED_NONE_HOTKEY,
   RESULT_HOTKEYS,
+  ROSTER_AWAY_HOTKEYS,
+  ROSTER_AWAY_OVERFLOW_HOTKEYS,
+  ROSTER_HOME_HOTKEYS,
+  ROSTER_HOME_OVERFLOW_HOTKEYS,
   assignColumn1Hotkey,
   assignColumn2Hotkey,
   buildPermanentPlayerHotkeys,
+  buildPermanentRosterHotkeys,
   findGamePlayerIdByHotkey,
+  findPlayerByHotkey,
   getDeflectionResultForKey,
   getThrowResultForKey,
   getTrackGameActionForKey,
@@ -42,6 +48,60 @@ describe('permanent player hotkeys', () => {
     // Same map after "elimination sort" would put Bob first in UI — keys unchanged
     expect(findGamePlayerIdByHotkey(map, 's')).toBe('h-bob');
     expect(findGamePlayerIdByHotkey(map, 'a')).toBe('h-amy');
+  });
+});
+
+describe('match / game roster hotkeys', () => {
+  it('uses Track Game keys then overflow keys up to 12 per side', () => {
+    expect(ROSTER_HOME_OVERFLOW_HOTKEYS).toEqual(['q', '1', '2', '3', '4', '5']);
+    expect(ROSTER_AWAY_OVERFLOW_HOTKEYS).toEqual(['p', '0', '9', '8', '7', '6']);
+    expect([...ROSTER_HOME_HOTKEYS]).toEqual([
+      'a',
+      's',
+      'd',
+      'f',
+      'w',
+      'e',
+      'q',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+    ]);
+    expect([...ROSTER_AWAY_HOTKEYS]).toEqual([
+      'j',
+      'k',
+      'l',
+      ';',
+      'i',
+      'o',
+      'p',
+      '0',
+      '9',
+      '8',
+      '7',
+      '6',
+    ]);
+  });
+
+  it('assigns the first six like Track Game and overflow keys after that', () => {
+    const home = ['Amy', 'Bob', 'Cara', 'Dee', 'Eve', 'Fay', 'Gia', 'Hana'].map(
+      (Name, index) => ({ Id: `h-${index}`, Name }),
+    );
+    const away = ['Ned', 'Zoe'].map((Name, index) => ({ Id: `a-${index}`, Name }));
+    const map = buildPermanentRosterHotkeys(home, away);
+    expect(map.get('h-0')).toBe('a');
+    expect(map.get('h-1')).toBe('s');
+    expect(map.get('h-5')).toBe('e');
+    expect(map.get('h-6')).toBe('q');
+    expect(map.get('h-7')).toBe('1');
+    expect(map.get('a-0')).toBe('j');
+    expect(map.get('a-1')).toBe('k');
+
+    expect(findPlayerByHotkey(home, away, 'q', map)?.player.Id).toBe('h-6');
+    expect(findPlayerByHotkey(home, away, '1', map)?.player.Id).toBe('h-7');
+    expect(findPlayerByHotkey(home, away, 'a', map)?.player.Id).toBe('h-0');
   });
 });
 

@@ -1,10 +1,24 @@
 import { DeflectionResult, ThrowResult } from './statistics/constants';
 import { deflectionResultUiOrder, throwResultUiOrder } from './gameEvents';
 
-/** Home / left-side permanent keys */
+/** Home / left-side permanent keys (Track Game throw/error; roster slots 1–6) */
 export const COLUMN_1_HOTKEYS = ['a', 's', 'd', 'f', 'w', 'e'] as const;
-/** Away / right-side permanent keys */
+/** Away / right-side permanent keys (Track Game throw/error; roster slots 1–6) */
 export const COLUMN_2_HOTKEYS = ['j', 'k', 'l', ';', 'i', 'o'] as const;
+/** Extra Match/Game roster keys for home slots 7–12 */
+export const ROSTER_HOME_OVERFLOW_HOTKEYS = ['q', '1', '2', '3', '4', '5'] as const;
+/** Extra Match/Game roster keys for away slots 7–12 */
+export const ROSTER_AWAY_OVERFLOW_HOTKEYS = ['p', '0', '9', '8', '7', '6'] as const;
+/** Match/Game roster: Track Game keys, then overflow (up to 12 per side) */
+export const ROSTER_HOME_HOTKEYS = [
+  ...COLUMN_1_HOTKEYS,
+  ...ROSTER_HOME_OVERFLOW_HOTKEYS,
+] as const;
+/** Match/Game roster: Track Game keys, then overflow (up to 12 per side) */
+export const ROSTER_AWAY_HOTKEYS = [
+  ...COLUMN_2_HOTKEYS,
+  ...ROSTER_AWAY_OVERFLOW_HOTKEYS,
+] as const;
 /** Result column — order matches throwResultUiOrder */
 export const RESULT_HOTKEYS = ['r', 't', 'y', 'u', 'g', 'h', 'p'] as const;
 /** Recovered "None" choice (not a player) */
@@ -87,11 +101,11 @@ export function buildPermanentRosterHotkeys(
     (a, b) => a.Name.localeCompare(b.Name) || a.Id.localeCompare(b.Id),
   );
   home.forEach((row, index) => {
-    const key = COLUMN_1_HOTKEYS[index];
+    const key = ROSTER_HOME_HOTKEYS[index];
     if (key) map.set(row.Id, key);
   });
   away.forEach((row, index) => {
-    const key = COLUMN_2_HOTKEYS[index];
+    const key = ROSTER_AWAY_HOTKEYS[index];
     if (key) map.set(row.Id, key);
   });
   return map;

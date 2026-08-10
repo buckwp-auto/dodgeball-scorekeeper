@@ -21,7 +21,7 @@
 
 ## Roster & match setup
 
-- **Match & game roster selection** with home/away columns; game roster heading is **Game N**; team logos on banners and player photos on rows; optional tall YouTube VOD on both roster screens
+- **Match & game roster selection** with home/away columns; game roster heading is **Game N**; team logos on banners and player photos on rows; optional tall YouTube VOD on both roster screens; roster hotkeys match Track Game for the first 6 per side, then `Q 1 2 3 4 5` / `P 0 9 8 7 6` for players 7–12
 - **Add players on the match screen** (creates a team player and includes them on the match); mark **Sub** officially instead of a “(sub)” name suffix
 - **Players per team per game** (League Stat Settings, default 6) caps who can be on court; match roster can still include extra subs
 - **Auto-select** up to that limit per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
@@ -88,8 +88,10 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 
 | Area | Keys |
 |------|------|
-| Home players | `A S D F W E` |
-| Away players | `J K L ; I O` (`I` badge uses a serif face so it is distinct from `L`) |
+| Home players (Track Game + roster 1–6) | `A S D F W E` |
+| Away players (Track Game + roster 1–6) | `J K L ; I O` (`I` badge uses a serif face so it is distinct from `L`) |
+| Match / Game roster 7–12 (home) | `Q 1 2 3 4 5` |
+| Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
 | Throw results | `R T Y U G H P` |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G H` |
 | Recovered None | `M` |
@@ -100,7 +102,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |
 
-Same permanent map is used on Match / Game roster screens and Track Game throw/error flows. Re-pressing a player/result key toggles the selection off where applicable.
+Roster keys use the same stable name order as Track Game; slots 7–12 on Match / Game select use the overflow keys (up to 12 per side). Re-pressing a player/result key toggles the selection off where applicable.
 
 ## Statistics & interop
 
