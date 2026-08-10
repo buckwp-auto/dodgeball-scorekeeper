@@ -17,7 +17,7 @@
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game; Match / Game / Player dropdowns jump between those views and player pages
 - **League Stat Settings** — highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on) plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
-- **MUI shell** — drawer nav, primary blue theme (`#1565c0`), Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
+- **MUI shell** — drawer nav on a light gray background, primary blue theme (`#1565c0`), larger color pill for the open cloud league in the sync bar; Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
 ## Roster & match setup
 

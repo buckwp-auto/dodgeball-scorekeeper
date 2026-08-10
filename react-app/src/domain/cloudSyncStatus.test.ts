@@ -63,6 +63,7 @@ describe('deriveCloudSyncPresentation', () => {
     ).toMatchObject({
       mode: 'local',
       connectionLabel: 'Local only',
+      leaguePill: null,
       saveCaption: null,
       saveLabel: null,
       canSaveNow: false,
@@ -95,6 +96,7 @@ describe('deriveCloudSyncPresentation', () => {
     ).toEqual({
       mode: 'signedInNoLeague',
       connectionLabel: 'Connected as Will, no league selected',
+      leaguePill: null,
       saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
@@ -114,7 +116,8 @@ describe('deriveCloudSyncPresentation', () => {
     });
     expect(view).toEqual({
       mode: 'syncing',
-      connectionLabel: 'Syncing to Spring League',
+      connectionLabel: 'Syncing',
+      leaguePill: 'Spring League',
       saveCaption: null,
       saveLabel: 'Unsaved…',
       saveTone: 'warning',
@@ -146,7 +149,7 @@ describe('deriveCloudSyncPresentation', () => {
         syncStatus: 'saved',
         lastSavedAt: null,
         isDirty: false,
-      }).connectionLabel,
-    ).toBe('Syncing to league');
+      }).leaguePill,
+    ).toBe('League');
   });
 });

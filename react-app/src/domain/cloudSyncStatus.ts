@@ -17,6 +17,8 @@ export type CloudSyncPresentationInput = {
 export type CloudSyncPresentation = {
   mode: CloudSyncMode;
   connectionLabel: string;
+  /** Selected cloud league, shown as a pill in the sidebar. */
+  leaguePill: string | null;
   saveCaption: string | null;
   saveLabel: string | null;
   saveTone: CloudSyncSaveTone;
@@ -79,6 +81,7 @@ export function deriveCloudSyncPresentation(
     return {
       mode: 'local',
       connectionLabel: 'Local only',
+      leaguePill: null,
       saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
@@ -90,6 +93,7 @@ export function deriveCloudSyncPresentation(
     return {
       mode: 'signedInNoLeague',
       connectionLabel: `Connected as ${userDisplayName}, no league selected`,
+      leaguePill: null,
       saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
@@ -97,14 +101,15 @@ export function deriveCloudSyncPresentation(
     };
   }
 
-  const leagueName = activeLeagueName?.trim() || 'league';
+  const leagueName = activeLeagueName?.trim() || 'League';
   const { saveCaption, saveLabel } = saveStatusPresentation(
     syncStatus,
     lastSavedAt,
   );
   return {
     mode: 'syncing',
-    connectionLabel: `Syncing to ${leagueName}`,
+    connectionLabel: 'Syncing',
+    leaguePill: leagueName,
     saveCaption,
     saveLabel,
     saveTone: saveStatusTone(syncStatus),

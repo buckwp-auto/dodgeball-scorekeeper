@@ -4,6 +4,7 @@ import { useCloudSyncStatus } from '../hooks/useCloudSyncStatus';
 export function CloudSyncBar() {
   const {
     connectionLabel,
+    leaguePill,
     saveCaption,
     saveLabel,
     saveTone,
@@ -24,33 +25,63 @@ export function CloudSyncBar() {
     >
       <Stack spacing={0.75}>
         <Typography
-          variant="caption"
+          variant="body2"
           color="text.primary"
           sx={{ lineHeight: 1.3, display: 'block' }}
         >
           {connectionLabel}
         </Typography>
+        {leaguePill ? (
+          <Chip
+            color="primary"
+            label={leaguePill}
+            className="sk-cloud-league-pill"
+            title={leaguePill}
+            sx={{
+              width: '100%',
+              height: 32,
+              borderRadius: 999,
+              fontSize: '0.75rem',
+              justifyContent: 'flex-start',
+              '& .MuiChip-label': {
+                px: 1.25,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                display: 'block',
+              },
+            }}
+          />
+        ) : null}
         {saveLabel ? (
-          <Stack spacing={0.25}>
+          <Stack spacing={0.75}>
             {saveCaption ? (
               <Typography
-                variant="caption"
+                variant="body2"
                 color="text.secondary"
-                sx={{ lineHeight: 1.2, display: 'block', fontSize: '0.65rem' }}
+                sx={{ lineHeight: 1.2, display: 'block' }}
               >
                 {saveCaption}
               </Typography>
             ) : null}
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            <Stack spacing={1} sx={{ alignItems: 'center' }}>
               <Chip
-                size="small"
                 color={saveTone}
                 label={saveLabel}
                 sx={{
-                  height: 20,
+                  height: 28,
                   minWidth: 0,
-                  fontSize: '0.65rem',
-                  '& .MuiChip-label': { px: 0.75 },
+                  maxWidth: '100%',
+                  alignSelf: 'stretch',
+                  fontSize: '0.8rem',
+                  justifyContent: 'flex-start',
+                  '& .MuiChip-label': {
+                    px: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                  },
                 }}
               />
               <Button
@@ -59,11 +90,11 @@ export function CloudSyncBar() {
                 disabled={!canSaveNow}
                 onClick={() => void saveNow()}
                 sx={{
+                  mt: 0.75,
                   minWidth: 0,
-                  flexShrink: 0,
                   px: 1,
                   py: 0.25,
-                  fontSize: '0.7rem',
+                  fontSize: '0.8rem',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -74,7 +105,7 @@ export function CloudSyncBar() {
         ) : null}
         {syncError ? (
           <Typography
-            variant="caption"
+            variant="body2"
             color="error"
             sx={{ lineHeight: 1.3, display: 'block' }}
           >

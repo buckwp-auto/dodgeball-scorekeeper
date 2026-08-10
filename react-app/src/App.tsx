@@ -98,6 +98,8 @@ export function App() {
                   boxSizing: 'border-box',
                   display: 'flex',
                   flexDirection: 'column',
+                  bgcolor: 'grey.100',
+                  borderRightColor: 'grey.300',
                 },
               }}
             >
