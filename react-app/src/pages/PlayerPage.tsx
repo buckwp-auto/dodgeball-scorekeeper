@@ -1,12 +1,14 @@
 import {
   Box,
+  Button,
+  Chip,
   Link as MuiLink,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { EntityAvatar } from '../components/EntityAvatar';
 import { StatsPlayerTable } from '../components/stats/StatsPlayerTable';
@@ -20,13 +22,21 @@ import {
 } from '../domain/highlights';
 import { imageSrc } from '../domain/imageRef';
 import { resolveHighlightQualifiers, resolveLeagueStatPolicy } from '../domain/leagueSettings';
-import { getPlayerGamesPlayed } from '../domain/playerProfile';
+import {
+  getLinkedGuestPlayers,
+  linkPlayer,
+  suggestLinkedPlayers,
+  unlinkPlayer,
+} from '../domain/playerMatch';
+import { getPlayerGamesPlayed, playerHref } from '../domain/playerProfile';
 import {
   buildDisplayStats,
   formatCountValue,
   formatPct,
   leaderboardRank,
+  loadIncludeSubStats,
   loadStatsCountingMode,
+  saveIncludeSubStats,
   saveStatsCountingMode,
   type StatsCountingMode,
 } from '../domain/statistics/displayStats';
@@ -40,14 +50,45 @@ export function PlayerPage() {
   const [counting, setCounting] = useState<StatsCountingMode>(() =>
     loadStatsCountingMode(),
   );
+  const [includeSubs, setIncludeSubs] = useState(() => loadIncludeSubStats());
 
   const player = getPlayer(data, playerId);
+
+  useEffect(() => {
+    if (player?.LinkedPlayerId) {
+      navigate(playerHref(player.LinkedPlayerId), { replace: true });
+    }
+  }, [navigate, player?.LinkedPlayerId]);
+
   const team = player ? getTeamForPlayer(data, player.Id) : undefined;
   const photoSrc = imageSrc(player?.Image);
   const qualifiers = useMemo(() => resolveHighlightQualifiers(data), [data]);
   const leagueRows = useMemo(
-    () => attachVorWar(buildDisplayStats(data, { kind: 'league' }), counting, qualifiers),
-    [data, counting, qualifiers],
+    () =>
+      attachVorWar(
+        buildDisplayStats(data, { kind: 'league' }, { includeSubStats: includeSubs }),
+        counting,
+        qualifiers,
+      ),
+    [data, counting, qualifiers, includeSubs],
+  );
+  const guests = useMemo(
+    () => (player ? getLinkedGuestPlayers(data, player.Id) : []),
+    [data, player],
+  );
+  const linkSuggestions = useMemo(
+    () =>
+      player?.AddedFromMatch && !player.LinkedPlayerId
+        ? suggestLinkedPlayers(data, {
+            query: player.Name,
+            excludePlayerId: player.Id,
+          }).filter(
+            (row) =>
+              !row.sameTeam &&
+              (row.rank === 'exact' || row.rank === 'prefix' || row.rank === 'token'),
+          )
+        : [],
+    [data, player],
   );
   const stats = leagueRows.find((row) => row.playerId === playerId);
   const policy = useMemo(() => resolveLeagueStatPolicy(data), [data]);
@@ -151,6 +192,9 @@ export function PlayerPage() {
               </MuiLink>
             </Typography>
           ) : null}
+          {player.AddedFromMatch && !player.LinkedPlayerId ? (
+            <Chip size="small" label="Added from match" className="sk-player-added-from-match" />
+          ) : null}
           {ranks ? (
             <Stack spacing={0.5} sx={{ mt: 1 }}>
               <Typography>
@@ -182,21 +226,36 @@ export function PlayerPage() {
 
       {stats ? (
         <>
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={counting}
-            onChange={(_, next: StatsCountingMode | null) => {
-              if (!next) return;
-              setCounting(next);
-              saveStatsCountingMode(next);
-            }}
-            className="sk-stats-counting"
-            sx={{ mb: 2 }}
-          >
-            <ToggleButton value="counts">Counts</ToggleButton>
-            <ToggleButton value="credit">Credit</ToggleButton>
-          </ToggleButtonGroup>
+          <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={counting}
+              onChange={(_, next: StatsCountingMode | null) => {
+                if (!next) return;
+                setCounting(next);
+                saveStatsCountingMode(next);
+              }}
+              className="sk-stats-counting"
+            >
+              <ToggleButton value="counts">Counts</ToggleButton>
+              <ToggleButton value="credit">Credit</ToggleButton>
+            </ToggleButtonGroup>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={includeSubs ? 'include' : 'exclude'}
+              onChange={(_, next: 'include' | 'exclude' | null) => {
+                if (!next) return;
+                setIncludeSubs(next === 'include');
+                saveIncludeSubStats(next === 'include');
+              }}
+              className="sk-stats-include-subs"
+            >
+              <ToggleButton value="include">Include sub stats</ToggleButton>
+              <ToggleButton value="exclude">Exclude sub stats</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
           <StatsPlayerTable
             rows={[stats]}
             metric="kills"
@@ -230,10 +289,75 @@ export function PlayerPage() {
                 {game.matchName} · {game.gameName}
               </MuiLink>
               {game.scoringComplete ? ' (complete)' : ' (in progress)'}
+              {game.substitute ? ' · sub' : ''}
             </Typography>
           ))}
         </Stack>
       )}
+
+      {guests.length > 0 ? (
+        <>
+          <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
+            Subbed for
+          </Typography>
+          <Stack spacing={1} className="sk-player-sub-appearances">
+            {guests.map((guest) => {
+              const guestTeam = getTeamForPlayer(data, guest.Id);
+              return (
+                <Stack
+                  key={guest.Id}
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                >
+                  <Typography>
+                    {guestTeam ? `${guestTeam.Name} · ${guest.Name}` : guest.Name}
+                  </Typography>
+                  <Button
+                    size="small"
+                    className="sk-unlink-player"
+                    onClick={() => {
+                      mutate((draft) => {
+                        unlinkPlayer(draft, guest.Id);
+                        return null;
+                      }, `Unlinked ${guest.Name}.`);
+                    }}
+                  >
+                    Unlink
+                  </Button>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </>
+      ) : null}
+
+      {linkSuggestions.length > 0 ? (
+        <>
+          <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
+            Link to a league player
+          </Typography>
+          <Stack spacing={1} className="sk-player-link-suggestions">
+            {linkSuggestions.map((candidate) => (
+              <Button
+                key={candidate.playerId}
+                size="small"
+                variant="outlined"
+                className="sk-link-player"
+                onClick={() => {
+                  mutate((draft) => {
+                    linkPlayer(draft, player.Id, candidate.playerId);
+                    return null;
+                  }, `Linked ${player.Name} to ${candidate.playerName}.`);
+                  navigate(playerHref(candidate.playerId), { replace: true });
+                }}
+              >
+                {candidate.playerName} · {candidate.teamName}
+              </Button>
+            ))}
+          </Stack>
+        </>
+      ) : null}
 
       <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
         Highlights

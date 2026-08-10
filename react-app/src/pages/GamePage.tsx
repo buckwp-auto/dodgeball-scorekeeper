@@ -34,8 +34,15 @@ import {
   getGameSidePlayersWithSelection,
   getMatchById,
   isPlayerInGame,
+  isPlayerInMatch,
+  setMatchPlayerSubstitute,
   toggleGamePlayer as toggleGamePlayerOp,
+  toggleMatchPlayer as toggleMatchPlayerOp,
 } from '../domain/matchGame';
+import {
+  suggestLinkedPlayers,
+  type PlayerMatchCandidate,
+} from '../domain/playerMatch';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
 import { useDatabase } from '../state/DatabaseContext';
 
@@ -164,14 +171,57 @@ export function GamePage() {
     [homeRoster, awayRoster, handleTogglePlayer, rosterHotkeys],
   );
 
-  const addSidePlayer = (teamHome: boolean) => {
-    const name = (teamHome ? homeAddName : awayAddName).trim();
-    const asSub = teamHome ? homeAddAsSub : awayAddAsSub;
+  const homeSuggestions = useMemo(
+    () =>
+      match
+        ? suggestLinkedPlayers(data, {
+            query: homeAddName,
+            matchId,
+            sideTeamId: match.TeamIdHome,
+          })
+        : [],
+    [data, homeAddName, match, matchId],
+  );
+  const awaySuggestions = useMemo(
+    () =>
+      match
+        ? suggestLinkedPlayers(data, {
+            query: awayAddName,
+            matchId,
+            sideTeamId: match.TeamIdAway,
+          })
+        : [],
+    [data, awayAddName, match, matchId],
+  );
+
+  const addSidePlayer = (teamHome: boolean, candidate?: PlayerMatchCandidate) => {
+    const asSub =
+      (teamHome ? homeAddAsSub : awayAddAsSub) || Boolean(candidate && !candidate.sameTeam);
+    const name = (candidate?.playerName ?? (teamHome ? homeAddName : awayAddName)).trim();
     if (!name || !match) return;
     const limit = resolvePlayersPerSide(data);
     const atLimit = countGameSidePlayers(data, matchId, gameId, teamHome) >= limit;
     mutate((draft) => {
-      const player = addPlayerToGameSide(draft, matchId, gameId, teamHome, name, asSub);
+      if (candidate?.sameTeam) {
+        if (!isPlayerInMatch(draft, matchId, candidate.playerId)) {
+          toggleMatchPlayerOp(draft, matchId, candidate.playerId, teamHome, {
+            isSubstitute: asSub,
+          });
+        } else if (asSub) {
+          setMatchPlayerSubstitute(draft, matchId, candidate.playerId, true);
+        }
+        toggleGamePlayerOp(draft, matchId, gameId, candidate.playerId);
+        return candidate.playerName;
+      }
+      const player = addPlayerToGameSide(
+        draft,
+        matchId,
+        gameId,
+        teamHome,
+        name,
+        asSub,
+        candidate?.playerId,
+      );
       return player.Name;
     }, (playerName) => `Added player (${playerName}) to game.`);
     if (teamHome) {
@@ -283,9 +333,10 @@ export function GamePage() {
           addPlayer={{
             name: homeAddName,
             asSub: homeAddAsSub,
+            suggestions: homeSuggestions,
             onNameChange: setHomeAddName,
             onAsSubChange: setHomeAddAsSub,
-            onSubmit: () => addSidePlayer(true),
+            onSubmit: (candidate) => addSidePlayer(true, candidate),
           }}
         />
         <PlayerRoster
@@ -301,9 +352,10 @@ export function GamePage() {
           addPlayer={{
             name: awayAddName,
             asSub: awayAddAsSub,
+            suggestions: awaySuggestions,
             onNameChange: setAwayAddName,
             onAsSubChange: setAwayAddAsSub,
-            onSubmit: () => addSidePlayer(false),
+            onSubmit: (candidate) => addSidePlayer(false, candidate),
           }}
         />
       </div>

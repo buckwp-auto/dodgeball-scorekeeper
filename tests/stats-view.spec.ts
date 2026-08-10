@@ -1,8 +1,13 @@
 import { test, expect } from '@playwright/test';
 import {
+  addPlayer,
+  addTeam,
   clearScorekeeperStorage,
+  createMatch,
+  gotoScorekeeper,
   loadSampleLeague,
   navigateMenu,
+  openTeam,
 } from './helpers/scorekeeper-page';
 
 test.describe('In-app stats', () => {
@@ -84,5 +89,48 @@ test.describe('In-app stats', () => {
     await expect(page.locator('.sk-stats-table')).toBeVisible();
     await page.getByRole('tab', { name: 'Charts' }).click();
     await expect(page.locator('.sk-stats-charts')).toBeVisible();
+  });
+
+  test('links a cross-team sub and toggles sub stats on league rollups', async ({
+    page,
+  }) => {
+    await gotoScorekeeper(page);
+    await addTeam(page, 'Home Hawks');
+    await openTeam(page, 'Home Hawks');
+    await addPlayer(page, 'H1');
+    await addPlayer(page, 'Alex');
+    await addTeam(page, 'Away Owls');
+    await openTeam(page, 'Away Owls');
+    await addPlayer(page, 'Casey');
+    await createMatch(page, 'Home Hawks', 'Away Owls');
+
+    const homeTeam = page.locator('.sk-match .sk-team').nth(0);
+    await homeTeam.getByRole('button', { name: 'Alex', exact: true }).click();
+
+    const awayTeam = page.locator('.sk-match .sk-team').nth(1);
+    await awayTeam.getByLabel('Add player').click();
+    await awayTeam.getByLabel('Add player').fill('Alex');
+    await expect(page.getByRole('option', { name: /Alex · Home Hawks/ })).toBeVisible();
+    await page.getByRole('option', { name: /Alex · Home Hawks/ }).click();
+    await expect(awayTeam.getByRole('button', { name: 'Alex', exact: true })).toBeVisible();
+    await expect(
+      awayTeam.locator('.sk-player').filter({ hasText: 'Alex' }).locator('.sk-player-sub'),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Track Match' }).click();
+    await page.getByRole('button', { name: 'Add Game' }).click();
+    await expect(page.getByRole('heading', { name: /^Game \d+$/ })).toBeVisible();
+
+    await navigateMenu(page, 'Stats');
+    await page.getByRole('tab', { name: 'Players' }).click();
+    const alexRow = page.locator('.sk-stats-table tbody tr').filter({ hasText: 'Alex' });
+    await expect(alexRow).toHaveCount(1);
+    await expect(alexRow.locator('.sk-stats-player-sub')).toContainText('Alex*');
+    expect(Number(await alexRow.locator('td').nth(2).textContent())).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: 'Exclude sub stats' }).click();
+    await expect(page.locator('.sk-stats-table tbody tr').filter({ hasText: 'Alex' })).toHaveCount(
+      0,
+    );
   });
 });

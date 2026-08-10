@@ -1,7 +1,7 @@
-import { getMatchName, getMatches } from '../database';
+import { getMatchName, getMatches, getPlayer } from '../database';
 import { getGameName, getMatchById, getMatchPlayers } from '../matchGame';
 import { throwResultLabels, throwResultUiOrder } from '../gameEvents';
-import type { DatabaseDto, Guid } from '../types';
+import type { DatabaseDto, Guid, PlayerRow } from '../types';
 import {
   DeflectionResult,
   ECompetitionOutcome,
@@ -13,6 +13,7 @@ import {
 import {
   buildGameEventsByGame,
   buildMatchEventsByMatch,
+  buildPlayerOverviews,
   buildThrowsDetail,
   indexGameEventThrows,
   indexGamePlayers,
@@ -20,7 +21,11 @@ import {
   indexMatchPlayers,
   type ThrowDetail,
 } from './databaseViews';
-import { createStatisticsSummary, type PlayerStatistics } from './statisticsService';
+import {
+  createSplitStatisticsSummary,
+  createStatisticsSummary,
+  type PlayerStatistics,
+} from './statisticsService';
 import type { StatisticAggregates } from './statisticAggregates';
 
 export type StatsScope =
@@ -47,6 +52,27 @@ export function loadStatsCountingMode(): StatsCountingMode {
 export function saveStatsCountingMode(mode: StatsCountingMode): void {
   try {
     sessionStorage.setItem(STATS_COUNTING_STORAGE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
+export const STATS_INCLUDE_SUBS_STORAGE_KEY = 'SCOREKEEPER_STATS_INCLUDE_SUBS';
+
+export function loadIncludeSubStats(): boolean {
+  try {
+    const raw = sessionStorage.getItem(STATS_INCLUDE_SUBS_STORAGE_KEY);
+    if (raw === '0') return false;
+    if (raw === '1') return true;
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
+export function saveIncludeSubStats(include: boolean): void {
+  try {
+    sessionStorage.setItem(STATS_INCLUDE_SUBS_STORAGE_KEY, include ? '1' : '0');
   } catch {
     /* ignore */
   }
@@ -103,6 +129,14 @@ export type DisplayPlayerStats = {
   /** Equal-weight z-scores vs median; null until `attachVorWar`. */
   vor: number | null;
   war: number | null;
+  /** True when this player has any sub-bucket stats (asterisk). */
+  hasSubStats: boolean;
+  subGamesPlayed: number;
+  subKills: number;
+  /** Match/game: this roster slot was marked Sub. */
+  isSubstitute: boolean;
+  /** Guest row on match/game stats — href the canonical player. */
+  canonicalPlayerId?: Guid;
 };
 
 export type ThrowMixSlice = {
@@ -142,16 +176,88 @@ export function statsPageTitle(data: DatabaseDto, scope: StatsScope): string {
 export function buildDisplayStats(
   data: DatabaseDto,
   scope: StatsScope,
+  options?: { includeSubStats?: boolean },
 ): DisplayPlayerStats[] {
   const { matchIds, gameIds } = resolveStatsQuery(data, scope);
   if (matchIds.length === 0) return [];
 
-  const summary = createStatisticsSummary(data, matchIds, gameIds);
-  const extras = countCatchesAndRecoveries(data, matchIds, gameIds);
-  const sideByPlayer =
-    scope.kind === 'league' ? null : teamHomeByPlayer(data, scope.matchId);
+  if (scope.kind !== 'league') {
+    const summary = createStatisticsSummary(data, matchIds, gameIds);
+    const extras = countCatchesAndRecoveries(data, matchIds, gameIds);
+    const sideByPlayer = teamHomeByPlayer(data, scope.matchId);
+    const subByPlayer = substituteByPlayer(data, scope.matchId);
+    return summary.map((row) => {
+      const display = toDisplayPlayer(
+        row,
+        extras.get(row.playerId)?.recoveries ?? 0,
+        sideByPlayer,
+      );
+      display.isSubstitute = subByPlayer.get(row.playerId) ?? false;
+      display.hasSubStats = display.isSubstitute;
+      if (display.isSubstitute) {
+        display.subGamesPlayed = display.gamesPlayed;
+        display.subKills = display.kills;
+      }
+      const linked = getPlayer(data, row.playerId)?.LinkedPlayerId;
+      if (linked) display.canonicalPlayerId = linked;
+      return display;
+    });
+  }
 
-  return summary.map((row) => toDisplayPlayer(row, extras, sideByPlayer));
+  const includeSubStats = options?.includeSubStats ?? true;
+  const { split } = createSplitStatisticsSummary(data, matchIds, gameIds);
+  const extrasSplit = countCatchesAndRecoveriesSplit(data, matchIds, gameIds);
+  const overviews = buildPlayerOverviews(data);
+  const groups = new Map<Guid, { starter: DisplayPlayerStats[]; sub: DisplayPlayerStats[] }>();
+
+  for (const [playerId, buckets] of split) {
+    const player = getPlayer(data, playerId);
+    if (!player) continue;
+    const canonicalId = resolveDisplayCanonicalId(data, player);
+    let group = groups.get(canonicalId);
+    if (!group) {
+      group = { starter: [], sub: [] };
+      groups.set(canonicalId, group);
+    }
+    const rec = extrasSplit.get(playerId) ?? { starter: 0, sub: 0 };
+    if (buckets.starter) {
+      group.starter.push(toDisplayPlayer(buckets.starter, rec.starter, null));
+    }
+    if (buckets.sub) {
+      group.sub.push(toDisplayPlayer(buckets.sub, rec.sub, null));
+    }
+  }
+
+  const rows: DisplayPlayerStats[] = [];
+  for (const [canonicalId, group] of groups) {
+    const overview = overviews.get(canonicalId);
+    if (!overview) continue;
+    const starterSum = sumDisplayRows(group.starter);
+    const subSum = sumDisplayRows(group.sub);
+    const base = includeSubStats
+      ? starterSum && subSum
+        ? addDisplayStats(starterSum, subSum)
+        : (starterSum ?? subSum)
+      : starterSum;
+    if (!base) continue;
+    rows.push({
+      ...base,
+      playerId: canonicalId,
+      teamId: overview.team.Id,
+      teamName: overview.team.Name,
+      playerName: overview.player.Name,
+      teamHome: null,
+      hasSubStats: includeSubStats && group.sub.length > 0,
+      subGamesPlayed: includeSubStats ? (subSum?.gamesPlayed ?? 0) : 0,
+      subKills: includeSubStats ? (subSum?.kills ?? 0) : 0,
+      isSubstitute: false,
+    });
+  }
+
+  return rows.sort(
+    (a, b) =>
+      a.teamName.localeCompare(b.teamName) || a.playerName.localeCompare(b.playerName),
+  );
 }
 
 export type LeaderboardRank = {
@@ -341,7 +447,7 @@ export const LEADERBOARD_METRICS: { id: LeaderboardMetric; label: string }[] = [
 
 function toDisplayPlayer(
   row: PlayerStatistics,
-  extras: Map<Guid, { recoveries: number }>,
+  recoveries: number,
   sideByPlayer: Map<Guid, boolean> | null,
 ): DisplayPlayerStats {
   const gamesWon = countOutcome(row.games, ECompetitionOutcome.Win);
@@ -377,7 +483,6 @@ function toDisplayPlayer(
     row.killsDeflectionsGroup,
   );
   const deaths = totalOf(row.deathsDirect, row.deathsDeflections, row.deathsErrors);
-  const extra = extras.get(row.playerId) ?? { recoveries: 0 };
   const catches = row.catchesDirect + row.catchesDeflection;
   const killsCredit = totalOf(row.killsDirectCredit, row.killsDeflectionsCredit);
 
@@ -414,7 +519,7 @@ function toDisplayPlayer(
     catches,
     catchesDeflection: row.catchesDeflection,
     catchesThrown,
-    recoveries: extra.recoveries,
+    recoveries,
     wastedBalls: row.offenseErrors.get(EThrowError.WastedBall) ?? 0,
     lineOuts: row.deathsErrors.get(EDeathError.LineOut) ?? 0,
     illegalBlocks: row.deathsErrors.get(EDeathError.BlockIllegal) ?? 0,
@@ -426,6 +531,100 @@ function toDisplayPlayer(
     elusivenessRate: targets > 0 ? (targets - targetHits) / targets : null,
     vor: null,
     war: null,
+    hasSubStats: false,
+    subGamesPlayed: 0,
+    subKills: 0,
+    isSubstitute: false,
+  };
+}
+
+function resolveDisplayCanonicalId(data: DatabaseDto, player: PlayerRow): Guid {
+  if (!player.LinkedPlayerId) return player.Id;
+  const target = getPlayer(data, player.LinkedPlayerId);
+  if (!target || target.LinkedPlayerId) return player.Id;
+  return player.LinkedPlayerId;
+}
+
+function sumDisplayRows(rows: DisplayPlayerStats[]): DisplayPlayerStats | null {
+  if (rows.length === 0) return null;
+  return rows.reduce((left, right) => addDisplayStats(left, right));
+}
+
+export function addDisplayStats(
+  a: DisplayPlayerStats,
+  b: DisplayPlayerStats,
+): DisplayPlayerStats {
+  const throwCounts: Partial<Record<ThrowResult, number>> = { ...a.throwCounts };
+  for (const resultId of enumValues(ThrowResult) as ThrowResult[]) {
+    const extra = b.throwCounts[resultId] ?? 0;
+    if (!extra) continue;
+    throwCounts[resultId] = (throwCounts[resultId] ?? 0) + extra;
+  }
+  const gamesWon = a.gamesWon + b.gamesWon;
+  const gamesLost = a.gamesLost + b.gamesLost;
+  const gamesTied = a.gamesTied + b.gamesTied;
+  const gamesPlayed = a.gamesPlayed + b.gamesPlayed;
+  const decidedGames = gamesWon + gamesLost + gamesTied;
+  const kills = a.kills + b.kills;
+  const deaths = a.deaths + b.deaths;
+  const killsCredit = a.killsCredit + b.killsCredit;
+  const deathsCredit = a.deathsCredit + b.deathsCredit;
+  const throws = a.throws + b.throws;
+  const throwHits = a.throwHits + b.throwHits;
+  const targets = a.targets + b.targets;
+  const targetHits = a.targetHits + b.targetHits;
+  const catches = a.catches + b.catches;
+  const catchesThrown = a.catchesThrown + b.catchesThrown;
+  return {
+    playerId: a.playerId,
+    teamId: a.teamId,
+    teamName: a.teamName,
+    playerName: a.playerName,
+    teamHome: a.teamHome,
+    gamesPlayed,
+    gamesWon,
+    gamesLost,
+    gamesTied,
+    gamesIncomplete: a.gamesIncomplete + b.gamesIncomplete,
+    gameWinPct: decidedGames > 0 ? gamesWon / decidedGames : null,
+    matchesPlayed: a.matchesPlayed + b.matchesPlayed,
+    kills,
+    killsCredit,
+    killsSupportCredit: a.killsSupportCredit + b.killsSupportCredit,
+    deaths,
+    deathsCredit,
+    assists: a.assists + b.assists,
+    doubleKills: a.doubleKills + b.doubleKills,
+    tripleKills: a.tripleKills + b.tripleKills,
+    quadKills: a.quadKills + b.quadKills,
+    doubleCatches: a.doubleCatches + b.doubleCatches,
+    tripleCatches: a.tripleCatches + b.tripleCatches,
+    quadCatches: a.quadCatches + b.quadCatches,
+    throws,
+    throwHits,
+    throwCounts,
+    targets,
+    targetHits,
+    catches,
+    catchesDeflection: a.catchesDeflection + b.catchesDeflection,
+    catchesThrown,
+    recoveries: a.recoveries + b.recoveries,
+    wastedBalls: a.wastedBalls + b.wastedBalls,
+    lineOuts: a.lineOuts + b.lineOuts,
+    illegalBlocks: a.illegalBlocks + b.illegalBlocks,
+    kd: rateOrInfinite(kills, deaths),
+    kdCredit: rateOrInfinite(killsCredit, deathsCredit),
+    hitRate: throws > 0 ? throwHits / throws : null,
+    catchRate: targets > 0 ? catches / targets : null,
+    caughtRate: throws > 0 ? catchesThrown / throws : null,
+    elusivenessRate: targets > 0 ? (targets - targetHits) / targets : null,
+    vor: null,
+    war: null,
+    hasSubStats: a.hasSubStats || b.hasSubStats,
+    subGamesPlayed: a.subGamesPlayed + b.subGamesPlayed,
+    subKills: a.subKills + b.subKills,
+    isSubstitute: a.isSubstitute || b.isSubstitute,
+    canonicalPlayerId: a.canonicalPlayerId ?? b.canonicalPlayerId,
   };
 }
 
@@ -503,6 +702,14 @@ function teamHomeByPlayer(data: DatabaseDto, matchId: Guid): Map<Guid, boolean> 
   return map;
 }
 
+function substituteByPlayer(data: DatabaseDto, matchId: Guid): Map<Guid, boolean> {
+  const map = new Map<Guid, boolean>();
+  for (const row of getMatchPlayers(data, matchId)) {
+    map.set(row.PlayerId, Boolean(row.IsSubstitute));
+  }
+  return map;
+}
+
 type RecoveryCounts = { recoveries: number };
 
 function countCatchesAndRecoveries(
@@ -522,6 +729,33 @@ function countCatchesAndRecoveries(
     if (!detail.throwRow.RecoveredId) return;
     const recoveredId = playerIdByGamePlayer.get(detail.throwRow.RecoveredId);
     if (recoveredId) bump(recoveredId);
+  });
+
+  return counts;
+}
+
+function countCatchesAndRecoveriesSplit(
+  data: DatabaseDto,
+  matchIds: Guid[],
+  gameIds?: Set<Guid>,
+): Map<Guid, { starter: number; sub: number }> {
+  const counts = new Map<Guid, { starter: number; sub: number }>();
+  const matchPlayers = indexMatchPlayers(data);
+  const gamePlayers = indexGamePlayers(data);
+  const bump = (playerId: Guid, isSub: boolean) => {
+    const current = counts.get(playerId) ?? { starter: 0, sub: 0 };
+    if (isSub) current.sub += 1;
+    else current.starter += 1;
+    counts.set(playerId, current);
+  };
+
+  iterateScopedThrows(data, matchIds, gameIds, (detail) => {
+    if (!detail.throwRow.RecoveredId) return;
+    const gamePlayer = gamePlayers.get(detail.throwRow.RecoveredId);
+    if (!gamePlayer) return;
+    const matchPlayer = matchPlayers.get(gamePlayer.MatchPlayerId);
+    if (!matchPlayer) return;
+    bump(matchPlayer.PlayerId, Boolean(matchPlayer.IsSubstitute));
   });
 
   return counts;

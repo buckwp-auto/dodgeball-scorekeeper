@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from '../database';
-import { addGame, toggleGamePlayer, toggleMatchPlayer } from '../matchGame';
+import {
+  addGame,
+  addPlayerToMatchSide,
+  setMatchPlayerSubstitute,
+  toggleGamePlayer,
+  toggleMatchPlayer,
+} from '../matchGame';
 import { setLeagueSettings } from '../leagueSettings';
 import {
   persistFinishGameEvent,
@@ -417,5 +423,100 @@ describe('buildDisplayStats', () => {
       value: 3,
     });
     expect(leaderboardRank(rows, 'a', 'hitRate')).toBeNull();
+  });
+
+  it('merges linked sub stats on league rollups and can exclude them', () => {
+    const data = createEmptyDatabase();
+    const hawks = addTeam(data, 'Hawks');
+    const owls = addTeam(data, 'Owls');
+    const alex = addPlayer(data, hawks.Id, 'Alex');
+    const casey = addPlayer(data, owls.Id, 'Casey');
+    const homeMatch = addMatch(data, hawks.Id, owls.Id);
+    toggleMatchPlayer(data, homeMatch.Id, alex.Id, true);
+    toggleMatchPlayer(data, homeMatch.Id, casey.Id, false);
+    const homeGame = addGame(data, homeMatch.Id);
+    toggleGamePlayer(data, homeMatch.Id, homeGame, alex.Id);
+    toggleGamePlayer(data, homeMatch.Id, homeGame, casey.Id);
+    persistThrowGameEvent(data, homeGame, homeMatch.Id, [
+      {
+        throwerGamePlayerId: gpFor(data, alex.Id).Id,
+        targetGamePlayerId: gpFor(data, casey.Id).Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistFinishGameEvent(data, homeGame, { resultId: GameEventFinishResult.WinHome });
+
+    const wolves = addTeam(data, 'Wolves');
+    const drew = addPlayer(data, wolves.Id, 'Drew');
+    const subMatch = addMatch(data, owls.Id, wolves.Id);
+    toggleMatchPlayer(data, subMatch.Id, casey.Id, true);
+    toggleMatchPlayer(data, subMatch.Id, drew.Id, false);
+    const guest = addPlayerToMatchSide(data, subMatch.Id, true, 'Alex', true, alex.Id);
+    const subGame = addGame(data, subMatch.Id);
+    toggleGamePlayer(data, subMatch.Id, subGame, guest.Id);
+    toggleGamePlayer(data, subMatch.Id, subGame, drew.Id);
+    const gpIn = (gameId: string, playerId: string) => {
+      const gamePlayers = data.Tables.GamePlayer as {
+        Id: string;
+        GameId: string;
+        MatchPlayerId: string;
+      }[];
+      const matchPlayers = data.Tables.MatchPlayer as { Id: string; PlayerId: string }[];
+      return gamePlayers.find(
+        (row) =>
+          row.GameId === gameId &&
+          matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === playerId,
+      )!;
+    };
+    persistThrowGameEvent(data, subGame, subMatch.Id, [
+      {
+        throwerGamePlayerId: gpIn(subGame, guest.Id).Id,
+        targetGamePlayerId: gpIn(subGame, drew.Id).Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistFinishGameEvent(data, subGame, { resultId: GameEventFinishResult.WinHome });
+
+    const included = buildDisplayStats(data, { kind: 'league' }, { includeSubStats: true });
+    expect(included.filter((row) => row.playerName === 'Alex')).toHaveLength(1);
+    const alexIncluded = byName(included, 'Alex')!;
+    expect(alexIncluded.playerId).toBe(alex.Id);
+    expect(alexIncluded.teamName).toBe('Hawks');
+    expect(alexIncluded.kills).toBe(2);
+    expect(alexIncluded.gamesPlayed).toBe(2);
+    expect(alexIncluded.hasSubStats).toBe(true);
+    expect(alexIncluded.subGamesPlayed).toBe(1);
+    expect(alexIncluded.subKills).toBe(1);
+
+    const excluded = buildDisplayStats(data, { kind: 'league' }, { includeSubStats: false });
+    const alexExcluded = byName(excluded, 'Alex')!;
+    expect(alexExcluded.kills).toBe(1);
+    expect(alexExcluded.gamesPlayed).toBe(1);
+    expect(alexExcluded.hasSubStats).toBe(false);
+    expect(alexExcluded.subKills).toBe(0);
+
+    const matchRows = buildDisplayStats(data, { kind: 'match', matchId: subMatch.Id });
+    const guestRow = matchRows.find((row) => row.playerId === guest.Id)!;
+    expect(guestRow.isSubstitute).toBe(true);
+    expect(guestRow.hasSubStats).toBe(true);
+    expect(guestRow.canonicalPlayerId).toBe(alex.Id);
+    expect(guestRow.teamName).toBe('Owls');
+  });
+
+  it('counts own-team bench appearances in the sub bucket', () => {
+    const { data, match, gameId, h1 } = setupMatch();
+    setMatchPlayerSubstitute(data, match.Id, h1.Id, true);
+    persistFinishGameEvent(data, gameId, { resultId: GameEventFinishResult.WinHome });
+    const rows = buildDisplayStats(data, { kind: 'league' }, { includeSubStats: true });
+    const alex = byName(rows, 'Alex')!;
+    expect(alex.hasSubStats).toBe(true);
+    expect(alex.subGamesPlayed).toBe(1);
+    expect(alex.gamesPlayed).toBe(1);
+    const withoutSubs = buildDisplayStats(data, { kind: 'league' }, { includeSubStats: false });
+    expect(byName(withoutSubs, 'Alex')).toBeUndefined();
   });
 });

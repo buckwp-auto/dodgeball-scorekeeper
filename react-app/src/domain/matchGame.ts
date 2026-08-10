@@ -1,7 +1,8 @@
 import { newIdTimestamp } from './id';
 import { resolvePlayersPerSide } from './leagueSettings';
+import { linkPlayer } from './playerMatch';
 import type { DatabaseDto, Guid, MatchPlayerRow, MatchRow, PlayerRow } from './types';
-import { addPlayer, getPlayersForTeam } from './database';
+import { addPlayer, getPlayer, getPlayersForTeam } from './database';
 
 function table<T>(data: DatabaseDto, name: string): T[] {
   return data.Tables[name] as T[];
@@ -100,12 +101,17 @@ export function addPlayerToMatchSide(
   teamHome: boolean,
   name: string,
   isSubstitute = false,
+  linkedPlayerId?: Guid,
 ): PlayerRow {
   const match = getMatchById(data, matchId);
   if (!match) throw new Error('Match not found');
   const teamId = teamHome ? match.TeamIdHome : match.TeamIdAway;
-  const player = addPlayer(data, teamId, name);
+  const displayName = linkedPlayerId
+    ? (getPlayer(data, linkedPlayerId)?.Name ?? name)
+    : name;
+  const player = addPlayer(data, teamId, displayName);
   player.AddedFromMatch = true;
+  if (linkedPlayerId) linkPlayer(data, player.Id, linkedPlayerId);
   toggleMatchPlayer(data, matchId, player.Id, teamHome, { isSubstitute });
   return player;
 }
@@ -118,8 +124,16 @@ export function addPlayerToGameSide(
   teamHome: boolean,
   name: string,
   isSubstitute = false,
+  linkedPlayerId?: Guid,
 ): PlayerRow {
-  const player = addPlayerToMatchSide(data, matchId, teamHome, name, isSubstitute);
+  const player = addPlayerToMatchSide(
+    data,
+    matchId,
+    teamHome,
+    name,
+    isSubstitute,
+    linkedPlayerId,
+  );
   toggleGamePlayer(data, matchId, gameId, player.Id);
   return player;
 }

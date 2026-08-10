@@ -59,6 +59,10 @@ function stub(partial: Partial<DisplayPlayerStats> & { playerId: string; playerN
     elusivenessRate: 1,
     vor: null,
     war: null,
+    hasSubStats: false,
+    subGamesPlayed: 0,
+    subKills: 0,
+    isSubstitute: false,
     ...partial,
   };
 }

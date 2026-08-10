@@ -10,6 +10,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
 } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
@@ -286,10 +287,25 @@ export function StatsPlayerTable({
                   <TableCell>
                     <MuiLink
                       component={Link}
-                      to={playerHref(row.playerId)}
+                      to={playerHref(row.canonicalPlayerId ?? row.playerId)}
                       underline="hover"
+                      className={
+                        row.hasSubStats || row.isSubstitute ? 'sk-stats-player-sub' : undefined
+                      }
                     >
-                      {row.playerName}
+                      {row.hasSubStats || row.isSubstitute ? (
+                        <Tooltip
+                          title={
+                            row.subGamesPlayed || row.subKills
+                              ? `${row.subGamesPlayed} games / ${row.subKills} kills as sub`
+                              : 'Has sub appearances'
+                          }
+                        >
+                          <span>{row.playerName}*</span>
+                        </Tooltip>
+                      ) : (
+                        row.playerName
+                      )}
                     </MuiLink>
                   </TableCell>
                   <TableCell align="center">{row.gamesPlayed}</TableCell>

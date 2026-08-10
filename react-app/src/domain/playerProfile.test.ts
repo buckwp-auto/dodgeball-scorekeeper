@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
-import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
+import { addGame, addPlayerToMatchSide, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import { getPlayerGamesPlayed, listPlayersForDirectory, playerHref } from './playerProfile';
 
 describe('player profile', () => {
@@ -42,11 +42,38 @@ describe('player profile', () => {
         matchName: 'Hawks vs. Owls',
         gameId: game1,
         gameName: 'Game 1',
+        substitute: false,
       }),
     ]);
     expect(getPlayerGamesPlayed(data, casey.Id).map((row) => row.gameId)).toEqual([
       game1,
       game2,
+    ]);
+  });
+
+  it('hides linked guests in the directory and unions their games onto the canonical player', () => {
+    const data = createEmptyDatabase();
+    const hawks = addTeam(data, 'Hawks');
+    const owls = addTeam(data, 'Owls');
+    const alex = addPlayer(data, hawks.Id, 'Alex');
+    const casey = addPlayer(data, owls.Id, 'Casey');
+    const match = addMatch(data, hawks.Id, owls.Id);
+    toggleMatchPlayer(data, match.Id, casey.Id, false);
+    const guest = addPlayerToMatchSide(data, match.Id, false, 'Alex', true, alex.Id);
+    const gameId = addGame(data, match.Id);
+    toggleGamePlayer(data, match.Id, gameId, guest.Id);
+    toggleGamePlayer(data, match.Id, gameId, casey.Id);
+
+    expect(listPlayersForDirectory(data).map((row) => row.playerId)).toEqual(
+      expect.arrayContaining([alex.Id, casey.Id]),
+    );
+    expect(listPlayersForDirectory(data).some((row) => row.playerId === guest.Id)).toBe(false);
+
+    expect(getPlayerGamesPlayed(data, alex.Id)).toEqual([
+      expect.objectContaining({
+        gameId,
+        substitute: true,
+      }),
     ]);
   });
 });

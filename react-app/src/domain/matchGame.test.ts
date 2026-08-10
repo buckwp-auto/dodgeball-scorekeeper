@@ -116,6 +116,21 @@ describe('match substitutes', () => {
     ).toEqual(['Pat', 'Amy', 'Zoe']);
   });
 
+  it('links a match-added sub to a known league player', () => {
+    const data = createEmptyDatabase();
+    const hawks = addTeam(data, 'Hawks');
+    const owls = addTeam(data, 'Owls');
+    const alex = addPlayer(data, hawks.Id, 'Alex');
+    const match = addMatch(data, hawks.Id, owls.Id);
+    const guest = addPlayerToMatchSide(data, match.Id, false, 'alex', true, alex.Id);
+    expect(guest.AddedFromMatch).toBe(true);
+    expect(guest.LinkedPlayerId).toBe(alex.Id);
+    expect(guest.Name).toBe('Alex');
+    expect(getMatchPlayers(data, match.Id).find((row) => row.PlayerId === guest.Id)?.IsSubstitute).toBe(
+      true,
+    );
+  });
+
   it('adds a player to the match and this game from the game screen', () => {
     const data = createEmptyDatabase();
     const home = addTeam(data, 'Home');

@@ -9,6 +9,7 @@ export type MatchPlayerRow = {
   MatchId: Guid;
   PlayerId: Guid;
   TeamHome: boolean;
+  IsSubstitute?: boolean;
 };
 export type GameRow = {
   Id: Guid;

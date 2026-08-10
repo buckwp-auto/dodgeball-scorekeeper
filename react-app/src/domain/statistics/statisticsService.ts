@@ -69,6 +69,38 @@ class PlayerStatisticsBuilder {
   constructor(playerId: Guid) {
     this.playerId = playerId;
   }
+
+  mergeFrom(other: PlayerStatisticsBuilder): void {
+    this.matches.mergeFrom(other.matches);
+    this.games.mergeFrom(other.games);
+    this.offenseIndividual.throws.mergeFrom(other.offenseIndividual.throws);
+    this.offenseIndividual.deflections.mergeFrom(other.offenseIndividual.deflections);
+    this.offenseGroup.throws.mergeFrom(other.offenseGroup.throws);
+    this.offenseGroup.deflections.mergeFrom(other.offenseGroup.deflections);
+    this.offenseErrors.mergeFrom(other.offenseErrors);
+    this.defense.targets.mergeFrom(other.defense.targets);
+    this.defense.deflections.mergeFrom(other.defense.deflections);
+    this.killsIndividual.direct.mergeFrom(other.killsIndividual.direct);
+    this.killsIndividual.deflections.mergeFrom(other.killsIndividual.deflections);
+    this.killsGroup.direct.mergeFrom(other.killsGroup.direct);
+    this.killsGroup.deflections.mergeFrom(other.killsGroup.deflections);
+    this.killsCredit.direct.mergeFrom(other.killsCredit.direct);
+    this.killsCredit.deflections.mergeFrom(other.killsCredit.deflections);
+    this.killsCredit.support.mergeFrom(other.killsCredit.support);
+    this.deaths.direct.mergeFrom(other.deaths.direct);
+    this.deaths.deflections.mergeFrom(other.deaths.deflections);
+    this.deaths.errors.mergeFrom(other.deaths.errors);
+    this.deathsCredit += other.deathsCredit;
+    this.teamThrowAssists += other.teamThrowAssists;
+    this.doubleKills += other.doubleKills;
+    this.tripleKills += other.tripleKills;
+    this.quadKills += other.quadKills;
+    this.doubleCatches += other.doubleCatches;
+    this.tripleCatches += other.tripleCatches;
+    this.quadCatches += other.quadCatches;
+    this.catchesDirect += other.catchesDirect;
+    this.catchesDeflection += other.catchesDeflection;
+  }
 }
 
 class PlayerStatisticsBuilderOffense {
@@ -133,11 +165,20 @@ export type PlayerStatistics = {
   catchesDeflection: number;
 };
 
+export type SplitPlayerStatistics = {
+  playerId: Guid;
+  starter: PlayerStatistics | null;
+  sub: PlayerStatistics | null;
+};
+
+type AppearanceBucket = 'starter' | 'sub';
+
 class StatisticsContext {
   readonly playerOverviews: Map<Guid, PlayerOverview>;
   readonly matchPlayers: Map<Guid, MatchPlayerRow>;
   readonly gamePlayers: Map<Guid, import('./databaseViews').GamePlayerRow>;
-  private readonly builders = new Map<Guid, PlayerStatisticsBuilder>();
+  private readonly starterBuilders = new Map<Guid, PlayerStatisticsBuilder>();
+  private readonly subBuilders = new Map<Guid, PlayerStatisticsBuilder>();
 
   constructor(
     playerOverviews: Map<Guid, PlayerOverview>,
@@ -149,6 +190,10 @@ class StatisticsContext {
     this.gamePlayers = gamePlayers;
   }
 
+  private bucketFor(matchPlayer: MatchPlayerRow): AppearanceBucket {
+    return matchPlayer.IsSubstitute ? 'sub' : 'starter';
+  }
+
   tryGetPlayerStatisticsByGamePlayer(gamePlayerId: Guid): {
     builder: PlayerStatisticsBuilder;
     teamHome: boolean;
@@ -158,7 +203,7 @@ class StatisticsContext {
     const matchPlayer = this.matchPlayers.get(gamePlayer.MatchPlayerId);
     if (!matchPlayer) return null;
     return {
-      builder: this.getPlayerStatistics(matchPlayer.PlayerId),
+      builder: this.getPlayerStatistics(matchPlayer.PlayerId, this.bucketFor(matchPlayer)),
       teamHome: matchPlayer.TeamHome,
     };
   }
@@ -185,61 +230,93 @@ class StatisticsContext {
     const matchPlayer = this.matchPlayers.get(matchPlayerId);
     if (!matchPlayer) throw new Error('Match player not found');
     return {
-      builder: this.getPlayerStatistics(matchPlayer.PlayerId),
+      builder: this.getPlayerStatistics(matchPlayer.PlayerId, this.bucketFor(matchPlayer)),
       teamHome: matchPlayer.TeamHome,
     };
   }
 
-  getPlayerStatistics(playerId: Guid): PlayerStatisticsBuilder {
-    let builder = this.builders.get(playerId);
+  getPlayerStatistics(
+    playerId: Guid,
+    bucket: AppearanceBucket,
+  ): PlayerStatisticsBuilder {
+    const map = bucket === 'sub' ? this.subBuilders : this.starterBuilders;
+    let builder = map.get(playerId);
     if (!builder) {
       builder = new PlayerStatisticsBuilder(playerId);
-      this.builders.set(playerId, builder);
+      map.set(playerId, builder);
     }
     return builder;
   }
 
-  buildPlayerStatistics(): PlayerStatistics[] {
-    return [...this.builders.values()]
-      .map((builder) => {
-        const overview = this.playerOverviews.get(builder.playerId);
-        if (!overview) return null;
-        return {
-          playerId: builder.playerId,
-          team: overview.team,
-          player: overview.player,
-          matches: builder.matches.build(),
-          games: builder.games.build(),
-          offenseThrowsIndividual: builder.offenseIndividual.throws.build(),
-          offenseThrowsGroup: builder.offenseGroup.throws.build(),
-          offenseDeflectionsIndividual: builder.offenseIndividual.deflections.build(),
-          offenseDeflectionsGroup: builder.offenseGroup.deflections.build(),
-          offenseErrors: builder.offenseErrors.build(),
-          defenseTargets: builder.defense.targets.build(),
-          defenseDeflections: builder.defense.deflections.build(),
-          killsDirectIndividual: builder.killsIndividual.direct.build(),
-          killsDirectGroup: builder.killsGroup.direct.build(),
-          killsDirectCredit: builder.killsCredit.direct.build(),
-          killsDeflectionsIndividual: builder.killsIndividual.deflections.build(),
-          killsDeflectionsGroup: builder.killsGroup.deflections.build(),
-          killsDeflectionsCredit: builder.killsCredit.deflections.build(),
-          killsSupportCredit: builder.killsCredit.support.build(),
-          deathsDirect: builder.deaths.direct.build(),
-          deathsDeflections: builder.deaths.deflections.build(),
-          deathsErrors: builder.deaths.errors.build(),
-          deathsCredit: builder.deathsCredit,
-          teamThrowAssists: builder.teamThrowAssists,
-          doubleKills: builder.doubleKills,
-          tripleKills: builder.tripleKills,
-          quadKills: builder.quadKills,
-          doubleCatches: builder.doubleCatches,
-          tripleCatches: builder.tripleCatches,
-          quadCatches: builder.quadCatches,
-          catchesDirect: builder.catchesDirect,
-          catchesDeflection: builder.catchesDeflection,
-        };
-      })
-      .filter((row): row is PlayerStatistics => row !== null);
+  private playerStatisticsFromBuilder(
+    builder: PlayerStatisticsBuilder,
+  ): PlayerStatistics | null {
+    const overview = this.playerOverviews.get(builder.playerId);
+    if (!overview) return null;
+    return {
+      playerId: builder.playerId,
+      team: overview.team,
+      player: overview.player,
+      matches: builder.matches.build(),
+      games: builder.games.build(),
+      offenseThrowsIndividual: builder.offenseIndividual.throws.build(),
+      offenseThrowsGroup: builder.offenseGroup.throws.build(),
+      offenseDeflectionsIndividual: builder.offenseIndividual.deflections.build(),
+      offenseDeflectionsGroup: builder.offenseGroup.deflections.build(),
+      offenseErrors: builder.offenseErrors.build(),
+      defenseTargets: builder.defense.targets.build(),
+      defenseDeflections: builder.defense.deflections.build(),
+      killsDirectIndividual: builder.killsIndividual.direct.build(),
+      killsDirectGroup: builder.killsGroup.direct.build(),
+      killsDirectCredit: builder.killsCredit.direct.build(),
+      killsDeflectionsIndividual: builder.killsIndividual.deflections.build(),
+      killsDeflectionsGroup: builder.killsGroup.deflections.build(),
+      killsDeflectionsCredit: builder.killsCredit.deflections.build(),
+      killsSupportCredit: builder.killsCredit.support.build(),
+      deathsDirect: builder.deaths.direct.build(),
+      deathsDeflections: builder.deaths.deflections.build(),
+      deathsErrors: builder.deaths.errors.build(),
+      deathsCredit: builder.deathsCredit,
+      teamThrowAssists: builder.teamThrowAssists,
+      doubleKills: builder.doubleKills,
+      tripleKills: builder.tripleKills,
+      quadKills: builder.quadKills,
+      doubleCatches: builder.doubleCatches,
+      tripleCatches: builder.tripleCatches,
+      quadCatches: builder.quadCatches,
+      catchesDirect: builder.catchesDirect,
+      catchesDeflection: builder.catchesDeflection,
+    };
+  }
+
+  buildCombinedPlayerStatistics(): PlayerStatistics[] {
+    const ids = new Set([...this.starterBuilders.keys(), ...this.subBuilders.keys()]);
+    const rows: PlayerStatistics[] = [];
+    for (const playerId of ids) {
+      const combined = new PlayerStatisticsBuilder(playerId);
+      const starter = this.starterBuilders.get(playerId);
+      const sub = this.subBuilders.get(playerId);
+      if (starter) combined.mergeFrom(starter);
+      if (sub) combined.mergeFrom(sub);
+      const row = this.playerStatisticsFromBuilder(combined);
+      if (row) rows.push(row);
+    }
+    return rows;
+  }
+
+  buildSplitPlayerStatistics(): Map<Guid, SplitPlayerStatistics> {
+    const ids = new Set([...this.starterBuilders.keys(), ...this.subBuilders.keys()]);
+    const map = new Map<Guid, SplitPlayerStatistics>();
+    for (const playerId of ids) {
+      const starterBuilder = this.starterBuilders.get(playerId);
+      const subBuilder = this.subBuilders.get(playerId);
+      map.set(playerId, {
+        playerId,
+        starter: starterBuilder ? this.playerStatisticsFromBuilder(starterBuilder) : null,
+        sub: subBuilder ? this.playerStatisticsFromBuilder(subBuilder) : null,
+      });
+    }
+    return map;
   }
 }
 
@@ -413,7 +490,8 @@ function processMatchOutcome(
 ): void {
   const matchOutcomeAway = invertCompetitionOutcome(matchOutcomeHome);
   for (const matchPlayer of matchOverview.matchPlayers) {
-    const builder = context.getPlayerStatistics(matchPlayer.PlayerId);
+    const bucket = matchPlayer.IsSubstitute ? 'sub' : 'starter';
+    const builder = context.getPlayerStatistics(matchPlayer.PlayerId, bucket);
     const outcome = matchPlayer.TeamHome ? matchOutcomeHome : matchOutcomeAway;
     builder.matches.increment(outcome, 1);
   }
@@ -428,7 +506,8 @@ function processGameOutcome(
   for (const gamePlayer of gameOverview.gamePlayers) {
     const matchPlayer = context.matchPlayers.get(gamePlayer.MatchPlayerId);
     if (!matchPlayer) continue;
-    const builder = context.getPlayerStatistics(matchPlayer.PlayerId);
+    const bucket = matchPlayer.IsSubstitute ? 'sub' : 'starter';
+    const builder = context.getPlayerStatistics(matchPlayer.PlayerId, bucket);
     const outcome = matchPlayer.TeamHome ? gameOutcomeHome : gameOutcomeAway;
     builder.games.increment(outcome, 1);
   }
@@ -447,12 +526,23 @@ function getGameOutcomeHome(resultId: number): ECompetitionOutcome {
   }
 }
 
-export function createStatisticsSummary(
+function sortPlayerStatistics(rows: PlayerStatistics[]): PlayerStatistics[] {
+  return [...rows].sort(
+    (a, b) =>
+      a.team.Name.localeCompare(b.team.Name) ||
+      a.player.Name.localeCompare(b.player.Name),
+  );
+}
+
+function runStatistics(
   data: DatabaseDto,
   matchIds: Guid[],
-  gameIds?: Set<Guid>,
-  policy: StatCreditPolicy = resolveLeagueStatPolicy(data),
-): PlayerStatistics[] {
+  gameIds: Set<Guid> | undefined,
+  policy: StatCreditPolicy,
+): {
+  combined: PlayerStatistics[];
+  split: Map<Guid, SplitPlayerStatistics>;
+} {
   const playerOverviews = buildPlayerOverviews(data);
   const matchOverviews = buildMatchOverviews(data);
   const gameOverviews = buildGameOverviews(data);
@@ -517,13 +607,31 @@ export function createStatisticsSummary(
     processMatchOutcome(context, matchOverview, matchOutcomeHome);
   }
 
-  return context
-    .buildPlayerStatistics()
-    .sort(
-      (a, b) =>
-        a.team.Name.localeCompare(b.team.Name) ||
-        a.player.Name.localeCompare(b.player.Name),
-    );
+  return {
+    combined: sortPlayerStatistics(context.buildCombinedPlayerStatistics()),
+    split: context.buildSplitPlayerStatistics(),
+  };
+}
+
+export function createStatisticsSummary(
+  data: DatabaseDto,
+  matchIds: Guid[],
+  gameIds?: Set<Guid>,
+  policy: StatCreditPolicy = resolveLeagueStatPolicy(data),
+): PlayerStatistics[] {
+  return runStatistics(data, matchIds, gameIds, policy).combined;
+}
+
+export function createSplitStatisticsSummary(
+  data: DatabaseDto,
+  matchIds: Guid[],
+  gameIds?: Set<Guid>,
+  policy: StatCreditPolicy = resolveLeagueStatPolicy(data),
+): {
+  combined: PlayerStatistics[];
+  split: Map<Guid, SplitPlayerStatistics>;
+} {
+  return runStatistics(data, matchIds, gameIds, policy);
 }
 
 export { enumValues };

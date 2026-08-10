@@ -1,15 +1,18 @@
-import { Button, Stack, TextField, Typography } from '@mui/material';
+import { Button, Chip, Stack, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { EntityAvatar } from '../components/EntityAvatar';
 import { ImageUrlField } from '../components/ImageUrlField';
 import { FormOneLine, PageHeader, TextButton } from '../components/Ui';
 import {
+  getPlayer,
   getPlayersForTeam,
   getTeam,
   playerIsUsedInMatches,
   teamIsUsedInMatches,
 } from '../domain/database';
+import { linkedPlayerLabel } from '../domain/playerMatch';
+import { playerHref } from '../domain/playerProfile';
 import { MAX_PLAYER_NAME, MAX_TEAM_NAME } from '../domain/limits';
 import { useDatabase } from '../state/DatabaseContext';
 
@@ -218,9 +221,24 @@ export function TeamPage() {
                       sx={{ alignItems: 'center', flexWrap: 'wrap' }}
                     >
                       <EntityAvatar name={player.Name} image={player.Image} size={28} />
-                      <TextButton onClick={() => navigate(`/players/${player.Id}`)}>
+                      <TextButton
+                        onClick={() =>
+                          navigate(playerHref(player.LinkedPlayerId ?? player.Id))
+                        }
+                      >
                         {player.Name}
                       </TextButton>
+                      {player.LinkedPlayerId ? (
+                        <Chip
+                          size="small"
+                          color="secondary"
+                          label={
+                            linkedPlayerLabel(data, player) ??
+                            `sub for ${getPlayer(data, player.LinkedPlayerId)?.Name ?? 'player'}`
+                          }
+                          className="sk-player-linked"
+                        />
+                      ) : null}
                       <Button
                         size="small"
                         onClick={() => {

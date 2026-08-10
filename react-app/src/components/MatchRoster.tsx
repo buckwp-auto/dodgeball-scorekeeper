@@ -1,10 +1,22 @@
 import CloseIcon from '@mui/icons-material/Close';
-import { Box, Button, Checkbox, Chip, FormControlLabel, IconButton, Paper, Stack, TextField, Typography } from '@mui/material';
+import {
+  Autocomplete,
+  Box,
+  Button,
+  Checkbox,
+  Chip,
+  FormControlLabel,
+  IconButton,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import type { ImageRef } from '../domain/imageRef';
+import type { PlayerMatchCandidate } from '../domain/playerMatch';
 import { HotkeyBadge } from './HotkeyBadge';
 import { EntityAvatar } from './EntityAvatar';
 import { TextButton } from './Ui';
-import { MAX_PLAYER_NAME } from '../domain/limits';
 
 export function PlayerRoster({
   side,
@@ -36,11 +48,17 @@ export function PlayerRoster({
   addPlayer?: {
     name: string;
     asSub: boolean;
+    suggestions?: PlayerMatchCandidate[];
     onNameChange: (value: string) => void;
     onAsSubChange: (value: boolean) => void;
-    onSubmit: () => void;
+    onSubmit: (candidate?: PlayerMatchCandidate) => void;
   };
 }) {
+  const suggestionLabel = (option: PlayerMatchCandidate) =>
+    option.sameTeam
+      ? `${option.playerName} (on this team)`
+      : `${option.playerName} · ${option.teamName}`;
+
   return (
     <Paper variant="outlined" className="sk-team" sx={{ p: 2 }}>
       <Box className="sk-team-header">
@@ -114,19 +132,41 @@ export function PlayerRoster({
       })}
       {addPlayer ? (
         <Stack spacing={1} sx={{ mt: 2 }} className="sk-add-match-player">
-          <TextField
-            size="small"
-            label="Add player"
-            value={addPlayer.name}
-            onChange={(event) => addPlayer.onNameChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                if (addPlayer.name.trim()) addPlayer.onSubmit();
-              }
+          <Autocomplete
+            freeSolo
+            options={addPlayer.suggestions ?? []}
+            filterOptions={(options) => options}
+            inputValue={addPlayer.name}
+            onInputChange={(_, value, reason) => {
+              if (reason !== 'input' && reason !== 'clear') return;
+              addPlayer.onNameChange(value);
             }}
-            slotProps={{ htmlInput: { maxLength: MAX_PLAYER_NAME } }}
-            fullWidth
+            getOptionLabel={(option) =>
+              typeof option === 'string' ? option : suggestionLabel(option)
+            }
+            isOptionEqualToValue={(option, value) =>
+              typeof value !== 'string' && option.playerId === value.playerId
+            }
+            onChange={(_, value) => {
+              if (!value) return;
+              if (typeof value === 'string') {
+                if (value.trim()) addPlayer.onSubmit();
+                return;
+              }
+              if (!value.sameTeam) addPlayer.onAsSubChange(true);
+              addPlayer.onSubmit(value);
+            }}
+            renderOption={(props, option) => (
+              <li {...props} key={option.playerId} className="sk-add-player-suggestion">
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <EntityAvatar name={option.playerName} image={option.image} size={24} />
+                  <span>{suggestionLabel(option)}</span>
+                </Stack>
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField {...params} size="small" label="Add player" fullWidth />
+            )}
           />
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <FormControlLabel
@@ -144,7 +184,7 @@ export function PlayerRoster({
               variant="contained"
               className="bw-button bw-button--text"
               disabled={!addPlayer.name.trim()}
-              onClick={addPlayer.onSubmit}
+              onClick={() => addPlayer.onSubmit()}
             >
               Add
             </Button>

@@ -257,6 +257,9 @@ export function deletePlayer(data: DatabaseDto, playerId: Guid): void {
   data.Tables.TeamPlayer = table<TeamPlayerRow>(data, 'TeamPlayer').filter(
     (row) => row.PlayerId !== playerId,
   );
+  for (const row of table<PlayerRow>(data, 'Player')) {
+    if (row.LinkedPlayerId === playerId) delete row.LinkedPlayerId;
+  }
 }
 
 export function clampNotes(value: string | null | undefined): string | null {

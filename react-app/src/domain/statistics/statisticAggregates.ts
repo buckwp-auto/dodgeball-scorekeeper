@@ -32,6 +32,12 @@ export abstract class StatisticAggregatesBuilder<
     this.set(key, this.combine(this.get(key), amount));
   }
 
+  mergeFrom(other: StatisticAggregatesBuilder<TKey, TValue>): void {
+    for (const [key, value] of other.aggregates) {
+      this.increment(key, value);
+    }
+  }
+
   getTotal(): TValue | undefined {
     if (this.aggregates.size === 0) return undefined;
     let total = this.zero();

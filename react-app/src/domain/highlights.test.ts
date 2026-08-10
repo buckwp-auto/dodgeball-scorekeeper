@@ -9,7 +9,7 @@ import {
   getPlayerHighlightGroups,
   highlightEventHref,
 } from './highlights';
-import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
+import { addGame, addPlayerToMatchSide, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import { ThrowResult } from './statistics/constants';
 
 function seedTwoMatchLeague() {
@@ -155,6 +155,46 @@ describe('league highlights', () => {
     expect(eventIds(alex.Id)).toEqual(expect.arrayContaining([throwA1, throwB1]));
     expect(eventIds(casey.Id)).toEqual([throwA1]);
     expect(eventIds(drew.Id)).toEqual([throwB1]);
+  });
+
+  it('includes linked guest appearances on the canonical player', () => {
+    const data = createEmptyDatabase();
+    const hawks = addTeam(data, 'Hawks');
+    const owls = addTeam(data, 'Owls');
+    const alex = addPlayer(data, hawks.Id, 'Alex');
+    const blake = addPlayer(data, hawks.Id, 'Blake');
+    const match = addMatch(data, hawks.Id, owls.Id);
+    toggleMatchPlayer(data, match.Id, blake.Id, true);
+    const guest = addPlayerToMatchSide(data, match.Id, false, 'Alex', true, alex.Id);
+    const gameId = addGame(data, match.Id);
+    toggleGamePlayer(data, match.Id, gameId, blake.Id);
+    toggleGamePlayer(data, match.Id, gameId, guest.Id);
+    const gamePlayers = data.Tables.GamePlayer as {
+      Id: string;
+      GameId: string;
+      MatchPlayerId: string;
+    }[];
+    const matchPlayers = data.Tables.MatchPlayer as { Id: string; PlayerId: string }[];
+    const gpFor = (playerId: string) =>
+      gamePlayers.find(
+        (row) =>
+          row.GameId === gameId &&
+          matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === playerId,
+      )!;
+    const eventId = persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gpFor(guest.Id).Id,
+        targetGamePlayerId: gpFor(blake.Id).Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    setGameEventHighlight(data, eventId, true);
+    const ids = getPlayerHighlightGroups(data, alex.Id).flatMap((group) =>
+      group.games.flatMap((game) => game.highlights.map((row) => row.eventId)),
+    );
+    expect(ids).toEqual([eventId]);
   });
 
   it('builds a deep link to the game timeline event', () => {

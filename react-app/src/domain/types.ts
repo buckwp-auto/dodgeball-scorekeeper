@@ -16,6 +16,8 @@ export type PlayerRow = {
   Image?: ImageRef | null;
   /** Created from Match/Game roster Add, not the team’s core roster. */
   AddedFromMatch?: boolean;
+  /** Canonical league player this guest row represents (cross-team sub). */
+  LinkedPlayerId?: Guid;
 };
 
 export type TeamPlayerRow = {

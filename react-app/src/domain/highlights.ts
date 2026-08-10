@@ -3,6 +3,7 @@ import type { GameEventRow } from './gameEvents';
 import { getGamePlayerInfos } from './gameEvents';
 import { buildTimelineEntry, type TimelineEntry } from './gameEventTimeline';
 import { getMatchById, getMatchGames, getMatchIdForGame } from './matchGame';
+import { getPlayerIdsForProfile } from './playerMatch';
 import type { DatabaseDto, Guid } from './types';
 
 export type LeagueHighlight = {
@@ -40,9 +41,16 @@ export function timelineEntryInvolvesPlayer(
   entry: TimelineEntry,
   playerId: Guid,
 ): boolean {
+  return timelineEntryInvolvesAnyPlayer(entry, new Set([playerId]));
+}
+
+export function timelineEntryInvolvesAnyPlayer(
+  entry: TimelineEntry,
+  playerIds: ReadonlySet<Guid>,
+): boolean {
   return entry.rows.some((row) =>
     row.segments.some(
-      (segment) => segment.kind === 'player' && segment.player.playerId === playerId,
+      (segment) => segment.kind === 'player' && playerIds.has(segment.player.playerId),
     ),
   );
 }
@@ -51,6 +59,7 @@ export function getPlayerHighlightGroups(
   data: DatabaseDto,
   playerId: Guid,
 ): LeagueHighlightMatchGroup[] {
+  const ids = new Set(getPlayerIdsForProfile(data, playerId));
   return getLeagueHighlightGroups(data)
     .map((match) => ({
       ...match,
@@ -58,7 +67,7 @@ export function getPlayerHighlightGroups(
         .map((game) => ({
           ...game,
           highlights: game.highlights.filter((highlight) =>
-            timelineEntryInvolvesPlayer(highlight.entry, playerId),
+            timelineEntryInvolvesAnyPlayer(highlight.entry, ids),
           ),
         }))
         .filter((game) => game.highlights.length > 0),

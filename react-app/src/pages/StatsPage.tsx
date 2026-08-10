@@ -15,8 +15,10 @@ import { getMatchById, getMatchGames } from '../domain/matchGame';
 import { resolveHighlightQualifiers, resolveLeagueStatPolicy } from '../domain/leagueSettings';
 import {
   buildDisplayStats,
+  loadIncludeSubStats,
   loadStatsCountingMode,
   resolveStatsQuery,
+  saveIncludeSubStats,
   saveStatsCountingMode,
   statsPageTitle,
   type LeaderboardMetric,
@@ -43,6 +45,7 @@ export function StatsPage() {
   const [metric, setMetric] = useState<LeaderboardMetric>('kills');
   const [minGames, setMinGames] = useState(1);
   const [counting, setCounting] = useState<StatsCountingMode>(() => loadStatsCountingMode());
+  const [includeSubs, setIncludeSubs] = useState(() => loadIncludeSubStats());
 
   const scope: StatsScope | null = useMemo(() => {
     if (matchId && gameId) return { kind: 'game', matchId, gameId };
@@ -63,9 +66,15 @@ export function StatsPage() {
   const rows = useMemo(
     () =>
       scope && valid
-        ? attachVorWar(buildDisplayStats(data, scope), counting, qualifiers)
+        ? attachVorWar(
+            buildDisplayStats(data, scope, {
+              includeSubStats: scope.kind === 'league' ? includeSubs : true,
+            }),
+            counting,
+            qualifiers,
+          )
         : [],
-    [data, scope, valid, counting, qualifiers],
+    [data, scope, valid, counting, qualifiers, includeSubs],
   );
   const policy = useMemo(() => resolveLeagueStatPolicy(data), [data]);
   const showAssists =
@@ -83,6 +92,10 @@ export function StatsPage() {
   const onCountingChange = (next: StatsCountingMode) => {
     setCounting(next);
     saveStatsCountingMode(next);
+  };
+  const onIncludeSubsChange = (next: boolean) => {
+    setIncludeSubs(next);
+    saveIncludeSubStats(next);
   };
   const standings = useMemo(
     () => (scope && valid ? buildTeamStandingsForScope(data, scope) : []),
@@ -174,19 +187,35 @@ export function StatsPage() {
         <Tab value="charts" label="Charts" />
       </Tabs>
       {activeTab === 'players' || activeTab === 'charts' || activeTab === 'leaderboards' ? (
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={counting}
-          onChange={(_, next: StatsCountingMode | null) => {
-            if (next) onCountingChange(next);
-          }}
-          className="sk-stats-counting"
-          sx={{ mb: 2 }}
-        >
-          <ToggleButton value="counts">Counts</ToggleButton>
-          <ToggleButton value="credit">Credit</ToggleButton>
-        </ToggleButtonGroup>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={counting}
+            onChange={(_, next: StatsCountingMode | null) => {
+              if (next) onCountingChange(next);
+            }}
+            className="sk-stats-counting"
+          >
+            <ToggleButton value="counts">Counts</ToggleButton>
+            <ToggleButton value="credit">Credit</ToggleButton>
+          </ToggleButtonGroup>
+          {scope?.kind === 'league' ? (
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={includeSubs ? 'include' : 'exclude'}
+              onChange={(_, next: 'include' | 'exclude' | null) => {
+                if (!next) return;
+                onIncludeSubsChange(next === 'include');
+              }}
+              className="sk-stats-include-subs"
+            >
+              <ToggleButton value="include">Include sub stats</ToggleButton>
+              <ToggleButton value="exclude">Exclude sub stats</ToggleButton>
+            </ToggleButtonGroup>
+          ) : null}
+        </Stack>
       ) : null}
       {activeTab === 'standings' ? <StatsStandingsTable rows={standings} /> : null}
       {activeTab === 'players' ? (
