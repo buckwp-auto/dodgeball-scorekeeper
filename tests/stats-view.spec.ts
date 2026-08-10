@@ -38,6 +38,7 @@ test.describe('In-app stats', () => {
     await expect(page.getByLabel('Min matches')).toHaveValue('2');
     await expect(page.getByLabel('Min throws')).toHaveValue('20');
     await expect(page.getByLabel('Min targets')).toHaveValue('20');
+    await expect(page.getByLabel('Players per team per game')).toHaveValue('6');
   });
 
   test('stats dropdowns navigate to match, game, and player pages', async ({

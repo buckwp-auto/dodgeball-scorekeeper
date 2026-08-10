@@ -13,9 +13,9 @@
 - **Overview** — Google sign-in / league directory (when Firebase configured) with league logos and an optional slim banner when a league is open, **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)** (six teams with a distinct DiceBear avatar style each, Minnesota Dodgeball VODs, starred catches/deflections/double-kills, and 12 games per match so highlight minimums are met), sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match); paste https logo / photo URLs (thumbnails + initials fallback); player name opens **Player** (`/players/:id`) with a large photo, league stats row (including Caught% / Catch% / Elu% / Eff% / Net / VOR / WAR), ranks (kills / catches / hit%), starred highlights they appear in, and links to games played
 - **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
-- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills first 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster heading shows **Game N**; **match score** (home–away game wins) on match roster, Track Match, game roster, Track Game, and Game Complete; game roster has **Previous / Next game** (Next creates a game if needed); after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
+- **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills up to the league’s players-per-side limit, default 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster heading shows **Game N**; **match score** (home–away game wins) on match roster, Track Match, game roster, Track Game, and Game Complete; game roster has **Previous / Next game** (Next creates a game if needed); Track Game / Game Complete have **Edit roster** back to that game’s on-court selection; after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game; Match / Game / Player dropdowns jump between those views and player pages
-- **League Stat Settings** — highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on) plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
+- **League Stat Settings** — players per team per game (default 6), highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on), plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
 - **MUI shell** — drawer nav on a light gray background, primary blue theme (`#1565c0`), larger color pill for the open cloud league in the sync bar; Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
@@ -23,7 +23,9 @@
 
 - **Match & game roster selection** with home/away columns; game roster heading is **Game N**; team logos on banners and player photos on rows; optional tall YouTube VOD on both roster screens
 - **Add players on the match screen** (creates a team player and includes them on the match); mark **Sub** officially instead of a “(sub)” name suffix
-- **Auto-select first 6 players** per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
+- **Players per team per game** (League Stat Settings, default 6) caps who can be on court; match roster can still include extra subs
+- **Auto-select** up to that limit per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
+- **Edit roster** from Track Game returns to that game’s player selection (not Teams). Removing someone who already appears in events warns, then after confirm deletes every event from their first involvement onward (Game start is kept)
 - **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint; subs sort below starters
 
 ## Track Game
@@ -46,7 +48,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 - **Catch recovery** — pick a teammate (including outs) or **None** (`M`)
 - Auto-commit when a draft is complete and dirty; **Done / Restore / Insert below / Delete**
 - **Undo / Redo** (`-` / `+`) remove or restore the last entered event (session redo stack; cleared when a new event is committed). Distinct from `N` (delete selected) and `V` (restore draft from saved selection)
-- **Game Complete** idle state after a finish is recorded (undo/redo still work)
+- **Game Complete** idle state after a finish is recorded (undo/redo still work); **Edit roster** still available there
 - Timeline lists events (newest-oriented virtualized list); select to edit
 
 ### Live elimination

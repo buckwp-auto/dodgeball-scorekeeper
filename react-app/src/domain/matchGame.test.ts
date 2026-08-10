@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
+import { setLeagueSettings } from './leagueSettings';
 import {
   addGame,
   addPlayerToMatchSide,
+  countGameSidePlayers,
   deleteGame,
   deleteMatch,
   getAdjacentGameId,
@@ -12,10 +14,12 @@ import {
   getMatchIdForGame,
   getMatchPlayers,
   getMatchSidePlayersWithSelection,
+  isPlayerInGame,
   setMatchPlayerSubstitute,
   toggleGamePlayer,
   toggleMatchPlayer,
 } from './matchGame';
+import { LEGACY_POLICY } from './statistics/statCreditPolicy';
 import { persistThrowGameEvent } from './gameEvents';
 import { ThrowResult } from './statistics/constants';
 
@@ -109,6 +113,34 @@ describe('getMatchIdForGame', () => {
     expect(getMatchIdForGame(data, game1)).toBe(match.Id);
     expect(getMatchIdForGame(data, game2)).toBe(match.Id);
     expect(getMatchIdForGame(data, 'missing')).toBeUndefined();
+  });
+});
+
+describe('game roster limit', () => {
+  it('refuses more than the league players-per-side cap', () => {
+    const data = createEmptyDatabase();
+    setLeagueSettings(data, LEGACY_POLICY, undefined, 2);
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const h1 = addPlayer(data, home.Id, 'H1');
+    const h2 = addPlayer(data, home.Id, 'H2');
+    const h3 = addPlayer(data, home.Id, 'H3');
+    const a1 = addPlayer(data, away.Id, 'A1');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, h1.Id, true);
+    toggleMatchPlayer(data, match.Id, h2.Id, true);
+    toggleMatchPlayer(data, match.Id, h3.Id, true);
+    toggleMatchPlayer(data, match.Id, a1.Id, false);
+    const gameId = addGame(data, match.Id);
+
+    expect(toggleGamePlayer(data, match.Id, gameId, h1.Id)).toBe(true);
+    expect(toggleGamePlayer(data, match.Id, gameId, h2.Id)).toBe(true);
+    expect(toggleGamePlayer(data, match.Id, gameId, h3.Id)).toBe(false);
+    expect(countGameSidePlayers(data, match.Id, gameId, true)).toBe(2);
+    expect(isPlayerInGame(data, gameId, h3.Id, match.Id)).toBe(false);
+
+    expect(toggleGamePlayer(data, match.Id, gameId, a1.Id)).toBe(true);
+    expect(countGameSidePlayers(data, match.Id, gameId, false)).toBe(1);
   });
 });
 

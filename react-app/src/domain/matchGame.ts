@@ -1,4 +1,5 @@
 import { newIdTimestamp } from './id';
+import { resolvePlayersPerSide } from './leagueSettings';
 import type { DatabaseDto, Guid, MatchPlayerRow, MatchRow, PlayerRow } from './types';
 import { addPlayer, getPlayersForTeam } from './database';
 
@@ -362,6 +363,33 @@ export function isPlayerInGame(
   );
 }
 
+export function getGamePlayerId(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  playerId: Guid,
+): Guid | undefined {
+  const matchPlayer = getMatchPlayerRow(data, matchId, playerId);
+  if (!matchPlayer) return undefined;
+  return getGamePlayers(data, gameId).find(
+    (row) => row.MatchPlayerId === matchPlayer.Id,
+  )?.Id;
+}
+
+export function countGameSidePlayers(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  teamHome: boolean,
+): number {
+  const matchPlayers = new Map(
+    getMatchPlayers(data, matchId).map((row) => [row.Id, row]),
+  );
+  return getGamePlayers(data, gameId).filter(
+    (row) => matchPlayers.get(row.MatchPlayerId)?.TeamHome === teamHome,
+  ).length;
+}
+
 export function canNavigateToGameEvents(
   data: DatabaseDto,
   matchId: Guid,
@@ -381,12 +409,13 @@ export function canNavigateToGameEvents(
   return home && away;
 }
 
+/** @returns true when the on-court roster changed */
 export function toggleGamePlayer(
   data: DatabaseDto,
   matchId: Guid,
   gameId: Guid,
   playerId: Guid,
-): void {
+): boolean {
   const matchPlayer = getMatchPlayerRow(data, matchId, playerId);
   if (!matchPlayer) throw new Error('Player not in match');
   const rows = table<{ Id: Guid; GameId: Guid; MatchPlayerId: Guid }>(
@@ -398,13 +427,18 @@ export function toggleGamePlayer(
   );
   if (index >= 0) {
     rows.splice(index, 1);
-    return;
+    return true;
+  }
+  const limit = resolvePlayersPerSide(data);
+  if (countGameSidePlayers(data, matchId, gameId, matchPlayer.TeamHome) >= limit) {
+    return false;
   }
   pushRow(data, 'GamePlayer', {
     Id: newIdTimestamp(),
     GameId: gameId,
     MatchPlayerId: matchPlayer.Id,
   });
+  return true;
 }
 
 export type MatchSidePlayer = {

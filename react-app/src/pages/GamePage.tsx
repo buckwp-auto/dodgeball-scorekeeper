@@ -1,5 +1,5 @@
-import { Button, Stack, Typography } from '@mui/material';
-import { useCallback, useEffect, useMemo } from 'react';
+import { Alert, Button, Stack, Typography } from '@mui/material';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { rememberLastGame } from '../domain/lastScoring';
 import { PlayerRoster } from '../components/MatchRoster';
@@ -9,9 +9,14 @@ import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { getTeam } from '../domain/database';
 import {
+  previewRemoveGamePlayer,
+  removeGamePlayerFromRoster,
+} from '../domain/gameEvents';
+import {
   buildPermanentRosterHotkeys,
   findPlayerByHotkey,
 } from '../domain/hotkeys';
+import { resolvePlayersPerSide } from '../domain/leagueSettings';
 import { autoSelectGameRoster } from '../domain/rosterAutoSelect';
 import {
   computeGameLiveState,
@@ -20,9 +25,12 @@ import {
 } from '../domain/gameElimination';
 import {
   canNavigateToGameEvents,
+  countGameSidePlayers,
   getGameName,
   getGameSidePlayersWithSelection,
   getMatchById,
+  isPlayerInGame,
+  toggleGamePlayer as toggleGamePlayerOp,
 } from '../domain/matchGame';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
 import { useDatabase } from '../state/DatabaseContext';
@@ -30,7 +38,8 @@ import { useDatabase } from '../state/DatabaseContext';
 export function GamePage() {
   const { matchId = '', gameId = '' } = useParams();
   const navigate = useNavigate();
-  const { data, toggleGamePlayer, mutate } = useDatabase();
+  const { data, mutate } = useDatabase();
+  const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const { previousGameId, goToPreviousGame, goToNextGame } = useMatchGameNavigation(
     matchId,
     gameId,
@@ -91,6 +100,48 @@ export function GamePage() {
     [awayRosterRaw, eliminatedIds],
   );
 
+  const handleTogglePlayer = useCallback(
+    (playerId: string) => {
+      setLimitMessage(null);
+      const name =
+        homeRosterRaw.find((row) => row.player.Id === playerId)?.player.Name ??
+        awayRosterRaw.find((row) => row.player.Id === playerId)?.player.Name ??
+        'This player';
+
+      if (isPlayerInGame(data, gameId, playerId, matchId)) {
+        const preview = previewRemoveGamePlayer(data, matchId, gameId, playerId);
+        if (preview && preview.eventCount > 0) {
+          const plural = preview.eventCount === 1 ? '' : 's';
+          const ok = window.confirm(
+            `${name} appears in recorded events. Removing them will delete ${preview.eventCount} event${plural} from this game, back to the earliest event they were in. Continue?`,
+          );
+          if (!ok) return;
+          mutate((draft) => {
+            removeGamePlayerFromRoster(draft, matchId, gameId, playerId, {
+              rollbackEvents: true,
+            });
+          }, `Removed ${name} from the game roster.`);
+          return;
+        }
+        mutate((draft) => {
+          toggleGamePlayerOp(draft, matchId, gameId, playerId);
+        }, '');
+        return;
+      }
+
+      const teamHome = homeRosterRaw.some((row) => row.player.Id === playerId);
+      const limit = resolvePlayersPerSide(data);
+      if (countGameSidePlayers(data, matchId, gameId, teamHome) >= limit) {
+        setLimitMessage(`Each team can have at most ${limit} players in a game.`);
+        return;
+      }
+      mutate((draft) => {
+        toggleGamePlayerOp(draft, matchId, gameId, playerId);
+      }, '');
+    },
+    [awayRosterRaw, data, gameId, homeRosterRaw, matchId, mutate],
+  );
+
   const onPlayerHotkey = useCallback(
     (key: string) => {
       const hit = findPlayerByHotkey(
@@ -100,9 +151,9 @@ export function GamePage() {
         rosterHotkeys,
       );
       if (!hit) return;
-      toggleGamePlayer(matchId, gameId, hit.player.Id);
+      handleTogglePlayer(hit.player.Id);
     },
-    [homeRosterRaw, awayRosterRaw, matchId, gameId, toggleGamePlayer, rosterHotkeys],
+    [homeRosterRaw, awayRosterRaw, handleTogglePlayer, rosterHotkeys],
   );
 
   useDocumentHotkeys((key) => onPlayerHotkey(key), Boolean(match));
@@ -115,17 +166,27 @@ export function GamePage() {
   const awayTeam = getTeam(data, match.TeamIdAway);
   const canTrack = canNavigateToGameEvents(data, matchId, gameId);
   const gameTitle = getGameName(data, matchId, gameId);
+  const playersPerSide = resolvePlayersPerSide(data);
+  const homeSelected = homeRosterRaw.filter((row) => row.selected).length;
+  const awaySelected = awayRosterRaw.filter((row) => row.selected).length;
 
   return (
     <>
       <PageHeader>{gameTitle}</PageHeader>
       <MatchScoreLine matchId={matchId} />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        On court — Home: {live.activeHomeCount} active · Away: {live.activeAwayCount} active
+        On court — Home {homeSelected}/{playersPerSide} · Away {awaySelected}/{playersPerSide}
         {live.isGameOver
           ? ` · Game over (${live.winningTeamHome ? homeTeam?.Name : awayTeam?.Name} win)`
-          : ''}
+          : live.activeHomeCount + live.activeAwayCount < homeSelected + awaySelected
+            ? ` · Home ${live.activeHomeCount} / Away ${live.activeAwayCount} active`
+            : ''}
       </Typography>
+      {limitMessage ? (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setLimitMessage(null)}>
+          {limitMessage}
+        </Alert>
+      ) : null}
       <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2, flexWrap: 'wrap' }}>
         <Button
           type="button"
@@ -161,7 +222,7 @@ export function GamePage() {
           teamName={homeTeam?.Name ?? 'Home'}
           teamImage={homeTeam?.Image}
           players={homeRoster}
-          onToggle={(playerId) => toggleGamePlayer(matchId, gameId, playerId)}
+          onToggle={handleTogglePlayer}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
         />
@@ -170,7 +231,7 @@ export function GamePage() {
           teamName={awayTeam?.Name ?? 'Away'}
           teamImage={awayTeam?.Image}
           players={awayRoster}
-          onToggle={(playerId) => toggleGamePlayer(matchId, gameId, playerId)}
+          onToggle={handleTogglePlayer}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
         />

@@ -58,6 +58,7 @@ export type LeagueSettingsRow = {
   HighlightMinVolumeEnabled?: boolean;
   HighlightMinThrows?: number;
   HighlightMinTargets?: number;
+  PlayersPerSide?: number;
 };
 
 function table<T>(data: DatabaseDto, name: string): T[] {
@@ -171,21 +172,49 @@ export function resolveHighlightQualifiers(data: DatabaseDto): HighlightQualifie
   return qualifiersFromSettingsRow(getLeagueSettingsRow(data));
 }
 
+export const DEFAULT_PLAYERS_PER_SIDE = 6;
+export const MIN_PLAYERS_PER_SIDE = 1;
+export const MAX_PLAYERS_PER_SIDE = 12;
+
+export function normalizePlayersPerSide(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_PLAYERS_PER_SIDE;
+  return Math.min(
+    MAX_PLAYERS_PER_SIDE,
+    Math.max(MIN_PLAYERS_PER_SIDE, Math.round(value)),
+  );
+}
+
+export function resolvePlayersPerSide(data: DatabaseDto): number {
+  return normalizePlayersPerSide(getLeagueSettingsRow(data)?.PlayersPerSide);
+}
+
 export function setLeagueSettings(
   data: DatabaseDto,
   policy: StatCreditPolicy,
   qualifiers?: HighlightQualifierSettings,
+  playersPerSide?: number,
 ): LeagueSettingsRow {
   const existing = getLeagueSettingsRow(data);
   const resolvedQualifiers = qualifiers
     ? normalizeHighlightQualifiers(qualifiers)
     : qualifiersFromSettingsRow(existing);
+  const resolvedPlayersPerSide =
+    playersPerSide != null
+      ? normalizePlayersPerSide(playersPerSide)
+      : resolvePlayersPerSideFromRow(existing);
   const row: LeagueSettingsRow = {
     ...settingsRowFromPolicy(existing?.Id ?? newIdTimestamp(), policy),
     ...settingsRowFromQualifiers(resolvedQualifiers),
+    PlayersPerSide: resolvedPlayersPerSide,
   };
   data.Tables.LeagueSettings = [row];
   return row;
+}
+
+function resolvePlayersPerSideFromRow(
+  row: LeagueSettingsRow | null | undefined,
+): number {
+  return normalizePlayersPerSide(row?.PlayersPerSide);
 }
 
 function rowHasHighlightQualifiers(row: LeagueSettingsRow): boolean {

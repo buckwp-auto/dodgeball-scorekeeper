@@ -6,7 +6,7 @@ import {
   ThrowResult,
 } from './statistics/constants';
 import type { DatabaseDto, Guid } from './types';
-import { getGamePlayers, getMatchPlayers } from './matchGame';
+import { getGamePlayers, getMatchPlayers, toggleGamePlayer } from './matchGame';
 
 function table<T>(data: DatabaseDto, name: string): T[] {
   return data.Tables[name] as T[];
@@ -626,6 +626,127 @@ export function persistFinishGameEvent(
     ResultId: draft.resultId!,
   });
   return gameEventId;
+}
+
+export function gameEventIncludesGamePlayer(
+  data: DatabaseDto,
+  gameEventId: Guid,
+  gamePlayerId: Guid,
+): boolean {
+  const error = table<{ GameEventId: Guid; OffenderId: Guid }>(
+    data,
+    'GameEventError',
+  ).find((row) => row.GameEventId === gameEventId);
+  if (error?.OffenderId === gamePlayerId) return true;
+
+  const throwRows = table<{
+    Id: Guid;
+    GameEventThrowId: Guid;
+    ThrowerId: Guid;
+    TargetId: Guid;
+    RecoveredId?: Guid | null;
+  }>(data, 'Throw').filter((row) => row.GameEventThrowId === gameEventId);
+
+  for (const throwRow of throwRows) {
+    if (
+      throwRow.ThrowerId === gamePlayerId ||
+      throwRow.TargetId === gamePlayerId ||
+      throwRow.RecoveredId === gamePlayerId
+    ) {
+      return true;
+    }
+    const hit = table<{ ThrowId: Guid; ReceiverId: Guid }>(data, 'Deflection').some(
+      (row) => row.ThrowId === throwRow.Id && row.ReceiverId === gamePlayerId,
+    );
+    if (hit) return true;
+  }
+  return false;
+}
+
+export function findFirstGameEventIncludingPlayer(
+  data: DatabaseDto,
+  gameId: Guid,
+  gamePlayerId: Guid,
+): GameEventRow | null {
+  for (const event of getGameEvents(data, gameId)) {
+    if (getGameEventType(data, event.Id) === 'start') continue;
+    if (gameEventIncludesGamePlayer(data, event.Id, gamePlayerId)) return event;
+  }
+  return null;
+}
+
+export function previewGamePlayerEventRollback(
+  data: DatabaseDto,
+  gameId: Guid,
+  gamePlayerId: Guid,
+): { firstOrdinal: number; eventCount: number } | null {
+  const first = findFirstGameEventIncludingPlayer(data, gameId, gamePlayerId);
+  if (!first) return null;
+  const eventCount = getGameEvents(data, gameId).filter(
+    (event) =>
+      event.Ordinal >= first.Ordinal && getGameEventType(data, event.Id) !== 'start',
+  ).length;
+  if (eventCount === 0) return null;
+  return { firstOrdinal: first.Ordinal, eventCount };
+}
+
+export function previewRemoveGamePlayer(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  playerId: Guid,
+): { gamePlayerId: Guid; eventCount: number } | null {
+  const info = getGamePlayerInfos(data, matchId, gameId).find(
+    (row) => row.playerId === playerId,
+  );
+  if (!info) return null;
+  const preview = previewGamePlayerEventRollback(data, gameId, info.gamePlayerId);
+  if (!preview) return null;
+  return { gamePlayerId: info.gamePlayerId, eventCount: preview.eventCount };
+}
+
+/** Delete every non-start event from the player's first involvement onward. */
+export function rollbackGameEventsFromPlayer(
+  data: DatabaseDto,
+  gameId: Guid,
+  gamePlayerId: Guid,
+): number {
+  const first = findFirstGameEventIncludingPlayer(data, gameId, gamePlayerId);
+  if (!first) return 0;
+  const toDelete = getGameEvents(data, gameId)
+    .filter(
+      (event) =>
+        event.Ordinal >= first.Ordinal && getGameEventType(data, event.Id) !== 'start',
+    )
+    .sort((a, b) => b.Ordinal - a.Ordinal);
+  for (const event of toDelete) {
+    deleteGameEvent(data, event.Id);
+  }
+  return toDelete.length;
+}
+
+export function removeGamePlayerFromRoster(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  playerId: Guid,
+  options?: { rollbackEvents?: boolean },
+): { removed: boolean; rolledBackEvents: number } {
+  const info = getGamePlayerInfos(data, matchId, gameId).find(
+    (row) => row.playerId === playerId,
+  );
+  if (!info) return { removed: false, rolledBackEvents: 0 };
+
+  const preview = previewGamePlayerEventRollback(data, gameId, info.gamePlayerId);
+  if (preview && !options?.rollbackEvents) {
+    throw new Error('Player appears in recorded events');
+  }
+
+  const rolledBackEvents = preview
+    ? rollbackGameEventsFromPlayer(data, gameId, info.gamePlayerId)
+    : 0;
+  toggleGamePlayer(data, matchId, gameId, playerId);
+  return { removed: true, rolledBackEvents };
 }
 
 export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {

@@ -1,3 +1,4 @@
+import { DEFAULT_PLAYERS_PER_SIDE, resolvePlayersPerSide } from './leagueSettings';
 import type { DatabaseDto, Guid } from './types';
 import {
   addGame,
@@ -11,15 +12,16 @@ import {
   toggleMatchPlayer,
 } from './matchGame';
 
-export const AUTO_SELECT_PLAYER_LIMIT = 6;
+export const AUTO_SELECT_PLAYER_LIMIT = DEFAULT_PLAYERS_PER_SIDE;
 
 /** @returns true if any players were added to the match roster */
 export function autoSelectMatchRoster(data: DatabaseDto, matchId: Guid): boolean {
   const match = getMatchById(data, matchId);
   if (!match) return false;
   let changed = false;
-  const homePlayers = getMatchSidePlayers(data, match, true).slice(0, AUTO_SELECT_PLAYER_LIMIT);
-  const awayPlayers = getMatchSidePlayers(data, match, false).slice(0, AUTO_SELECT_PLAYER_LIMIT);
+  const limit = resolvePlayersPerSide(data);
+  const homePlayers = getMatchSidePlayers(data, match, true).slice(0, limit);
+  const awayPlayers = getMatchSidePlayers(data, match, false).slice(0, limit);
   for (const player of homePlayers) {
     if (!isPlayerInMatch(data, matchId, player.Id)) {
       toggleMatchPlayer(data, matchId, player.Id, true);
@@ -49,7 +51,7 @@ export function autoSelectGameRoster(
     const side = matchPlayerRows.filter((row) => row.TeamHome === teamHome);
     const starters = side.filter((row) => !row.IsSubstitute);
     const subs = side.filter((row) => row.IsSubstitute);
-    return [...starters, ...subs].slice(0, AUTO_SELECT_PLAYER_LIMIT);
+    return [...starters, ...subs].slice(0, resolvePlayersPerSide(data));
   };
   const playerIds = [...startersThenSubs(true), ...startersThenSubs(false)].map(
     (row) => row.PlayerId,

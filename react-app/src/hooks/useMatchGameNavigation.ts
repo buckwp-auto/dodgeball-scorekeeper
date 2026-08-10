@@ -52,5 +52,6 @@ export function useMatchGameNavigation(matchId: string, gameId: string) {
     goToPreviousGame,
     goToNextGame,
     goToMatch,
+    goToGameRoster,
   };
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
+import { setLeagueSettings } from './leagueSettings';
+import { LEGACY_POLICY } from './statistics/statCreditPolicy';
 import {
   addGame,
   getMatchPlayers,
@@ -84,6 +86,21 @@ describe('roster auto-select', () => {
     expect(isPlayerInGame(data, gameId, homePlayers[0].Id, match.Id)).toBe(false);
     expect(isPlayerInGame(data, gameId, awayPlayers[0].Id, match.Id)).toBe(false);
     expect(getGamePlayers(data, gameId).length).toBe(AUTO_SELECT_PLAYER_LIMIT * 2);
+  });
+
+  it('respects a custom players-per-side league setting', () => {
+    const { data, match, homePlayers, awayPlayers } = seedTeamsWithManyPlayers(8, 8);
+    setLeagueSettings(data, LEGACY_POLICY, undefined, 3);
+    autoSelectMatchRoster(data, match.Id);
+    const rows = getMatchPlayers(data, match.Id);
+    expect(rows.filter((row) => row.TeamHome)).toHaveLength(3);
+    expect(rows.filter((row) => !row.TeamHome)).toHaveLength(3);
+
+    const gameId = addGameWithAutoRoster(data, match.Id);
+    expect(getGamePlayers(data, gameId)).toHaveLength(6);
+    expect(isPlayerInGame(data, gameId, homePlayers[2].Id, match.Id)).toBe(true);
+    expect(isPlayerInGame(data, gameId, homePlayers[3].Id, match.Id)).toBe(false);
+    expect(isPlayerInGame(data, gameId, awayPlayers[3].Id, match.Id)).toBe(false);
   });
 
   it('does not add more players when the game already has a roster', () => {

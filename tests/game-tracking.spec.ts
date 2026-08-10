@@ -9,7 +9,25 @@ import {
   openTeam,
   selectMatchRoster,
   selectGameRoster,
+  STORAGE_KEY,
 } from './helpers/scorekeeper-page';
+import {
+  addMatch,
+  addPlayer as addPlayerRow,
+  addTeam as addTeamRow,
+  createEmptyDatabase,
+  serializeDatabase,
+} from '../react-app/src/domain/database';
+import {
+  addGame as addGameRow,
+  toggleGamePlayer,
+  toggleMatchPlayer,
+} from '../react-app/src/domain/matchGame';
+import {
+  getGamePlayerInfos,
+  persistThrowGameEvent,
+} from '../react-app/src/domain/gameEvents';
+import { ThrowResult } from '../react-app/src/domain/statistics/constants';
 
 /** End-to-end roster and game tracking. */
 test.describe('Game tracking (full roster)', () => {
@@ -56,5 +74,65 @@ test.describe('Game tracking (full roster)', () => {
     await expect(page.getByRole('heading', { name: 'Track Match' })).toBeVisible();
     await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
     await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
+  });
+
+  test('edit roster from track game rolls back events after confirm', async ({ page }) => {
+    const data = createEmptyDatabase();
+    const home = addTeamRow(data, 'Home Hawks');
+    const away = addTeamRow(data, 'Away Owls');
+    const h1 = addPlayerRow(data, home.Id, 'H1');
+    const h2 = addPlayerRow(data, home.Id, 'H2');
+    const a1 = addPlayerRow(data, away.Id, 'A1');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, h1.Id, true);
+    toggleMatchPlayer(data, match.Id, h2.Id, true);
+    toggleMatchPlayer(data, match.Id, a1.Id, false);
+    const gameId = addGameRow(data, match.Id);
+    toggleGamePlayer(data, match.Id, gameId, h1.Id);
+    toggleGamePlayer(data, match.Id, gameId, h2.Id);
+    toggleGamePlayer(data, match.Id, gameId, a1.Id);
+
+    const infos = getGamePlayerInfos(data, match.Id, gameId);
+    const gp = (name: string) => infos.find((row) => row.playerName === name)!.gamePlayerId;
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gp('H2'),
+        targetGamePlayerId: gp('A1'),
+        resultId: ThrowResult.Miss,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gp('H1'),
+        targetGamePlayerId: gp('A1'),
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+
+    await page.addInitScript(
+      ({ key, value }) => sessionStorage.setItem(key, value),
+      { key: STORAGE_KEY, value: serializeDatabase(data) },
+    );
+    await page.goto(`/matches/${match.Id}/games/${gameId}/events`);
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+    await expect(page.locator('.sk-game-timeline')).toContainText('H1');
+    await expect(page.locator('.sk-game-timeline')).toContainText('H2');
+
+    await page.getByRole('button', { name: 'Edit roster' }).click();
+    await expect(page.getByRole('heading', { name: /^Game \d+$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Track Game' })).toBeVisible();
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.locator('.sk-game .sk-team').nth(0).getByRole('button', { name: 'H1', exact: true }).click();
+
+    await page.getByRole('button', { name: 'Track Game' }).click();
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+    await expect(page.locator('.sk-game-timeline')).toContainText('Game start');
+    await expect(page.locator('.sk-game-timeline')).toContainText('H2');
+    await expect(page.locator('.sk-game-timeline')).not.toContainText('H1');
   });
 });

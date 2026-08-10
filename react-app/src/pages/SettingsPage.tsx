@@ -19,9 +19,13 @@ import { PageHeader } from '../components/Ui';
 import { imageRefFromExternalUrl } from '../domain/imageRef';
 import {
   normalizeHighlightQualifiers,
+  normalizePlayersPerSide,
   resolveHighlightQualifiers,
   resolveLeagueStatPolicy,
+  resolvePlayersPerSide,
   setLeagueSettings,
+  MAX_PLAYERS_PER_SIDE,
+  MIN_PLAYERS_PER_SIDE,
   type HighlightQualifierSettings,
 } from '../domain/leagueSettings';
 import {
@@ -72,10 +76,16 @@ export function SettingsPage() {
   const canEditImages = Boolean(activeLeagueId && canOverrideActiveLeague);
   const savedPolicy = useMemo(() => resolveLeagueStatPolicy(data), [data]);
   const savedQualifiers = useMemo(() => resolveHighlightQualifiers(data), [data]);
-  const savedKey = JSON.stringify({ policy: savedPolicy, qualifiers: savedQualifiers });
+  const savedPlayersPerSide = useMemo(() => resolvePlayersPerSide(data), [data]);
+  const savedKey = JSON.stringify({
+    policy: savedPolicy,
+    qualifiers: savedQualifiers,
+    playersPerSide: savedPlayersPerSide,
+  });
   const [draft, setDraft] = useState<StatCreditPolicy>(savedPolicy);
   const [qualifiers, setQualifiers] =
     useState<HighlightQualifierSettings>(savedQualifiers);
+  const [playersPerSide, setPlayersPerSide] = useState(savedPlayersPerSide);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
 
@@ -83,9 +93,11 @@ export function SettingsPage() {
     const parsed = JSON.parse(savedKey) as {
       policy: StatCreditPolicy;
       qualifiers: HighlightQualifierSettings;
+      playersPerSide: number;
     };
     setDraft(parsed.policy);
     setQualifiers(parsed.qualifiers);
+    setPlayersPerSide(parsed.playersPerSide);
   }, [savedKey]);
 
   const preset = matchingStatCreditPreset(draft);
@@ -93,7 +105,8 @@ export function SettingsPage() {
     JSON.stringify(normalizeStatCreditPolicy(draft)) !==
       JSON.stringify(normalizeStatCreditPolicy(savedPolicy)) ||
     JSON.stringify(normalizeHighlightQualifiers(qualifiers)) !==
-      JSON.stringify(normalizeHighlightQualifiers(savedQualifiers));
+      JSON.stringify(normalizeHighlightQualifiers(savedQualifiers)) ||
+    normalizePlayersPerSide(playersPerSide) !== savedPlayersPerSide;
 
   const update = (patch: Partial<StatCreditPolicy>) => {
     setDraft((current) => normalizeStatCreditPolicy({ ...current, ...patch }));
@@ -113,7 +126,7 @@ export function SettingsPage() {
 
   const save = () => {
     mutate((draftData) => {
-      setLeagueSettings(draftData, draft, qualifiers);
+      setLeagueSettings(draftData, draft, qualifiers, playersPerSide);
     }, 'Updated league stat settings.');
     setSavedMessage('Saved. Stats recalculate from existing games immediately.');
   };
@@ -135,9 +148,10 @@ export function SettingsPage() {
     <>
       <PageHeader>League Stat Settings</PageHeader>
       <Typography variant="body1" sx={{ mb: 2, maxWidth: 720 }}>
-        Configure highlight-leaderboard minimums and how this league awards kill credit for team
-        throws, deflections, multi-kills, and catches. Changing settings does not edit scored
-        events — leaderboards and CSV recalculate from the games already recorded.
+        Configure how many players each team fields in a game, highlight-leaderboard minimums, and
+        how this league awards kill credit for team throws, deflections, multi-kills, and catches.
+        Changing stat settings does not edit scored events — leaderboards and CSV recalculate from
+        the games already recorded.
       </Typography>
       {activeLeagueId && !canEdit ? (
         <Alert severity="info" sx={{ mb: 2 }}>
@@ -180,6 +194,31 @@ export function SettingsPage() {
       ) : null}
 
       <Stack spacing={3} sx={{ maxWidth: 720 }} className="sk-settings">
+        <Box className="sk-settings-roster">
+          <Typography variant="h6">Game roster</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Maximum players each team can field in a single game. Auto-select uses this limit; the
+            match roster can still include extra substitutes.
+          </Typography>
+          <TextField
+            label="Players per team per game"
+            type="number"
+            size="small"
+            disabled={!canEdit}
+            value={playersPerSide}
+            onChange={(event) => {
+              const next = Number.parseInt(event.target.value, 10);
+              if (!Number.isFinite(next)) return;
+              setPlayersPerSide(normalizePlayersPerSide(next));
+              setSavedMessage(null);
+            }}
+            slotProps={{
+              htmlInput: { min: MIN_PLAYERS_PER_SIDE, max: MAX_PLAYERS_PER_SIDE },
+            }}
+            sx={{ width: 220 }}
+          />
+        </Box>
+
         <Box className="sk-settings-qualifiers">
           <Typography variant="h6">Leaderboard minimums</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

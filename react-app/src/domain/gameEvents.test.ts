@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyDatabase } from './database';
 import { addMatch, addPlayer, addTeam } from './database';
-import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
+import { addGame, isPlayerInGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import {
   DeflectionResult,
+  GameEventErrorOffense,
   GameEventFinishResult,
   ThrowResult,
 } from './statistics/constants';
@@ -17,8 +18,11 @@ import {
   getGameStartEvent,
   initialVideoSeekSeconds,
   loadThrowDraftsFromEvent,
+  persistErrorGameEvent,
   persistFinishGameEvent,
   persistThrowGameEvent,
+  previewRemoveGamePlayer,
+  removeGamePlayerFromRoster,
   restoreGameEventSnapshot,
   setGameEventHighlight,
   setGameEventVideoOffset,
@@ -528,5 +532,118 @@ describe('undo / redo game events', () => {
     expect(gameHasFinishEvent(data, gameId)).toBe(false);
     restoreGameEventSnapshot(data, snapshot!);
     expect(gameHasFinishEvent(data, gameId)).toBe(true);
+  });
+});
+
+describe('game roster event rollback', () => {
+  it('rolls back from the first event that includes the removed player', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    const h1Id = (data.Tables.Player as { Id: string; Name: string }[]).find(
+      (row) => row.Name === 'Alex',
+    )!.Id;
+    const h2Id = (data.Tables.Player as { Id: string; Name: string }[]).find(
+      (row) => row.Name === 'Blake',
+    )!.Id;
+
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp2!.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Miss,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistFinishGameEvent(data, gameId, { resultId: GameEventFinishResult.WinHome });
+
+    const preview = previewRemoveGamePlayer(data, match.Id, gameId, h1Id);
+    expect(preview?.eventCount).toBe(2);
+
+    const result = removeGamePlayerFromRoster(data, match.Id, gameId, h1Id, {
+      rollbackEvents: true,
+    });
+    expect(result).toEqual({ removed: true, rolledBackEvents: 2 });
+    expect(isPlayerInGame(data, gameId, h1Id, match.Id)).toBe(false);
+    expect(isPlayerInGame(data, gameId, h2Id, match.Id)).toBe(true);
+    expect(gameHasFinishEvent(data, gameId)).toBe(false);
+
+    const events = getGameEvents(data, gameId);
+    expect(events).toHaveLength(2);
+    expect(getGameEventType(data, events[0].Id)).toBe('start');
+    expect(getGameEventType(data, events[1].Id)).toBe('throw');
+    expect(loadThrowDraftsFromEvent(data, events[1].Id)[0].throwerGamePlayerId).toBe(
+      homeGp2!.Id,
+    );
+  });
+
+  it('keeps events when the removed player never appeared in them', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch(true);
+    const h2Id = (data.Tables.Player as { Id: string; Name: string }[]).find(
+      (row) => row.Name === 'Blake',
+    )!.Id;
+
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+
+    expect(previewRemoveGamePlayer(data, match.Id, gameId, h2Id)).toBeNull();
+    const result = removeGamePlayerFromRoster(data, match.Id, gameId, h2Id);
+    expect(result).toEqual({ removed: true, rolledBackEvents: 0 });
+    expect(getGameEvents(data, gameId)).toHaveLength(2);
+    expect(isPlayerInGame(data, gameId, h2Id, match.Id)).toBe(false);
+  });
+
+  it('treats error offenders and catch recoveries as involvement', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    const h1Id = (data.Tables.Player as { Id: string; Name: string }[]).find(
+      (row) => row.Name === 'Alex',
+    )!.Id;
+    const h2Id = (data.Tables.Player as { Id: string; Name: string }[]).find(
+      (row) => row.Name === 'Blake',
+    )!.Id;
+
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: awayGp.Id,
+        targetGamePlayerId: homeGp.Id,
+        resultId: ThrowResult.Catch,
+        deflections: [],
+        recoveredId: homeGp2!.Id,
+      },
+    ]);
+    persistErrorGameEvent(data, gameId, match.Id, {
+      offenderGamePlayerId: homeGp.Id,
+      offenseId: GameEventErrorOffense.LineOut,
+    });
+
+    expect(previewRemoveGamePlayer(data, match.Id, gameId, h2Id)?.eventCount).toBe(2);
+    removeGamePlayerFromRoster(data, match.Id, gameId, h2Id, { rollbackEvents: true });
+    expect(getGameEvents(data, gameId)).toHaveLength(1);
+    expect(getGameEventType(data, getGameEvents(data, gameId)[0].Id)).toBe('start');
+
+    toggleGamePlayer(data, match.Id, gameId, h2Id);
+    persistErrorGameEvent(data, gameId, match.Id, {
+      offenderGamePlayerId: homeGp.Id,
+      offenseId: GameEventErrorOffense.LineOut,
+    });
+    expect(previewRemoveGamePlayer(data, match.Id, gameId, h1Id)?.eventCount).toBe(1);
+    expect(() => removeGamePlayerFromRoster(data, match.Id, gameId, h1Id)).toThrow(
+      /appears in recorded events/,
+    );
   });
 });

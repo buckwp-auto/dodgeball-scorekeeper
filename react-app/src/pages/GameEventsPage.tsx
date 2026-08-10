@@ -83,7 +83,10 @@ export function GameEventsPage() {
   const [searchParams] = useSearchParams();
   const focusEventFromUrl = searchParams.get('event');
   const { data, mutate } = useDatabase();
-  const { goToNextGame, goToMatch } = useMatchGameNavigation(matchId, gameId);
+  const { goToNextGame, goToMatch, goToGameRoster } = useMatchGameNavigation(
+    matchId,
+    gameId,
+  );
 
   // Backfill Game Start for older saves that predate the event type
   useEffect(() => {
@@ -803,6 +806,14 @@ export function GameEventsPage() {
             <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap' }}>
               <Button
                 type="button"
+                className="bw-button bw-button--text sk-edit-roster"
+                variant="outlined"
+                onClick={() => goToGameRoster(gameId)}
+              >
+                Edit active players
+              </Button>
+              <Button
+                type="button"
                 className="bw-button bw-button--text"
                 variant="outlined"
                 onClick={goToMatch}
@@ -833,6 +844,15 @@ export function GameEventsPage() {
             >
               {!lockedTab ? (
                 <>
+                  <Button
+                    type="button"
+                    className="bw-button bw-button--text sk-edit-roster"
+                    size={editorCompact ? 'small' : 'medium'}
+                    variant="outlined"
+                    onClick={() => goToGameRoster(gameId)}
+                  >
+                    Edit active players
+                  </Button>
                   {(['throw', 'error', 'finish'] as const).map((tab) => (
                     <Box key={tab} className="tab tab--attached">
                       <Button
