@@ -88,23 +88,17 @@ export function buildPermanentPlayerHotkeys(
   return map;
 }
 
-/** Match/game roster page: permanent keys by player Id within a side. */
+/** Match/game roster: keys follow the given visual order (starters, then subs). */
 export function buildPermanentRosterHotkeys(
   homePlayers: { Id: string; Name: string }[],
   awayPlayers: { Id: string; Name: string }[],
 ): Map<string, string> {
   const map = new Map<string, string>();
-  const home = [...homePlayers].sort(
-    (a, b) => a.Name.localeCompare(b.Name) || a.Id.localeCompare(b.Id),
-  );
-  const away = [...awayPlayers].sort(
-    (a, b) => a.Name.localeCompare(b.Name) || a.Id.localeCompare(b.Id),
-  );
-  home.forEach((row, index) => {
+  homePlayers.forEach((row, index) => {
     const key = ROSTER_HOME_HOTKEYS[index];
     if (key) map.set(row.Id, key);
   });
-  away.forEach((row, index) => {
+  awayPlayers.forEach((row, index) => {
     const key = ROSTER_AWAY_HOTKEYS[index];
     if (key) map.set(row.Id, key);
   });

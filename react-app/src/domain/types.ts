@@ -14,6 +14,8 @@ export type PlayerRow = {
   Name: string;
   Notes: string | null;
   Image?: ImageRef | null;
+  /** Created from Match/Game roster Add, not the team’s core roster. */
+  AddedFromMatch?: boolean;
 };
 
 export type TeamPlayerRow = {

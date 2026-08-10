@@ -103,6 +103,21 @@ describe('match / game roster hotkeys', () => {
     expect(findPlayerByHotkey(home, away, '1', map)?.player.Id).toBe('h-7');
     expect(findPlayerByHotkey(home, away, 'a', map)?.player.Id).toBe('h-0');
   });
+
+  it('reassigns keys when visual order changes (subs last)', () => {
+    const amy = { Id: 'h-amy', Name: 'Amy' };
+    const pat = { Id: 'h-pat', Name: 'Pat' };
+    const zoe = { Id: 'h-zoe', Name: 'Zoe' };
+    const startersThenSubs = buildPermanentRosterHotkeys([amy, zoe, pat], []);
+    expect(startersThenSubs.get('h-amy')).toBe('a');
+    expect(startersThenSubs.get('h-zoe')).toBe('s');
+    expect(startersThenSubs.get('h-pat')).toBe('d');
+
+    const afterAmyBecomesSub = buildPermanentRosterHotkeys([zoe, amy, pat], []);
+    expect(afterAmyBecomesSub.get('h-zoe')).toBe('a');
+    expect(afterAmyBecomesSub.get('h-amy')).toBe('s');
+    expect(afterAmyBecomesSub.get('h-pat')).toBe('d');
+  });
 });
 
 describe('result hotkeys', () => {

@@ -26,6 +26,7 @@ Firebase is optional. Without `react-app/.env.local`, the app is local-only (ses
 - MUI + `sx`; stable e2e classes use the `sk-` prefix. Prefer `getByRole` in Playwright.
 - Named exports, strict TypeScript, match surrounding style (no ESLint/Prettier config).
 - Update `docs/FEATURES.md` for user-facing changes. Never commit `.env` or secrets.
+- **Admins mass-destroy; scorers undo their game.** Admin (or local-only) for delete team/core roster, delete match, replace league data, league settings. Match/game entry must be able to undo *that game*: active roster, remove a player they added from Match/Game, event rollback, undo recorded events. Do not gate those on admin, and do not let scorers delete the core team roster.
 
 ## Tests
 

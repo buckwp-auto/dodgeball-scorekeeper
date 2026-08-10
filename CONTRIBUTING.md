@@ -28,6 +28,7 @@ See the [README](README.md) for layout, GitHub Pages, and data keys. You do not 
 3. Golden CSV unchanged unless you intentionally changed the Legacy stats engine.
 4. `docs/FEATURES.md` updated for user-facing behavior.
 5. No secrets, `.env`, or unrelated refactors.
+6. Permissions: **admins mass-destroy** (teams, core roster, matches, replace league); **match/game scorers can undo their own game** (active players, mistaken Match/Game adds, event rollback) without being admin. See [CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md#principles).
 
 Read [CODE_CONVENTIONS.md](docs/CODE_CONVENTIONS.md) before writing code (or before prompting an agent).
 
@@ -46,7 +47,7 @@ Read CONTRIBUTING.md and docs/CODE_CONVENTIONS.md (and docs/FEATURES.md if this 
 
 Implement: <describe the change and acceptance criteria>.
 
-Follow existing patterns. Keep scoring/stats/roster rules in react-app/src/domain/ with no React. Keep .scrkpr DTO fields PascalCase. Do not change tests/fixtures/*.golden.csv under the default Legacy policy. Sync react-app/src/domain/limits.ts with firestore.rules if you add/change string limits. Update docs/FEATURES.md if players or admins see new behavior. Add Vitest tests next to domain modules; extend Playwright specs in tests/ if a UI workflow changed.
+Follow existing patterns. Keep scoring/stats/roster rules in react-app/src/domain/ with no React. Keep .scrkpr DTO fields PascalCase. Do not change tests/fixtures/*.golden.csv under the default Legacy policy. Sync react-app/src/domain/limits.ts with firestore.rules if you add/change string limits. Update docs/FEATURES.md if players or admins see new behavior. Add Vitest tests next to domain modules; extend Playwright specs in tests/ if a UI workflow changed. Admins mass-destroy; scorers undo the game they are managing (not the core team roster).
 
 Run npm test. If you touched Track Game, roster, Overview, import/export, or stats UI, also run npm run test:e2e and/or npm run test:interop.
 

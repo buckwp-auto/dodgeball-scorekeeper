@@ -21,12 +21,12 @@
 
 ## Roster & match setup
 
-- **Match & game roster selection** with home/away columns; game roster heading is **Game N**; team logos on banners and player photos on rows; optional tall YouTube VOD on both roster screens; roster hotkeys match Track Game for the first 6 per side, then `Q 1 2 3 4 5` / `P 0 9 8 7 6` for players 7–12
-- **Add players on the match screen** (creates a team player and includes them on the match); mark **Sub** officially instead of a “(sub)” name suffix
+- **Match & game roster selection** with home/away columns; game roster heading is **Game N**; team logos on banners and player photos on rows; optional tall YouTube VOD on both roster screens; roster hotkeys match Track Game for the first 6 per side, then `Q 1 2 3 4 5` / `P 0 9 8 7 6` for players 7–12, assigned in on-screen order (starters then subs; reassigned when sub status changes)
+- **Add / remove players on Match and Game roster screens** (creates a team player and includes them on the match, and on this game when added from Game); mark **Sub** officially instead of a “(sub)” name suffix; **Remove** is only for players added from those screens, not the core team roster; it confirms, rolls back any events they appear in, drops them from this match’s games, and deletes them from the team if they aren’t on another match
 - **Players per team per game** (League Stat Settings, default 6) caps who can be on court; match roster can still include extra subs
 - **Auto-select** up to that limit per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
 - **Edit roster** from Track Game returns to that game’s player selection (not Teams). Removing someone who already appears in events warns, then after confirm deletes every event from their first involvement onward (Game start is kept)
-- **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint; subs sort below starters
+- **Live elimination on Game page** — outs grayed, sorted to bottom, active counts, game-over hint; subs sort below starters; roster hotkeys follow that order
 
 ## Track Game
 
@@ -102,7 +102,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |
 
-Roster keys use the same stable name order as Track Game; slots 7–12 on Match / Game select use the overflow keys (up to 12 per side). Re-pressing a player/result key toggles the selection off where applicable.
+Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable.
 
 ## Statistics & interop
 

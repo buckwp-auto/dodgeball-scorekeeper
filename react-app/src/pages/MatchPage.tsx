@@ -10,6 +10,11 @@ import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { buildStatisticsCsvBytes } from '../domain/statisticsCsv';
 import { getMatchName, getTeam } from '../domain/database';
 import {
+  previewRemovePlayerFromMatch,
+  removeMatchSidePlayerConfirmMessage,
+  removePlayerFromMatchSide,
+} from '../domain/gameEvents';
+import {
   buildPermanentRosterHotkeys,
   findPlayerByHotkey,
 } from '../domain/hotkeys';
@@ -99,6 +104,27 @@ export function MatchPage() {
       setMatchPlayerSubstitute(draft, matchId, playerId, !currentlySub);
       return null;
     }, '');
+  };
+
+  const canRemovePlayer = (playerId: string) =>
+    previewRemovePlayerFromMatch(data, matchId, playerId).canRemove;
+
+  const removeSidePlayer = (playerId: string) => {
+    const name =
+      homeRoster.find((row) => row.player.Id === playerId)?.player.Name ??
+      awayRoster.find((row) => row.player.Id === playerId)?.player.Name ??
+      'This player';
+    const preview = previewRemovePlayerFromMatch(data, matchId, playerId);
+    const message = removeMatchSidePlayerConfirmMessage(name, preview);
+    if (!message || !window.confirm(message)) return;
+    mutate((draft) => {
+      const result = removePlayerFromMatchSide(draft, matchId, playerId, {
+        rollbackEvents: true,
+      });
+      return result.deletedPlayer
+        ? `Removed ${name} from the match and team.`
+        : `Removed ${name} from the match.`;
+    }, (message) => message);
   };
 
   if (!match) {
@@ -241,6 +267,8 @@ export function MatchPage() {
               Boolean(homeRoster.find((row) => row.player.Id === playerId)?.substitute),
             )
           }
+          onRemove={removeSidePlayer}
+          canRemovePlayer={canRemovePlayer}
           addPlayer={{
             name: homeAddName,
             asSub: homeAddAsSub,
@@ -262,6 +290,8 @@ export function MatchPage() {
               Boolean(awayRoster.find((row) => row.player.Id === playerId)?.substitute),
             )
           }
+          onRemove={removeSidePlayer}
+          canRemovePlayer={canRemovePlayer}
           addPlayer={{
             name: awayAddName,
             asSub: awayAddAsSub,

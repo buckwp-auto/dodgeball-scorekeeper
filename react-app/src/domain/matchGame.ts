@@ -105,7 +105,22 @@ export function addPlayerToMatchSide(
   if (!match) throw new Error('Match not found');
   const teamId = teamHome ? match.TeamIdHome : match.TeamIdAway;
   const player = addPlayer(data, teamId, name);
+  player.AddedFromMatch = true;
   toggleMatchPlayer(data, matchId, player.Id, teamHome, { isSubstitute });
+  return player;
+}
+
+/** Add a team+match player and try to put them on this game (no-op if the side is full). */
+export function addPlayerToGameSide(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  teamHome: boolean,
+  name: string,
+  isSubstitute = false,
+): PlayerRow {
+  const player = addPlayerToMatchSide(data, matchId, teamHome, name, isSubstitute);
+  toggleGamePlayer(data, matchId, gameId, player.Id);
   return player;
 }
 
@@ -480,11 +495,16 @@ export function getGameSidePlayersWithSelection(
     }));
 }
 
-export function sortMatchSidePlayers<T extends { selected: boolean; substitute: boolean }>(
-  rows: T[],
-): T[] {
+export function sortMatchSidePlayers<
+  T extends { selected: boolean; substitute: boolean; player: { Id: string; Name: string } },
+>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
-    const rank = (row: T) => (row.selected ? (row.substitute ? 1 : 0) : row.substitute ? 3 : 2);
-    return rank(a) - rank(b);
+    const rank = (row: T) =>
+      row.selected ? (row.substitute ? 1 : 0) : row.substitute ? 3 : 2;
+    const diff = rank(a) - rank(b);
+    if (diff !== 0) return diff;
+    return (
+      a.player.Name.localeCompare(b.player.Name) || a.player.Id.localeCompare(b.player.Id)
+    );
   });
 }

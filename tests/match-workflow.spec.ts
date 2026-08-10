@@ -34,12 +34,48 @@ test.describe('Match workflow', () => {
     await homeTeam.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(homeTeam.getByRole('button', { name: 'Pat', exact: true })).toBeVisible();
     await expect(homeTeam.locator('.sk-player').filter({ hasText: 'Pat' }).locator('.sk-player-sub')).toBeVisible();
+    await expect(homeTeam.getByRole('button', { name: 'Remove H1' })).toHaveCount(0);
+    await expect(homeTeam.getByRole('button', { name: 'Remove Pat' })).toBeVisible();
+
+    await homeTeam.getByLabel('Add player').fill('Zoe');
+    await homeTeam.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(homeTeam.getByRole('button', { name: 'Zoe', exact: true })).toBeVisible();
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'H1' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('A');
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'Zoe' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('S');
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'Pat' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('D');
+
+    await homeTeam.locator('.sk-player').filter({ hasText: 'H1' }).locator('.sk-player-sub').click();
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'Zoe' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('A');
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'H1' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('S');
+    await expect(
+      homeTeam.locator('.sk-player').filter({ hasText: 'Pat' }).locator('.sk-hotkey-badge'),
+    ).toHaveText('D');
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await homeTeam
+      .locator('.sk-player')
+      .filter({ hasText: 'Pat' })
+      .getByRole('button', { name: 'Remove Pat' })
+      .click();
+    await expect(homeTeam.getByRole('button', { name: 'Pat', exact: true })).toHaveCount(0);
+
+    await homeTeam.locator('.sk-player').filter({ hasText: 'H1' }).locator('.sk-player-sub').click();
 
     await expect(
       homeTeam.locator('.sk-player').filter({ hasText: 'H1' }).locator('.sk-hotkey-badge'),
     ).toHaveText('A');
     await expect(
-      homeTeam.locator('.sk-player').filter({ hasText: 'Pat' }).locator('.sk-hotkey-badge'),
+      homeTeam.locator('.sk-player').filter({ hasText: 'Zoe' }).locator('.sk-hotkey-badge'),
     ).toHaveText('S');
     await expect(
       page

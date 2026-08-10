@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyDatabase } from './database';
-import { addMatch, addPlayer, addTeam } from './database';
-import { addGame, isPlayerInGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
+import { addMatch, addPlayer, addTeam, getPlayer, getPlayersForTeam } from './database';
+import {
+  addGame,
+  addPlayerToMatchSide,
+  isPlayerInGame,
+  isPlayerInMatch,
+  toggleGamePlayer,
+  toggleMatchPlayer,
+} from './matchGame';
 import {
   DeflectionResult,
   GameEventErrorOffense,
@@ -22,7 +29,10 @@ import {
   persistFinishGameEvent,
   persistThrowGameEvent,
   previewRemoveGamePlayer,
+  previewRemovePlayerFromMatch,
   removeGamePlayerFromRoster,
+  removeMatchSidePlayerConfirmMessage,
+  removePlayerFromMatchSide,
   restoreGameEventSnapshot,
   setGameEventHighlight,
   setGameEventVideoOffset,
@@ -645,5 +655,111 @@ describe('game roster event rollback', () => {
     expect(() => removeGamePlayerFromRoster(data, match.Id, gameId, h1Id)).toThrow(
       /appears in recorded events/,
     );
+  });
+});
+
+describe('remove player from match side', () => {
+  it('removes a match-added player from the match and deletes them from the team', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const match = addMatch(data, home.Id, away.Id);
+    const added = addPlayerToMatchSide(data, match.Id, true, 'Remy');
+    const preview = previewRemovePlayerFromMatch(data, match.Id, added.Id);
+    expect(preview).toMatchObject({
+      onThisMatch: true,
+      willDeletePlayer: true,
+      canRemove: true,
+      eventCount: 0,
+    });
+    expect(removeMatchSidePlayerConfirmMessage('Remy', preview)).toContain(
+      'delete them from the team',
+    );
+
+    const result = removePlayerFromMatchSide(data, match.Id, added.Id);
+    expect(result).toEqual({
+      removedFromMatch: true,
+      deletedPlayer: true,
+      rolledBackEvents: 0,
+    });
+    expect(isPlayerInMatch(data, match.Id, added.Id)).toBe(false);
+    expect(getPlayer(data, added.Id)).toBeUndefined();
+    expect(getPlayersForTeam(data, home.Id)).toHaveLength(0);
+  });
+
+  it('does not allow removing a core team-roster player from the match screen', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const player = addPlayer(data, home.Id, 'Alex');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, player.Id, true);
+
+    const preview = previewRemovePlayerFromMatch(data, match.Id, player.Id);
+    expect(preview.canRemove).toBe(false);
+    expect(removeMatchSidePlayerConfirmMessage('Alex', preview)).toBeNull();
+    expect(() => removePlayerFromMatchSide(data, match.Id, player.Id)).toThrow(
+      /core roster/,
+    );
+    expect(isPlayerInMatch(data, match.Id, player.Id)).toBe(true);
+    expect(getPlayer(data, player.Id)?.Name).toBe('Alex');
+  });
+
+  it('keeps the team player when a match-added player is on another match', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const match1 = addMatch(data, home.Id, away.Id);
+    const match2 = addMatch(data, home.Id, away.Id);
+    const player = addPlayerToMatchSide(data, match1.Id, true, 'Alex');
+    toggleMatchPlayer(data, match2.Id, player.Id, true);
+
+    const preview = previewRemovePlayerFromMatch(data, match1.Id, player.Id);
+    expect(preview.canRemove).toBe(true);
+    expect(preview.willDeletePlayer).toBe(false);
+    expect(removeMatchSidePlayerConfirmMessage('Alex', preview)).toContain(
+      'stay on the team',
+    );
+
+    const result = removePlayerFromMatchSide(data, match1.Id, player.Id);
+    expect(result.deletedPlayer).toBe(false);
+    expect(isPlayerInMatch(data, match1.Id, player.Id)).toBe(false);
+    expect(isPlayerInMatch(data, match2.Id, player.Id)).toBe(true);
+    expect(getPlayer(data, player.Id)?.Name).toBe('Alex');
+  });
+
+  it('rolls back game events when removing a player used in scoring', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    const alex = (data.Tables.Player as { Id: string; Name: string; AddedFromMatch?: boolean }[]).find(
+      (row) => row.Name === 'Alex',
+    )!;
+    alex.AddedFromMatch = true;
+    const alexId = alex.Id;
+    const preview = previewRemovePlayerFromMatch(data, match.Id, alexId);
+    expect(preview.eventCount).toBeGreaterThan(0);
+    expect(() => removePlayerFromMatchSide(data, match.Id, alexId)).toThrow(
+      /appears in recorded events/,
+    );
+
+    const result = removePlayerFromMatchSide(data, match.Id, alexId, {
+      rollbackEvents: true,
+    });
+    expect(result.rolledBackEvents).toBeGreaterThan(0);
+    expect(isPlayerInGame(data, gameId, alexId, match.Id)).toBe(false);
+    expect(isPlayerInMatch(data, match.Id, alexId)).toBe(false);
+    expect(
+      getGameEvents(data, gameId).every(
+        (event) => getGameEventType(data, event.Id) !== 'throw',
+      ),
+    ).toBe(true);
   });
 });

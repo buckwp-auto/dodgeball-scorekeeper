@@ -3,6 +3,7 @@ import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
 import { setLeagueSettings } from './leagueSettings';
 import {
   addGame,
+  addPlayerToGameSide,
   addPlayerToMatchSide,
   countGameSidePlayers,
   deleteGame,
@@ -80,6 +81,8 @@ describe('match substitutes', () => {
     const match = addMatch(data, home.Id, away.Id);
     const starter = addPlayerToMatchSide(data, match.Id, true, 'Alex');
     const sub = addPlayerToMatchSide(data, match.Id, true, 'Pat', true);
+    expect(starter.AddedFromMatch).toBe(true);
+    expect(sub.AddedFromMatch).toBe(true);
 
     const rows = getMatchPlayers(data, match.Id);
     expect(rows.find((row) => row.PlayerId === starter.Id)?.IsSubstitute).toBeFalsy();
@@ -94,6 +97,36 @@ describe('match substitutes', () => {
     expect(getMatchPlayers(data, match.Id).find((row) => row.PlayerId === starter.Id)?.IsSubstitute).toBe(
       true,
     );
+  });
+
+  it('sorts selected starters before selected subs, then by name', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const match = addMatch(data, home.Id, away.Id);
+    addPlayerToMatchSide(data, match.Id, true, 'Zoe', true);
+    addPlayerToMatchSide(data, match.Id, true, 'Amy');
+    addPlayerToMatchSide(data, match.Id, true, 'Pat');
+    const listed = getMatchSidePlayersWithSelection(data, match, true);
+    expect(listed.map((row) => row.player.Name)).toEqual(['Amy', 'Pat', 'Zoe']);
+
+    setMatchPlayerSubstitute(data, match.Id, listed[0].player.Id, true);
+    expect(
+      getMatchSidePlayersWithSelection(data, match, true).map((row) => row.player.Name),
+    ).toEqual(['Pat', 'Amy', 'Zoe']);
+  });
+
+  it('adds a player to the match and this game from the game screen', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const match = addMatch(data, home.Id, away.Id);
+    const gameId = addGame(data, match.Id);
+    const player = addPlayerToGameSide(data, match.Id, gameId, true, 'Remy');
+    expect(getMatchPlayers(data, match.Id).some((row) => row.PlayerId === player.Id)).toBe(
+      true,
+    );
+    expect(isPlayerInGame(data, gameId, player.Id, match.Id)).toBe(true);
   });
 });
 

@@ -10,7 +10,10 @@ import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { getTeam } from '../domain/database';
 import {
   previewRemoveGamePlayer,
+  previewRemovePlayerFromMatch,
   removeGamePlayerFromRoster,
+  removeMatchSidePlayerConfirmMessage,
+  removePlayerFromMatchSide,
 } from '../domain/gameEvents';
 import {
   buildPermanentRosterHotkeys,
@@ -24,6 +27,7 @@ import {
   sortRosterWithEliminations,
 } from '../domain/gameElimination';
 import {
+  addPlayerToGameSide,
   canNavigateToGameEvents,
   countGameSidePlayers,
   getGameName,
@@ -40,6 +44,10 @@ export function GamePage() {
   const navigate = useNavigate();
   const { data, mutate } = useDatabase();
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const [homeAddName, setHomeAddName] = useState('');
+  const [homeAddAsSub, setHomeAddAsSub] = useState(false);
+  const [awayAddName, setAwayAddName] = useState('');
+  const [awayAddAsSub, setAwayAddAsSub] = useState(false);
   const { previousGameId, goToPreviousGame, goToNextGame } = useMatchGameNavigation(
     matchId,
     gameId,
@@ -81,15 +89,6 @@ export function GamePage() {
     return getGameSidePlayersWithSelection(data, match, gameId, false);
   }, [data, match, gameId]);
 
-  const rosterHotkeys = useMemo(
-    () =>
-      buildPermanentRosterHotkeys(
-        homeRosterRaw.map((row) => row.player),
-        awayRosterRaw.map((row) => row.player),
-      ),
-    [homeRosterRaw, awayRosterRaw],
-  );
-
   const homeRoster = useMemo(
     () => sortRosterWithEliminations(homeRosterRaw, eliminatedIds),
     [homeRosterRaw, eliminatedIds],
@@ -98,6 +97,15 @@ export function GamePage() {
   const awayRoster = useMemo(
     () => sortRosterWithEliminations(awayRosterRaw, eliminatedIds),
     [awayRosterRaw, eliminatedIds],
+  );
+
+  const rosterHotkeys = useMemo(
+    () =>
+      buildPermanentRosterHotkeys(
+        homeRoster.map((row) => row.player),
+        awayRoster.map((row) => row.player),
+      ),
+    [homeRoster, awayRoster],
   );
 
   const handleTogglePlayer = useCallback(
@@ -145,16 +153,61 @@ export function GamePage() {
   const onPlayerHotkey = useCallback(
     (key: string) => {
       const hit = findPlayerByHotkey(
-        homeRosterRaw.map((row) => row.player),
-        awayRosterRaw.map((row) => row.player),
+        homeRoster.map((row) => row.player),
+        awayRoster.map((row) => row.player),
         key,
         rosterHotkeys,
       );
       if (!hit) return;
       handleTogglePlayer(hit.player.Id);
     },
-    [homeRosterRaw, awayRosterRaw, handleTogglePlayer, rosterHotkeys],
+    [homeRoster, awayRoster, handleTogglePlayer, rosterHotkeys],
   );
+
+  const addSidePlayer = (teamHome: boolean) => {
+    const name = (teamHome ? homeAddName : awayAddName).trim();
+    const asSub = teamHome ? homeAddAsSub : awayAddAsSub;
+    if (!name || !match) return;
+    const limit = resolvePlayersPerSide(data);
+    const atLimit = countGameSidePlayers(data, matchId, gameId, teamHome) >= limit;
+    mutate((draft) => {
+      const player = addPlayerToGameSide(draft, matchId, gameId, teamHome, name, asSub);
+      return player.Name;
+    }, (playerName) => `Added player (${playerName}) to game.`);
+    if (teamHome) {
+      setHomeAddName('');
+      setHomeAddAsSub(false);
+    } else {
+      setAwayAddName('');
+      setAwayAddAsSub(false);
+    }
+    if (atLimit) {
+      setLimitMessage(
+        `Added to the match roster. Each team can have at most ${limit} players in a game.`,
+      );
+    }
+  };
+
+  const canRemovePlayer = (playerId: string) =>
+    previewRemovePlayerFromMatch(data, matchId, playerId).canRemove;
+
+  const removeSidePlayer = (playerId: string) => {
+    const name =
+      homeRoster.find((row) => row.player.Id === playerId)?.player.Name ??
+      awayRoster.find((row) => row.player.Id === playerId)?.player.Name ??
+      'This player';
+    const preview = previewRemovePlayerFromMatch(data, matchId, playerId);
+    const message = removeMatchSidePlayerConfirmMessage(name, preview);
+    if (!message || !window.confirm(message)) return;
+    mutate((draft) => {
+      const result = removePlayerFromMatchSide(draft, matchId, playerId, {
+        rollbackEvents: true,
+      });
+      return result.deletedPlayer
+        ? `Removed ${name} from the match and team.`
+        : `Removed ${name} from the match.`;
+    }, (commitMessage) => commitMessage);
+  };
 
   useDocumentHotkeys((key) => onPlayerHotkey(key), Boolean(match));
 
@@ -225,6 +278,15 @@ export function GamePage() {
           onToggle={handleTogglePlayer}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
+          onRemove={removeSidePlayer}
+          canRemovePlayer={canRemovePlayer}
+          addPlayer={{
+            name: homeAddName,
+            asSub: homeAddAsSub,
+            onNameChange: setHomeAddName,
+            onAsSubChange: setHomeAddAsSub,
+            onSubmit: () => addSidePlayer(true),
+          }}
         />
         <PlayerRoster
           side="Away Team"
@@ -234,6 +296,15 @@ export function GamePage() {
           onToggle={handleTogglePlayer}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
+          onRemove={removeSidePlayer}
+          canRemovePlayer={canRemovePlayer}
+          addPlayer={{
+            name: awayAddName,
+            asSub: awayAddAsSub,
+            onNameChange: setAwayAddName,
+            onAsSubChange: setAwayAddAsSub,
+            onSubmit: () => addSidePlayer(false),
+          }}
         />
       </div>
     </>

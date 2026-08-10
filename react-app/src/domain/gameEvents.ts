@@ -5,8 +5,17 @@ import {
   GameEventFinishResult,
   ThrowResult,
 } from './statistics/constants';
+import { deletePlayer, getPlayer, playerIsUsedInMatches } from './database';
 import type { DatabaseDto, Guid } from './types';
-import { getGamePlayers, getMatchPlayers, toggleGamePlayer } from './matchGame';
+import {
+  getGamePlayers,
+  getMatchGames,
+  getMatchPlayers,
+  isPlayerInGame,
+  isPlayerInMatch,
+  toggleGamePlayer,
+  toggleMatchPlayer,
+} from './matchGame';
 
 function table<T>(data: DatabaseDto, name: string): T[] {
   return data.Tables[name] as T[];
@@ -747,6 +756,111 @@ export function removeGamePlayerFromRoster(
     : 0;
   toggleGamePlayer(data, matchId, gameId, playerId);
   return { removed: true, rolledBackEvents };
+}
+
+export type RemoveMatchSidePlayerPreview = {
+  onThisMatch: boolean;
+  eventCount: number;
+  gameCountWithEvents: number;
+  willDeletePlayer: boolean;
+  canRemove: boolean;
+};
+
+export function previewRemovePlayerFromMatch(
+  data: DatabaseDto,
+  matchId: Guid,
+  playerId: Guid,
+): RemoveMatchSidePlayerPreview {
+  const onThisMatch = isPlayerInMatch(data, matchId, playerId);
+  const matchCount = getMatchPlayersAcrossMatches(data, playerId);
+  let eventCount = 0;
+  let gameCountWithEvents = 0;
+  if (onThisMatch) {
+    for (const { gameId } of getMatchGames(data, matchId)) {
+      const preview = previewRemoveGamePlayer(data, matchId, gameId, playerId);
+      if (preview && preview.eventCount > 0) {
+        eventCount += preview.eventCount;
+        gameCountWithEvents += 1;
+      }
+    }
+  }
+  const willDeletePlayer = matchCount <= (onThisMatch ? 1 : 0);
+  const addedFromMatch = Boolean(getPlayer(data, playerId)?.AddedFromMatch);
+  return {
+    onThisMatch,
+    eventCount,
+    gameCountWithEvents,
+    willDeletePlayer,
+    canRemove: addedFromMatch && (onThisMatch || willDeletePlayer),
+  };
+}
+
+export function removeMatchSidePlayerConfirmMessage(
+  name: string,
+  preview: RemoveMatchSidePlayerPreview,
+): string | null {
+  if (!preview.canRemove) return null;
+  if (preview.eventCount > 0) {
+    const eventLabel = preview.eventCount === 1 ? 'event' : 'events';
+    const gameLabel = preview.gameCountWithEvents === 1 ? 'game' : 'games';
+    const tail = preview.willDeletePlayer
+      ? ', remove them from this match, and delete them from the team. Continue?'
+      : ', and remove them from this match. Continue?';
+    return `${name} appears in recorded events. Removing them will delete ${preview.eventCount} ${eventLabel} across ${preview.gameCountWithEvents} ${gameLabel}${tail}`;
+  }
+  if (!preview.onThisMatch) return `Delete ${name} from the team?`;
+  if (preview.willDeletePlayer) {
+    return `Remove ${name} from this match and delete them from the team?`;
+  }
+  return `Remove ${name} from this match? They will stay on the team.`;
+}
+
+export function removePlayerFromMatchSide(
+  data: DatabaseDto,
+  matchId: Guid,
+  playerId: Guid,
+  options?: { rollbackEvents?: boolean },
+): { removedFromMatch: boolean; deletedPlayer: boolean; rolledBackEvents: number } {
+  if (!getPlayer(data, playerId)?.AddedFromMatch) {
+    throw new Error('Cannot delete a core roster player from the match screen');
+  }
+  const onThisMatch = isPlayerInMatch(data, matchId, playerId);
+  let rolledBackEvents = 0;
+
+  if (onThisMatch) {
+    for (const { gameId } of getMatchGames(data, matchId)) {
+      if (!isPlayerInGame(data, gameId, playerId, matchId)) continue;
+      const preview = previewRemoveGamePlayer(data, matchId, gameId, playerId);
+      if (preview && preview.eventCount > 0) {
+        if (!options?.rollbackEvents) {
+          throw new Error('Player appears in recorded events');
+        }
+        rolledBackEvents += removeGamePlayerFromRoster(data, matchId, gameId, playerId, {
+          rollbackEvents: true,
+        }).rolledBackEvents;
+      } else {
+        toggleGamePlayer(data, matchId, gameId, playerId);
+      }
+    }
+    toggleMatchPlayer(data, matchId, playerId, true);
+  }
+
+  let deletedPlayer = false;
+  if (!playerIsUsedInMatches(data, playerId)) {
+    deletePlayer(data, playerId);
+    deletedPlayer = true;
+  }
+
+  return { removedFromMatch: onThisMatch, deletedPlayer, rolledBackEvents };
+}
+
+function getMatchPlayersAcrossMatches(data: DatabaseDto, playerId: Guid): number {
+  const matchIds = new Set(
+    table<{ PlayerId: Guid; MatchId: Guid }>(data, 'MatchPlayer')
+      .filter((row) => row.PlayerId === playerId)
+      .map((row) => row.MatchId),
+  );
+  return matchIds.size;
 }
 
 export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {

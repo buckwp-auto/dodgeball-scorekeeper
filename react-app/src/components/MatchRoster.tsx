@@ -1,4 +1,5 @@
-import { Box, Button, Checkbox, Chip, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import { Box, Button, Checkbox, Chip, FormControlLabel, IconButton, Paper, Stack, TextField, Typography } from '@mui/material';
 import type { ImageRef } from '../domain/imageRef';
 import { HotkeyBadge } from './HotkeyBadge';
 import { EntityAvatar } from './EntityAvatar';
@@ -14,6 +15,8 @@ export function PlayerRoster({
   hotkeyForPlayerId,
   eliminatedPlayerIds,
   onToggleSubstitute,
+  onRemove,
+  canRemovePlayer,
   addPlayer,
 }: {
   side: 'Home Team' | 'Away Team';
@@ -28,6 +31,8 @@ export function PlayerRoster({
   hotkeyForPlayerId?: (playerId: string) => string | null;
   eliminatedPlayerIds?: ReadonlySet<string>;
   onToggleSubstitute?: (playerId: string) => void;
+  onRemove?: (playerId: string) => void;
+  canRemovePlayer?: (playerId: string) => boolean;
   addPlayer?: {
     name: string;
     asSub: boolean;
@@ -93,6 +98,16 @@ export function PlayerRoster({
                 color="secondary"
                 className="sk-player-sub"
               />
+            ) : null}
+            {onRemove && (canRemovePlayer?.(player.Id) ?? true) ? (
+              <IconButton
+                size="small"
+                aria-label={`Remove ${player.Name}`}
+                className="sk-remove-player"
+                onClick={() => onRemove(player.Id)}
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
             ) : null}
           </Stack>
         );
