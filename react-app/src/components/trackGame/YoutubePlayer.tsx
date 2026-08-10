@@ -530,7 +530,8 @@ export const YoutubePlayer = forwardRef<
           py: 0.75,
           borderBottom: 1,
           borderColor: 'divider',
-          bgcolor: 'grey.100',
+          bgcolor: (theme) =>
+            theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
         }}
       >
         <Button size="small" onClick={() => onModeChange('tall')}>

@@ -1,8 +1,10 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { createContext, useContext, type ReactNode } from 'react';
 import {
   playerPillStyles,
   teamHeaderStyles,
+  type ColorSurface,
 } from '../../domain/timelineColors';
 import { HotkeyBadge } from '../HotkeyBadge';
 
@@ -24,6 +26,10 @@ export function EditorDensityProvider({
 
 export function useEditorDensity(): EditorDensity {
   return useContext(EditorDensityContext);
+}
+
+function useEditorColorSurface(): ColorSurface {
+  return useTheme().palette.mode === 'dark' ? 'dark' : 'light';
 }
 
 export function EditorGrid({ children }: { children: ReactNode }) {
@@ -79,7 +85,8 @@ export function EditorLabel({
 }
 
 export function TeamBanner({ name, teamHome }: { name: string; teamHome: boolean }) {
-  const styles = teamHeaderStyles(teamHome, 'light');
+  const surface = useEditorColorSurface();
+  const styles = teamHeaderStyles(teamHome, surface);
   const density = useEditorDensity();
   const compact = density === 'compact';
   return (
@@ -182,9 +189,10 @@ export function EditorChoiceButton({
 }) {
   const density = useEditorDensity();
   const compact = density === 'compact';
+  const surface = useEditorColorSurface();
   const pill =
     playerId !== undefined && teamHome !== undefined
-      ? playerPillStyles(teamHome, playerId, 'light')
+      ? playerPillStyles(teamHome, playerId, surface)
       : null;
 
   return (
@@ -252,9 +260,10 @@ export function EditorChipButton({
 }) {
   const density = useEditorDensity();
   const compact = density === 'compact';
+  const surface = useEditorColorSurface();
   const pill =
     playerId !== undefined && teamHome !== undefined
-      ? playerPillStyles(teamHome, playerId, 'light')
+      ? playerPillStyles(teamHome, playerId, surface)
       : null;
 
   return (

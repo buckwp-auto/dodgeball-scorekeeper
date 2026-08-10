@@ -37,6 +37,11 @@ body {
   border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
 
+:root[data-color-mode='dark'] .sk-grid td,
+:root[data-color-mode='dark'] .sk-grid th {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .sk-grid td.MuiTableCell-alignCenter,
 .sk-grid th.MuiTableCell-alignCenter {
   text-align: center;

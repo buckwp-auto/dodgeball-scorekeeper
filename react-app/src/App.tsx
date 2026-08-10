@@ -29,6 +29,7 @@ import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
 import { CloudSyncBar } from './components/CloudSyncBar';
+import { ColorModeToggle } from './components/ColorModeToggle';
 import { MadeByFooter } from './components/MadeByFooter';
 import { ResumeScoringNavItem } from './components/ResumeScoringButton';
 
@@ -98,15 +99,17 @@ export function App() {
                   boxSizing: 'border-box',
                   display: 'flex',
                   flexDirection: 'column',
-                  bgcolor: 'grey.100',
-                  borderRightColor: 'grey.300',
+                  bgcolor: (theme) =>
+                    theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
+                  borderRightColor: 'divider',
                 },
               }}
             >
-              <Toolbar>
+              <Toolbar sx={{ gap: 0.5, justifyContent: 'space-between', px: 1.5 }}>
                 <Typography variant="h6" color="primary" noWrap>
                   Scorekeeper
                 </Typography>
+                <ColorModeToggle />
               </Toolbar>
               <Box
                 className="sk-menu-content"

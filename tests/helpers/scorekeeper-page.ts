@@ -4,14 +4,17 @@ import { expect, type Locator, type Page } from '@playwright/test';
 export const STORAGE_KEY = 'SCOREKEEPER_DATA';
 /** Last game/match resume pointer (localStorage). */
 export const LAST_SCORING_KEY = 'SCOREKEEPER_LAST_SCORING';
+/** Appearance preference (localStorage): system / light / dark. */
+export const COLOR_MODE_KEY = 'SCOREKEEPER_COLOR_MODE';
 
 export async function clearScorekeeperStorage(page: Page) {
   await page.addInitScript(
-    ([dataKey, lastScoringKey]) => {
+    ([dataKey, lastScoringKey, colorModeKey]) => {
       sessionStorage.removeItem(dataKey);
       localStorage.removeItem(lastScoringKey);
+      localStorage.removeItem(colorModeKey);
     },
-    [STORAGE_KEY, LAST_SCORING_KEY],
+    [STORAGE_KEY, LAST_SCORING_KEY, COLOR_MODE_KEY],
   );
 }
 

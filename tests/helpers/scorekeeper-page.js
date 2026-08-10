@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAST_SCORING_KEY = exports.STORAGE_KEY = void 0;
+exports.COLOR_MODE_KEY = exports.LAST_SCORING_KEY = exports.STORAGE_KEY = void 0;
 exports.clearScorekeeperStorage = clearScorekeeperStorage;
 exports.gotoScorekeeper = gotoScorekeeper;
 exports.loadSampleLeague = loadSampleLeague;
@@ -21,11 +21,14 @@ const test_1 = require("@playwright/test");
 exports.STORAGE_KEY = 'SCOREKEEPER_DATA';
 /** Last game/match resume pointer (localStorage). */
 exports.LAST_SCORING_KEY = 'SCOREKEEPER_LAST_SCORING';
+/** Appearance preference (localStorage): system / light / dark. */
+exports.COLOR_MODE_KEY = 'SCOREKEEPER_COLOR_MODE';
 async function clearScorekeeperStorage(page) {
-    await page.addInitScript(([dataKey, lastScoringKey]) => {
+    await page.addInitScript(([dataKey, lastScoringKey, colorModeKey]) => {
         sessionStorage.removeItem(dataKey);
         localStorage.removeItem(lastScoringKey);
-    }, [exports.STORAGE_KEY, exports.LAST_SCORING_KEY]);
+        localStorage.removeItem(colorModeKey);
+    }, [exports.STORAGE_KEY, exports.LAST_SCORING_KEY, exports.COLOR_MODE_KEY]);
 }
 async function gotoScorekeeper(page, subPath = '') {
     const path = subPath ? `/${subPath}` : '/';

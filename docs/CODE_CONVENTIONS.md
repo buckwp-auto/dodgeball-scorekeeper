@@ -20,10 +20,10 @@ Related: [FEATURES.md](./FEATURES.md) (product behavior), [FIREBASE_SETUP.md](./
 | `react-app/src/domain/` | Pure logic: database, events, elimination, hotkeys, statistics, limits |
 | `react-app/src/pages/` | Route screens (`OverviewPage`, `GamePage`, …) |
 | `react-app/src/components/` | Shared UI (`stats/`, `trackGame/`, `Ui.tsx`, …) |
-| `react-app/src/state/` | React context: `DatabaseContext`, `AuthContext`, `LeagueContext` |
+| `react-app/src/state/` | React context: `DatabaseContext`, `AuthContext`, `LeagueContext`, `ColorModeContext` |
 | `react-app/src/cloud/` | Firebase Auth / Firestore API (no UI) |
 | `react-app/src/hooks/` | Reusable hooks (`useDocumentHotkeys`, `useLastScoring`, …) |
-| `react-app/src/theme.ts` | MUI theme (primary `#1565c0`) |
+| `react-app/src/theme.ts` | MUI theme (`createAppTheme`, primary `#1565c0`, light/dark) |
 | `tests/` | Playwright e2e (`*.spec.ts`) + helpers |
 | `tests/fixtures/` | `.scrkpr` + golden CSV + sample league |
 | `docs/` | Product and contributor docs |
@@ -74,7 +74,7 @@ Cloud types (`LeagueMeta`, `RosterDoc`, `MatchDoc`) are camelCase and live under
 | Newer domain & cloud types | camelCase | `ImageRef.url`, `StatsScope`, `LeagueMeta.adminUid` |
 | UI / hooks / locals | camelCase | `hasMatches`, `fileInputRef` |
 | React components | PascalCase | `EntityAvatar`, `SeeStatsButton` |
-| Storage keys | `SCOREKEEPER_*` | `SCOREKEEPER_DATA`, `SCOREKEEPER_ACTIVE_LEAGUE` |
+| Storage keys | `SCOREKEEPER_*` | `SCOREKEEPER_DATA`, `SCOREKEEPER_ACTIVE_LEAGUE`, `SCOREKEEPER_COLOR_MODE` |
 
 When adding a persisted field on a `.scrkpr` row, keep PascalCase and make it optional (`YoutubeUrl?: string | null`) so old files still load.
 
@@ -84,7 +84,7 @@ When adding a persisted field on a `.scrkpr` row, keep PascalCase and make it op
 - Prefer MUI primitives (`Stack`, `Box`, `Paper`, `TextField`, `Button`, `Dialog`, `Alert`) over raw HTML.
 - `TextField` / compact controls: `size="small"`. Buttons: `variant="contained"` for primary actions, `text` for secondary. Don’t uppercase labels (`textTransform: 'none'` when needed).
 - MUI v6+ uses **`slotProps`**, not deprecated `InputProps` / `inputProps`.
-- Theme color is **`#1565c0`** primary / `#00838f` secondary (`theme.ts`). Don’t introduce a second palette without updating the theme.
+- Theme color is **`#1565c0`** primary / `#00838f` secondary (`createAppTheme` in `theme.ts`). Light/dark follow `SCOREKEEPER_COLOR_MODE` (system / light / dark). Don’t introduce a second palette without updating the theme.
 - Destructive actions (delete match/game/team, replace cloud league, remove a match-added player, roster rollback) need a **confirm dialog**.
 - Shared chrome: `PageHeader` from `components/Ui.tsx`, `EntityAvatar` for logos/photos, `SeeStatsButton` for stats entry points.
 - Image URLs are **https only** (`imageRef.ts`). Paste fields, never file upload / Cloud Storage (yet).
