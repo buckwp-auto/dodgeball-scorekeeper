@@ -6,6 +6,7 @@ import {
   DeflectionResult,
   ECompetitionOutcome,
   EDeathError,
+  EDeathType,
   EThrowError,
   ThrowResult,
   enumValues,
@@ -482,7 +483,13 @@ function toDisplayPlayer(
     row.killsDeflectionsIndividual,
     row.killsDeflectionsGroup,
   );
-  const deaths = totalOf(row.deathsDirect, row.deathsDeflections, row.deathsErrors);
+  // CatchThrown outs are counted separately as catchesThrown for Net / Caught%.
+  const catchThrownDeaths =
+    (row.deathsDirect.get(EDeathType.CatchThrown) ?? 0) +
+    (row.deathsDeflections.get(EDeathType.CatchThrown) ?? 0);
+  const deaths =
+    totalOf(row.deathsDirect, row.deathsDeflections, row.deathsErrors) - catchThrownDeaths;
+  const deathsCredit = row.deathsCredit - row.deathsCatchThrownCredit;
   const catches = row.catchesDirect + row.catchesDeflection;
   const killsCredit = totalOf(row.killsDirectCredit, row.killsDeflectionsCredit);
 
@@ -503,7 +510,7 @@ function toDisplayPlayer(
     killsCredit,
     killsSupportCredit: row.killsSupportCredit.total ?? 0,
     deaths,
-    deathsCredit: row.deathsCredit,
+    deathsCredit,
     assists: row.teamThrowAssists,
     doubleKills: row.doubleKills,
     tripleKills: row.tripleKills,
@@ -524,7 +531,7 @@ function toDisplayPlayer(
     lineOuts: row.deathsErrors.get(EDeathError.LineOut) ?? 0,
     illegalBlocks: row.deathsErrors.get(EDeathError.BlockIllegal) ?? 0,
     kd: rateOrInfinite(kills, deaths),
-    kdCredit: rateOrInfinite(killsCredit, row.deathsCredit),
+    kdCredit: rateOrInfinite(killsCredit, deathsCredit),
     hitRate: throws > 0 ? throwHits / throws : null,
     catchRate: targets > 0 ? catches / targets : null,
     caughtRate: throws > 0 ? catchesThrown / throws : null,

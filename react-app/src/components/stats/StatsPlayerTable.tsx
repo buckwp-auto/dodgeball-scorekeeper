@@ -40,6 +40,7 @@ type SortKey =
   | 'gp'
   | 'wl'
   | 'deaths'
+  | 'catchesThrown'
   | 'assists'
   | 'doubleKills'
   | 'tripleKills'
@@ -95,6 +96,8 @@ function compareRows(
       return cmp(displayedKills(a, counting), displayedKills(b, counting));
     case 'deaths':
       return cmp(displayedDeaths(a, counting), displayedDeaths(b, counting));
+    case 'catchesThrown':
+      return cmp(a.catchesThrown, b.catchesThrown);
     case 'kd':
       return cmp(displayedKd(a, counting), displayedKd(b, counting));
     case 'assists':
@@ -258,6 +261,7 @@ export function StatsPlayerTable({
                 {header('wl', 'W-L')}
                 {header('kills', 'Kills')}
                 {header('deaths', 'Deaths')}
+                {header('catchesThrown', 'Caught')}
                 {header('kd', 'K/D')}
                 {showAssists ? header('assists', 'Ast') : null}
                 {showMultiKills ? header('doubleKills', 'Dbl') : null}
@@ -318,6 +322,7 @@ export function StatsPlayerTable({
                   <TableCell align="center">
                     {formatCountValue(displayedDeaths(row, counting))}
                   </TableCell>
+                  <TableCell align="center">{row.catchesThrown}</TableCell>
                   <TableCell align="center">{formatRate(displayedKd(row, counting))}</TableCell>
                   {showAssists ? <TableCell align="center">{row.assists}</TableCell> : null}
                   {showMultiKills ? <TableCell align="center">{row.doubleKills}</TableCell> : null}

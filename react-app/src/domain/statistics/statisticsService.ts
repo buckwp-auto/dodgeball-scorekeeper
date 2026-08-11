@@ -56,6 +56,8 @@ class PlayerStatisticsBuilder {
   readonly killsCredit = new PlayerStatisticsBuilderKillsCredit();
   readonly deaths = new PlayerStatisticsBuilderDeaths();
   deathsCredit = 0;
+  /** Credit from CatchThrown deaths (excluded from display deaths / Net). */
+  deathsCatchThrownCredit = 0;
   teamThrowAssists = 0;
   doubleKills = 0;
   tripleKills = 0;
@@ -91,6 +93,7 @@ class PlayerStatisticsBuilder {
     this.deaths.deflections.mergeFrom(other.deaths.deflections);
     this.deaths.errors.mergeFrom(other.deaths.errors);
     this.deathsCredit += other.deathsCredit;
+    this.deathsCatchThrownCredit += other.deathsCatchThrownCredit;
     this.teamThrowAssists += other.teamThrowAssists;
     this.doubleKills += other.doubleKills;
     this.tripleKills += other.tripleKills;
@@ -154,6 +157,7 @@ export type PlayerStatistics = {
   deathsDeflections: StatisticAggregates<EDeathType, number>;
   deathsErrors: StatisticAggregates<EDeathError, number>;
   deathsCredit: number;
+  deathsCatchThrownCredit: number;
   teamThrowAssists: number;
   doubleKills: number;
   tripleKills: number;
@@ -277,6 +281,7 @@ class StatisticsContext {
       deathsDeflections: builder.deaths.deflections.build(),
       deathsErrors: builder.deaths.errors.build(),
       deathsCredit: builder.deathsCredit,
+      deathsCatchThrownCredit: builder.deathsCatchThrownCredit,
       teamThrowAssists: builder.teamThrowAssists,
       doubleKills: builder.doubleKills,
       tripleKills: builder.tripleKills,
@@ -423,6 +428,7 @@ function applyEventAwards(
       death.source === 'deflection' ? builder.deaths.deflections : builder.deaths.direct;
     bucket.increment(EDeathType.CatchThrown, death.integer);
     builder.deathsCredit += death.credit;
+    builder.deathsCatchThrownCredit += death.credit;
   }
 
   for (const throwerId of awards.assists) {

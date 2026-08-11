@@ -38,7 +38,7 @@ export const HIGHLIGHT_FORMULAS: Record<HighlightMetric, string> = {
   catchRate: 'Catch % = catches made / times targeted',
   elusivenessRate: 'Elusiveness % = (times targeted − times hit) / times targeted',
   efficiencyRate: 'Efficiency % = kills / throws',
-  netScore: 'Net score = 2×catches + kills − eliminations − 2×catches thrown',
+  netScore: 'Net score = 2×catches + kills − hit/error deaths − 2×times caught',
   vor: 'VOR = equal-weight average of z-scores vs median (Caught % inverted)',
   war: 'WAR = VOR / 6',
 };

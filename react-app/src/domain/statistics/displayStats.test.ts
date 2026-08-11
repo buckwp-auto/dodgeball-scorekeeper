@@ -187,7 +187,8 @@ describe('buildDisplayStats', () => {
 
     expect(casey.catches).toBe(1);
     expect(drew.recoveries).toBe(1);
-    expect(alex.deaths).toBe(1);
+    // Catch-outs are times caught, not Deaths (Deaths = hit/error only).
+    expect(alex.deaths).toBe(0);
     expect(casey.catchRate).toBeCloseTo(0.5);
     expect(alex.throws).toBe(2);
     expect(alex.catchesThrown).toBe(1);
@@ -197,8 +198,30 @@ describe('buildDisplayStats', () => {
     expect(casey.targets).toBe(2);
     expect(casey.targetHits).toBe(1);
     expect(casey.elusivenessRate).toBeCloseTo(0.5);
-    expect(netScore(alex)).toBe(-2);
+    // Net = kills − 2×times caught (not also −1 death for the same catch-out).
+    expect(netScore(alex)).toBe(-1);
     expect(netScore(casey)).toBe(1);
+  });
+
+  it('does not double-count catch-outs in Net score', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupMatch();
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Catch,
+        deflections: [],
+        recoveredId: null,
+      },
+    ]);
+
+    const alex = byName(
+      buildDisplayStats(data, { kind: 'game', matchId: match.Id, gameId }),
+      'Alex',
+    )!;
+    expect(alex.deaths).toBe(0);
+    expect(alex.catchesThrown).toBe(1);
+    expect(netScore(alex)).toBe(-2);
   });
 
   it('counts a deflection catch on the receiver', () => {
@@ -221,6 +244,7 @@ describe('buildDisplayStats', () => {
     expect(byName(rows, 'Drew')?.catches).toBe(1);
     expect(byName(rows, 'Casey')?.recoveries).toBe(1);
     expect(byName(rows, 'Alex')?.catchesThrown).toBe(1);
+    expect(byName(rows, 'Alex')?.deaths).toBe(0);
     expect(byName(rows, 'Alex')?.caughtRate).toBe(1);
     expect(byName(rows, 'Drew')?.targets).toBe(1);
     expect(byName(rows, 'Drew')?.elusivenessRate).toBe(1);
