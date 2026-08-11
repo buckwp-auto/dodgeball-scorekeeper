@@ -93,7 +93,7 @@ describe('deriveCloudSyncPresentation', () => {
     });
   });
 
-  it('shows signed-in with no league selected', () => {
+  it('shows signed-in with no cloud league selected', () => {
     expect(
       deriveCloudSyncPresentation({
         configured: true,
@@ -107,7 +107,7 @@ describe('deriveCloudSyncPresentation', () => {
       }),
     ).toEqual({
       mode: 'signedInNoLeague',
-      connectionLabel: 'Connected as Will, no league selected',
+      connectionLabel: 'Connected as Will, no cloud league selected',
       leaguePill: null,
       leaguePillKind: null,
       saveCaption: null,

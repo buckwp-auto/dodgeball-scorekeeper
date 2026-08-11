@@ -112,7 +112,7 @@ export function deriveCloudSyncPresentation(
     const pill = localPill(localLeagueLabel);
     return {
       mode: 'signedInNoLeague',
-      connectionLabel: `Connected as ${userDisplayName}, no league selected`,
+      connectionLabel: `Connected as ${userDisplayName}, no cloud league selected`,
       leaguePill: pill.leaguePill,
       leaguePillKind: pill.leaguePillKind,
       saveCaption: null,

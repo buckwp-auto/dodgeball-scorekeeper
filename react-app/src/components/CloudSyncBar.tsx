@@ -59,6 +59,15 @@ export function CloudSyncBar() {
             }}
           />
         ) : null}
+        {!isCloudPill ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ lineHeight: 1.2, display: 'block' }}
+          >
+            (local file)
+          </Typography>
+        ) : null}
         {saveLabel ? (
           <Stack spacing={0.75}>
             {saveCaption ? (
