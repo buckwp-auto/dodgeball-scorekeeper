@@ -42,6 +42,7 @@ export function RosterYoutubePlayer({ youtubeUrl }: { youtubeUrl: string }) {
           ready={popoutPlayback.ready}
           playing={popoutPlayback.playing}
           displayTime={popoutPlayback.displayTime}
+          seekingTo={popoutPlayback.seekingTo}
           blocked={popoutPlayback.blocked}
           handle={popoutPlayback.handle}
           onDockBack={() => dockBack('tall')}

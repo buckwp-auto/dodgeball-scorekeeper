@@ -6,6 +6,7 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   IconButton,
   Stack,
   Typography,
@@ -670,6 +671,7 @@ export function YoutubePopoutBar({
   ready,
   playing,
   displayTime,
+  seekingTo = null,
   blocked,
   handle,
   onDockBack,
@@ -678,6 +680,7 @@ export function YoutubePopoutBar({
   ready: boolean;
   playing: boolean;
   displayTime: number;
+  seekingTo?: number | null;
   blocked?: boolean;
   handle: YoutubePlayerHandle;
   onDockBack: () => void;
@@ -706,10 +709,24 @@ export function YoutubePopoutBar({
         onSetLayout={onModeChange}
         onDockBack={onDockBack}
       />
-      <Typography variant="caption" sx={{ display: 'block', px: 1.5, py: 0.5, opacity: 0.8 }}>
-        Video is in the pop-out window. Fullscreen that window (F11), not YouTube’s
-        button. Scoring hotkeys work from either window.
-      </Typography>
+      {seekingTo != null ? (
+        <Stack
+          direction="row"
+          spacing={1}
+          className="sk-youtube-popout-seeking"
+          sx={{ alignItems: 'center', px: 1.5, py: 0.75 }}
+        >
+          <CircularProgress size={14} color="inherit" />
+          <Typography variant="caption">
+            Seeking to {formatVideoTime(seekingTo)}…
+          </Typography>
+        </Stack>
+      ) : (
+        <Typography variant="caption" sx={{ display: 'block', px: 1.5, py: 0.5, opacity: 0.8 }}>
+          Video is in the pop-out window. Fullscreen that window (F11), not YouTube’s
+          button. Scoring hotkeys work from either window.
+        </Typography>
+      )}
     </Box>
   );
 }

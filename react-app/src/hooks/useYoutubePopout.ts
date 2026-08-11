@@ -8,7 +8,10 @@ import {
   envelopeYoutubePopoutMessage,
   isYoutubePopoutControllerMessage,
   isYoutubePopoutHostMessage,
+  YOUTUBE_POPOUT_SEEK_TIMEOUT_MS,
   youtubePopoutChannelName,
+  youtubePopoutSeekSettled,
+  type YoutubePopoutControllerEnvelope,
   type YoutubePopoutSnapshot,
 } from '../domain/youtubePopout';
 
@@ -27,6 +30,7 @@ export function useYoutubePopoutController() {
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
+  const [seekingTo, setSeekingTo] = useState<number | null>(null);
 
   const snapshotRef = useRef<YoutubePopoutSnapshot>({
     currentTime: 0,
@@ -37,6 +41,45 @@ export function useYoutubePopoutController() {
   const popupRef = useRef<Window | null>(null);
   const activeRef = useRef(false);
   const onGoneRef = useRef<(() => void) | null>(null);
+  const seekingToRef = useRef<number | null>(null);
+  const seekTimeoutRef = useRef<number | null>(null);
+
+  const clearSeekTimeout = useCallback(() => {
+    if (seekTimeoutRef.current != null) {
+      window.clearTimeout(seekTimeoutRef.current);
+      seekTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearSeeking = useCallback(() => {
+    clearSeekTimeout();
+    seekingToRef.current = null;
+    setSeekingTo(null);
+  }, [clearSeekTimeout]);
+
+  const beginSeeking = useCallback(
+    (seconds: number) => {
+      clearSeekTimeout();
+      seekingToRef.current = seconds;
+      setSeekingTo(seconds);
+      seekTimeoutRef.current = window.setTimeout(() => {
+        seekingToRef.current = null;
+        setSeekingTo(null);
+        seekTimeoutRef.current = null;
+      }, YOUTUBE_POPOUT_SEEK_TIMEOUT_MS);
+    },
+    [clearSeekTimeout],
+  );
+
+  const notePlayerTime = useCallback(
+    (currentTime: number) => {
+      const target = seekingToRef.current;
+      if (target != null && youtubePopoutSeekSettled(currentTime, target)) {
+        clearSeeking();
+      }
+    },
+    [clearSeeking],
+  );
 
   const syncUiFromSnapshot = useCallback(() => {
     const snap = snapshotRef.current;
@@ -45,38 +88,43 @@ export function useYoutubePopoutController() {
     setDisplayTime(snap.currentTime);
   }, []);
 
-  const teardown = useCallback((notifyHost: boolean) => {
-    if (notifyHost) {
+  const teardown = useCallback(
+    (notifyHost: boolean) => {
+      clearSeeking();
+      if (notifyHost) {
+        try {
+          channelRef.current?.postMessage(
+            envelopeYoutubePopoutMessage({ type: 'shutdown' }),
+          );
+        } catch {
+          /* ignore */
+        }
+        try {
+          popupRef.current?.close();
+        } catch {
+          /* ignore */
+        }
+      }
       try {
-        channelRef.current?.postMessage(
-          envelopeYoutubePopoutMessage({ type: 'shutdown' }),
-        );
+        channelRef.current?.close();
       } catch {
         /* ignore */
       }
-      try {
-        popupRef.current?.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    try {
-      channelRef.current?.close();
-    } catch {
-      /* ignore */
-    }
-    channelRef.current = null;
-    popupRef.current = null;
-    activeRef.current = false;
-    setActive(false);
-    setReady(false);
-    setPlaying(false);
-  }, []);
-
-  const postRef = useRef<(message: ReturnType<typeof envelopeYoutubePopoutMessage>) => void>(
-    () => {},
+      channelRef.current = null;
+      popupRef.current = null;
+      activeRef.current = false;
+      setActive(false);
+      setReady(false);
+      setPlaying(false);
+    },
+    [clearSeeking],
   );
+
+  const postRef = useRef<(message: YoutubePopoutControllerEnvelope) => void>(() => {});
   postRef.current = (message) => {
+    if (message.type === 'command' && message.op === 'seekTo') {
+      beginSeeking(message.seconds);
+    }
     try {
       channelRef.current?.postMessage(message);
     } catch {
@@ -118,6 +166,7 @@ export function useYoutubePopoutController() {
         snapshotRef.current.currentTime = event.data.currentTime;
         snapshotRef.current.playing = event.data.playing;
         snapshotRef.current.ready = true;
+        notePlayerTime(event.data.currentTime);
         syncUiFromSnapshot();
       };
       channelRef.current = channel;
@@ -151,7 +200,7 @@ export function useYoutubePopoutController() {
       }
       return true;
     },
-    [syncUiFromSnapshot, teardown],
+    [notePlayerTime, syncUiFromSnapshot, teardown],
   );
 
   const disconnect = useCallback(() => {
@@ -194,6 +243,7 @@ export function useYoutubePopoutController() {
     ready,
     playing,
     displayTime,
+    seekingTo,
     handle,
     open,
     disconnect,
@@ -208,6 +258,36 @@ export function useYoutubePopoutHost(options: {
 }) {
   const { sessionId, playerRef, enabled = true } = options;
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const [seekingTo, setSeekingTo] = useState<number | null>(null);
+  const seekingToRef = useRef<number | null>(null);
+  const seekTimeoutRef = useRef<number | null>(null);
+
+  const clearSeekTimeout = useCallback(() => {
+    if (seekTimeoutRef.current != null) {
+      window.clearTimeout(seekTimeoutRef.current);
+      seekTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearSeeking = useCallback(() => {
+    clearSeekTimeout();
+    seekingToRef.current = null;
+    setSeekingTo(null);
+  }, [clearSeekTimeout]);
+
+  const beginSeeking = useCallback(
+    (seconds: number) => {
+      clearSeekTimeout();
+      seekingToRef.current = seconds;
+      setSeekingTo(seconds);
+      seekTimeoutRef.current = window.setTimeout(() => {
+        seekingToRef.current = null;
+        setSeekingTo(null);
+        seekTimeoutRef.current = null;
+      }, YOUTUBE_POPOUT_SEEK_TIMEOUT_MS);
+    },
+    [clearSeekTimeout],
+  );
 
   const postGoodbye = useCallback(() => {
     try {
@@ -234,6 +314,9 @@ export function useYoutubePopoutHost(options: {
         postGoodbye();
         window.close();
         return;
+      }
+      if (event.data.op === 'seekTo') {
+        beginSeeking(event.data.seconds);
       }
       applyYoutubePopoutCommand(playerRef.current, event.data);
     };
@@ -266,6 +349,10 @@ export function useYoutubePopoutHost(options: {
       if (!player) return;
       const currentTime = player.getCurrentTime();
       if (currentTime == null) return;
+      const target = seekingToRef.current;
+      if (target != null && youtubePopoutSeekSettled(currentTime, target)) {
+        clearSeeking();
+      }
       try {
         channel.postMessage(
           envelopeYoutubePopoutMessage({
@@ -277,7 +364,7 @@ export function useYoutubePopoutHost(options: {
       } catch {
         /* ignore */
       }
-    }, 250);
+    }, 100);
 
     const onUnload = () => postGoodbye();
     window.addEventListener('beforeunload', onUnload);
@@ -286,6 +373,7 @@ export function useYoutubePopoutHost(options: {
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('beforeunload', onUnload);
       window.clearInterval(pollId);
+      clearSeeking();
       try {
         channel.close();
       } catch {
@@ -293,7 +381,14 @@ export function useYoutubePopoutHost(options: {
       }
       if (channelRef.current === channel) channelRef.current = null;
     };
-  }, [enabled, playerRef, postGoodbye, sessionId]);
+  }, [
+    beginSeeking,
+    clearSeeking,
+    enabled,
+    playerRef,
+    postGoodbye,
+    sessionId,
+  ]);
 
-  return { requestClose };
+  return { requestClose, seekingTo };
 }

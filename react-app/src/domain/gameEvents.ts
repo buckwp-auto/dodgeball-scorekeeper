@@ -173,12 +173,17 @@ export function getGameStartEvent(data: DatabaseDto, gameId: Guid): GameEventRow
 }
 
 /**
- * Where the YouTube player should open when entering Track Game.
- * Finished games resume at game start; unfinished games resume at the last stamped event.
+ * Preferred seek when entering Track Game, or null when nothing is stamped yet.
+ * Null means keep the current player position (e.g. a pop-out left at the prior
+ * game's end until Game start is marked).
+ * Finished games prefer game start; unfinished prefer the last stamped event.
  */
-export function initialVideoSeekSeconds(data: DatabaseDto, gameId: Guid): number {
+export function trackGameOpenSeekSeconds(
+  data: DatabaseDto,
+  gameId: Guid,
+): number | null {
   const start = getGameStartEvent(data, gameId);
-  const startSeconds = start?.VideoOffsetSeconds ?? 0;
+  const startSeconds = start?.VideoOffsetSeconds ?? null;
 
   if (gameHasFinishEvent(data, gameId)) {
     return startSeconds;
@@ -192,6 +197,14 @@ export function initialVideoSeekSeconds(data: DatabaseDto, gameId: Guid): number
   }
 
   return startSeconds;
+}
+
+/**
+ * Where the in-page YouTube player should cue when entering Track Game.
+ * Same rules as {@link trackGameOpenSeekSeconds}, falling back to 0 when unstamped.
+ */
+export function initialVideoSeekSeconds(data: DatabaseDto, gameId: Guid): number {
+  return trackGameOpenSeekSeconds(data, gameId) ?? 0;
 }
 
 /**

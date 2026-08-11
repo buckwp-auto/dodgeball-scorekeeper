@@ -7,11 +7,67 @@ import {
 export const YOUTUBE_POPOUT_PATH = '/youtube-popout';
 export const YOUTUBE_POPOUT_MESSAGE_KIND = 'sk-yt-popout';
 
+/** Match id from a router pathname (basename already stripped), or null. */
+export function matchIdFromPath(pathname: string): string | null {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts[0] === 'matches' && parts[1]) return parts[1];
+  return null;
+}
+
 export type YoutubePopoutSnapshot = {
   currentTime: number;
   playing: boolean;
   ready: boolean;
 };
+
+/** How close the player head must get before a pending auto-seek is considered done. */
+export const YOUTUBE_POPOUT_SEEK_SETTLED_SECONDS = 1.25;
+/** Max time to show the seeking spinner if YouTube never reports the target. */
+export const YOUTUBE_POPOUT_SEEK_TIMEOUT_MS = 4000;
+
+export function youtubePopoutSeekSettled(
+  currentTime: number,
+  targetSeconds: number,
+): boolean {
+  return (
+    Number.isFinite(currentTime) &&
+    Number.isFinite(targetSeconds) &&
+    Math.abs(currentTime - targetSeconds) <= YOUTUBE_POPOUT_SEEK_SETTLED_SECONDS
+  );
+}
+
+/**
+ * After opening a pop-out, keep the Track Game attach mark unless the pop-out
+ * is switching to a different match or video (which should force a fresh attach).
+ */
+export function attachedGameIdAfterPopoutOpen(args: {
+  previousBoundMatchId: string | null;
+  previousBoundVideoId: string | null;
+  previousAttachedGameId: string | null;
+  matchId: string;
+  videoId: string;
+}): string | null {
+  const switchingTarget =
+    (args.previousBoundMatchId != null && args.previousBoundMatchId !== args.matchId) ||
+    (args.previousBoundVideoId != null && args.previousBoundVideoId !== args.videoId);
+  return switchingTarget ? null : args.previousAttachedGameId;
+}
+
+/**
+ * Auto-seek when a persisted pop-out attaches to a different Track Game and a
+ * stamp exists. Same-game attach (e.g. pop out while already on that game) stays put.
+ */
+export function shouldAutoSeekPopoutForGame(args: {
+  attachedGameId: string | null;
+  gameId: string;
+  seekTargetSeconds: number | null;
+}): boolean {
+  return (
+    args.attachedGameId !== args.gameId &&
+    args.seekTargetSeconds != null &&
+    Number.isFinite(args.seekTargetSeconds)
+  );
+}
 
 export type YoutubePopoutCommand =
   | { type: 'command'; op: 'togglePlayPause' }

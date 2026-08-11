@@ -24,6 +24,7 @@ import {
   getGameEvents,
   getGameStartEvent,
   initialVideoSeekSeconds,
+  trackGameOpenSeekSeconds,
   loadThrowDraftsFromEvent,
   persistErrorGameEvent,
   persistFinishGameEvent,
@@ -412,7 +413,7 @@ describe('buildTimelineEntries', () => {
   });
 });
 
-describe('initialVideoSeekSeconds', () => {
+describe('initialVideoSeekSeconds / trackGameOpenSeekSeconds', () => {
   it('seeks to the last stamped event for an unfinished game', () => {
     const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
     setGameEventVideoOffset(data, getGameStartEvent(data, gameId)!.Id, 10);
@@ -448,6 +449,7 @@ describe('initialVideoSeekSeconds', () => {
     );
     expect(first).toBeTruthy();
     expect(initialVideoSeekSeconds(data, gameId)).toBe(95);
+    expect(trackGameOpenSeekSeconds(data, gameId)).toBe(95);
   });
 
   it('seeks to game start for a finished game', () => {
@@ -475,6 +477,20 @@ describe('initialVideoSeekSeconds', () => {
       { videoOffsetSeconds: 100 },
     );
     expect(initialVideoSeekSeconds(data, gameId)).toBe(12);
+    expect(trackGameOpenSeekSeconds(data, gameId)).toBe(12);
+  });
+
+  it('returns null when nothing is stamped yet (keep pop-out position)', () => {
+    const { data, gameId } = setupOneGameMatch();
+    expect(trackGameOpenSeekSeconds(data, gameId)).toBeNull();
+    expect(initialVideoSeekSeconds(data, gameId)).toBe(0);
+  });
+
+  it('returns game start when only start is stamped', () => {
+    const { data, gameId } = setupOneGameMatch();
+    setGameEventVideoOffset(data, getGameStartEvent(data, gameId)!.Id, 33);
+    expect(trackGameOpenSeekSeconds(data, gameId)).toBe(33);
+    expect(initialVideoSeekSeconds(data, gameId)).toBe(33);
   });
 });
 

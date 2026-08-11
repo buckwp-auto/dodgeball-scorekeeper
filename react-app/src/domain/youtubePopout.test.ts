@@ -10,15 +10,89 @@ import {
   envelopeYoutubePopoutMessage,
   isYoutubePopoutControllerMessage,
   isYoutubePopoutHostMessage,
+  matchIdFromPath,
   parseYoutubePopoutSearch,
+  shouldAutoSeekPopoutForGame,
+  attachedGameIdAfterPopoutOpen,
   YOUTUBE_POPOUT_MESSAGE_KIND,
   youtubePopoutChannelName,
+  youtubePopoutSeekSettled,
   type YoutubePopoutSnapshot,
 } from './youtubePopout';
 
 describe('youtube popout URL + channel', () => {
   it('names a channel per session', () => {
     expect(youtubePopoutChannelName('abc')).toBe('scorekeeper-yt-popout:abc');
+  });
+
+  it('extracts match id from router paths', () => {
+    expect(matchIdFromPath('/matches/m1')).toBe('m1');
+    expect(matchIdFromPath('/matches/m1/games/g1/events')).toBe('m1');
+    expect(matchIdFromPath('/stats')).toBeNull();
+    expect(matchIdFromPath('/')).toBeNull();
+  });
+
+  it('treats seeks as settled within tolerance', () => {
+    expect(youtubePopoutSeekSettled(40, 40)).toBe(true);
+    expect(youtubePopoutSeekSettled(40.5, 40)).toBe(true);
+    expect(youtubePopoutSeekSettled(42, 40)).toBe(false);
+  });
+
+  it('preserves attached game when popping out on the same match video', () => {
+    expect(
+      attachedGameIdAfterPopoutOpen({
+        previousBoundMatchId: null,
+        previousBoundVideoId: null,
+        previousAttachedGameId: 'game-1',
+        matchId: 'match-1',
+        videoId: 'dQw4w9WgXcQ',
+      }),
+    ).toBe('game-1');
+    expect(
+      shouldAutoSeekPopoutForGame({
+        attachedGameId: 'game-1',
+        gameId: 'game-1',
+        seekTargetSeconds: 95,
+      }),
+    ).toBe(false);
+  });
+
+  it('clears attach and seeks when opening a different game under an active pop-out', () => {
+    expect(
+      attachedGameIdAfterPopoutOpen({
+        previousBoundMatchId: 'match-1',
+        previousBoundVideoId: 'dQw4w9WgXcQ',
+        previousAttachedGameId: 'game-1',
+        matchId: 'match-1',
+        videoId: 'dQw4w9WgXcQ',
+      }),
+    ).toBe('game-1');
+    expect(
+      shouldAutoSeekPopoutForGame({
+        attachedGameId: 'game-1',
+        gameId: 'game-2',
+        seekTargetSeconds: 279,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoSeekPopoutForGame({
+        attachedGameId: 'game-1',
+        gameId: 'game-2',
+        seekTargetSeconds: null,
+      }),
+    ).toBe(false);
+  });
+
+  it('resets attach when the pop-out switches match or video', () => {
+    expect(
+      attachedGameIdAfterPopoutOpen({
+        previousBoundMatchId: 'match-1',
+        previousBoundVideoId: 'aaaaaaaaaaa',
+        previousAttachedGameId: 'game-1',
+        matchId: 'match-1',
+        videoId: 'bbbbbbbbbbb',
+      }),
+    ).toBeNull();
   });
 
   it('builds and parses popout href query params', () => {

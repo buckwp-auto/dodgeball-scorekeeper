@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import type { YoutubePlayerHandle } from '../domain/youtube';
 import {
   isYoutubeInPageMode,
@@ -16,9 +17,10 @@ import {
   type YoutubeInPageMode,
   type YoutubePlayerMode,
 } from '../domain/youtube';
+import { matchIdFromPath } from '../domain/youtubePopout';
 import { logVideoPlayerMode } from '../cloud/logAnalytics';
 import { useDocumentHotkeys } from './useDocumentHotkeys';
-import { useYoutubePopoutController } from './useYoutubePopout';
+import { useYoutubePopout } from '../state/YoutubePopoutContext';
 
 const YOUTUBE_CONTROL_HOTKEYS = new Set([
   YOUTUBE_LAYOUT_SMALL_HOTKEY,
@@ -34,31 +36,53 @@ export function isYoutubeControlHotkey(key: string): boolean {
   return YOUTUBE_CONTROL_HOTKEYS.has(key);
 }
 
+function popoutAppliesTo(
+  popout: { active: boolean; matchId: string | null; videoId: string | null },
+  matchId: string | null,
+  videoId: string | null,
+): boolean {
+  return (
+    popout.active &&
+    Boolean(matchId) &&
+    Boolean(videoId) &&
+    popout.matchId === matchId &&
+    popout.videoId === videoId
+  );
+}
+
 export function useYoutubeControls(
   youtubeUrl: string,
   options?: { enableLayoutHotkeys?: boolean },
 ) {
   const enableLayoutHotkeys = options?.enableLayoutHotkeys ?? true;
+  const location = useLocation();
+  const routeMatchId = matchIdFromPath(location.pathname);
+  const videoId = parseYoutubeVideoId(youtubeUrl);
+  const hasYoutube = Boolean(videoId);
+
+  const popout = useYoutubePopout();
+  const popoutForThisVideo = popoutAppliesTo(popout, routeMatchId, videoId);
+
   const localPlayerRef = useRef<YoutubePlayerHandle | null>(null);
   const [mode, setMode] = useState<YoutubePlayerMode>(() =>
-    loadYoutubePlayerMode(),
+    popoutForThisVideo ? 'popout' : loadYoutubePlayerMode(),
   );
   const [cueSeconds, setCueSeconds] = useState<number | null>(null);
-  const hasYoutube = Boolean(parseYoutubeVideoId(youtubeUrl));
   const dockBackModeRef = useRef<YoutubeInPageMode>(loadYoutubePlayerMode());
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const wasPopoutForThisRef = useRef(popoutForThisVideo);
 
   const {
     blocked: popoutBlocked,
     ready: popoutReady,
     playing: popoutPlaying,
     displayTime: popoutDisplayTime,
+    seekingTo: popoutSeekingTo,
     handle: popoutHandle,
     open: openPopout,
     disconnect: disconnectPopout,
-    setOnGone,
-  } = useYoutubePopoutController();
+  } = popout;
 
   const activePlayer = useCallback((): YoutubePlayerHandle | null => {
     if (modeRef.current === 'popout') return popoutHandle;
@@ -92,25 +116,53 @@ export function useYoutubeControls(
   );
 
   useEffect(() => {
-    setOnGone(() => {
-      if (modeRef.current === 'popout') dockBack();
-    });
-    return () => setOnGone(null);
-  }, [dockBack, setOnGone]);
+    const was = wasPopoutForThisRef.current;
+    wasPopoutForThisRef.current = popoutForThisVideo;
+
+    if (popoutForThisVideo) {
+      if (modeRef.current !== 'popout') {
+        if (isYoutubeInPageMode(modeRef.current)) {
+          persistInPageMode(modeRef.current);
+        }
+        commitMode('popout');
+      }
+      return;
+    }
+
+    if (was && modeRef.current === 'popout') {
+      if (Number.isFinite(popoutDisplayTime)) setCueSeconds(popoutDisplayTime);
+      const resolved = dockBackModeRef.current;
+      commitMode(resolved);
+      persistInPageMode(resolved);
+      // URL/match mismatch can leave an orphaned window; close it. Already-closed
+      // sessions are inactive and this is a no-op.
+      if (popout.active) disconnectPopout();
+    }
+  }, [
+    commitMode,
+    disconnectPopout,
+    persistInPageMode,
+    popout.active,
+    popoutDisplayTime,
+    popoutForThisVideo,
+  ]);
 
   const popOut = useCallback(() => {
-    const videoId = parseYoutubeVideoId(youtubeUrl);
-    if (!videoId) return;
+    if (!routeMatchId || !videoId) return;
+    if (popoutAppliesTo(popout, routeMatchId, videoId)) {
+      commitMode('popout');
+      return;
+    }
     const current = localPlayerRef.current?.getCurrentTime();
     const startSeconds =
       current != null && Number.isFinite(current) ? current : (cueSeconds ?? 0);
     if (isYoutubeInPageMode(modeRef.current)) {
       persistInPageMode(modeRef.current);
     }
-    const opened = openPopout(videoId, startSeconds);
+    const opened = openPopout(routeMatchId, videoId, startSeconds);
     if (!opened) return;
     commitMode('popout');
-  }, [commitMode, cueSeconds, openPopout, persistInPageMode, youtubeUrl]);
+  }, [commitMode, cueSeconds, openPopout, persistInPageMode, popout, routeMatchId, videoId]);
 
   const setModeAndPersist = useCallback(
     (next: YoutubePlayerMode) => {
@@ -196,6 +248,7 @@ export function useYoutubeControls(
       ready: popoutReady,
       playing: popoutPlaying,
       displayTime: popoutDisplayTime,
+      seekingTo: popoutSeekingTo,
       blocked: popoutBlocked,
       handle: popoutHandle,
     },

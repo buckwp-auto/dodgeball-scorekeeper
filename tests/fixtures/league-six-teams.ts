@@ -195,6 +195,7 @@ const EMPTY_TABLE_NAMES = [
   'GameEvent',
   'GameEventError',
   'GameEventFinish',
+  'GameEventStart',
   'GameEventThrow',
   'GamePlayer',
   'Match',
@@ -206,6 +207,13 @@ const EMPTY_TABLE_NAMES = [
   'TeamPlayer',
   'Throw',
 ] as const;
+
+/** Seconds from match VOD start before game 1. */
+const MATCH_INTRO_SECONDS = 45;
+/** Typical spacing between stamped events within a game. */
+const EVENT_GAP_SECONDS = 12;
+/** Break between one game's finish and the next game's start on the same VOD. */
+const BETWEEN_GAMES_GAP_SECONDS = 90;
 
 function createEmptyTables(): DatabaseDto['Tables'] {
   return Object.fromEntries(EMPTY_TABLE_NAMES.map((name) => [name, []]));
@@ -345,7 +353,8 @@ function appendThrowEvent(
 
 /**
  * Builds a throw history until one side is wiped, mixing misses/dodges/hits/catches/deflections.
- * Returns whether home won.
+ * Stamps Game start, every throw, and finish on the match VOD timeline starting at
+ * `videoStartSeconds`. Returns the finish offset so the next game can begin later.
  */
 function writeGameEventHistory(
   tables: DatabaseDto['Tables'],
@@ -354,13 +363,34 @@ function writeGameEventHistory(
   homeGamePlayerIds: Guid[],
   awayGamePlayerIds: Guid[],
   seed: number,
-): boolean {
+  videoStartSeconds: number,
+): { homeWins: boolean; videoEndSeconds: number } {
   const rng = mulberry32(seed);
   const eliminated = new Set<Guid>();
   let ordinal = 1;
-  const maxEvents = 64;
+  let lastOffset = videoStartSeconds;
+  const maxThrowEvents = 64;
 
-  while (ordinal <= maxEvents) {
+  const startEventId = nextId();
+  (tables.GameEvent as {
+    Id: Guid;
+    GameId: Guid;
+    Ordinal: number;
+    VideoOffsetSeconds?: number;
+  }[]).push({
+    Id: startEventId,
+    GameId: gameId,
+    Ordinal: ordinal,
+    VideoOffsetSeconds: videoStartSeconds,
+  });
+  (tables.GameEventStart as { GameEventId: Guid }[]).push({ GameEventId: startEventId });
+  const gameRow = (tables.Game as { Id: Guid; VideoStartSeconds?: number }[]).find(
+    (row) => row.Id === gameId,
+  );
+  if (gameRow) gameRow.VideoStartSeconds = videoStartSeconds;
+  ordinal += 1;
+
+  while (ordinal <= maxThrowEvents + 1) {
     const activeHome = activeOf(homeGamePlayerIds, eliminated);
     const activeAway = activeOf(awayGamePlayerIds, eliminated);
     if (activeHome.length === 0 || activeAway.length === 0) break;
@@ -372,14 +402,14 @@ function writeGameEventHistory(
     const throwerId = pickOne(throwerTeam, rng);
     const targetId = pickOne(targetTeam, rng);
 
-    let resultId = ThrowResult.Hit;
+    let resultId: number = ThrowResult.Hit;
     let recoveredId: Guid | null = null;
     const deflections: { receiverId: Guid; resultId: number }[] = [];
     const roll = rng();
     const otherTargets = targetTeam.filter((id) => id !== targetId);
     const outOnCatcherSide = catcherTeamAll.filter((id) => eliminated.has(id));
 
-    if (ordinal > maxEvents - 8) {
+    if (ordinal > maxThrowEvents - 8) {
       // Force progress toward a wipe near the safety limit.
       resultId = ThrowResult.Hit;
     } else if (roll < 0.18) {
@@ -425,6 +455,7 @@ function writeGameEventHistory(
       ResultId: row.resultId,
     }));
     const newOuts = countNewEliminations(eliminated, throwRow, deflectionRows);
+    lastOffset = videoStartSeconds + (ordinal - 1) * EVENT_GAP_SECONDS;
     appendThrowEvent(
       tables,
       nextId,
@@ -437,7 +468,7 @@ function writeGameEventHistory(
       deflections,
       {
         isHighlight: throwIsHighlight(resultId, deflections, newOuts),
-        videoOffsetSeconds: ordinal * 12,
+        videoOffsetSeconds: lastOffset,
       },
     );
     applyThrowToEliminated(
@@ -464,6 +495,7 @@ function writeGameEventHistory(
       : activeOf(awayGamePlayerIds, eliminated);
     for (const targetId of survivors) {
       const throwerId = pickOne(finishers, rng);
+      lastOffset = videoStartSeconds + (ordinal - 1) * EVENT_GAP_SECONDS;
       appendThrowEvent(
         tables,
         nextId,
@@ -474,7 +506,7 @@ function writeGameEventHistory(
         ThrowResult.Hit,
         null,
         [],
-        { videoOffsetSeconds: ordinal * 12 },
+        { videoOffsetSeconds: lastOffset },
       );
       eliminated.add(targetId);
       ordinal += 1;
@@ -488,18 +520,25 @@ function writeGameEventHistory(
   }
   const homeWins = homeAlive && !awayAlive;
 
+  lastOffset += EVENT_GAP_SECONDS;
   const finishEventId = nextId();
-  (tables.GameEvent as { Id: Guid; GameId: Guid; Ordinal: number }[]).push({
+  (tables.GameEvent as {
+    Id: Guid;
+    GameId: Guid;
+    Ordinal: number;
+    VideoOffsetSeconds?: number;
+  }[]).push({
     Id: finishEventId,
     GameId: gameId,
     Ordinal: ordinal,
+    VideoOffsetSeconds: lastOffset,
   });
   (tables.GameEventFinish as { GameEventId: Guid; ResultId: number }[]).push({
     GameEventId: finishEventId,
     ResultId: homeWins ? FINISH_WIN_HOME : FINISH_WIN_AWAY,
   });
 
-  return homeWins;
+  return { homeWins, videoEndSeconds: lastOffset };
 }
 
 /**
@@ -589,10 +628,11 @@ export function buildLeagueSixTeamsDatabase(): DatabaseDto {
       }
     }
 
+    let nextGameStartSeconds = MATCH_INTRO_SECONDS;
     for (let gameIndex = 0; gameIndex < GAMES_PER_MATCH; gameIndex++) {
       const gameId = nextId();
       const matchEventId = nextId();
-      (tables.Game as { Id: Guid }[]).push({ Id: gameId });
+      (tables.Game as { Id: Guid; VideoStartSeconds?: number }[]).push({ Id: gameId });
       (tables.MatchEvent as { Id: Guid; MatchId: Guid; Ordinal: number }[]).push({
         Id: matchEventId,
         MatchId: matchId,
@@ -624,14 +664,16 @@ export function buildLeagueSixTeamsDatabase(): DatabaseDto {
         );
       }
 
-      writeGameEventHistory(
+      const { videoEndSeconds } = writeGameEventHistory(
         tables,
         nextId,
         gameId,
         homeGamePlayerIds,
         awayGamePlayerIds,
         (homeIdx + 1) * 1000 + (awayIdx + 1) * 100 + gameIndex * 17 + 42,
+        nextGameStartSeconds,
       );
+      nextGameStartSeconds = videoEndSeconds + BETWEEN_GAMES_GAP_SECONDS;
     }
   });
 
@@ -648,6 +690,16 @@ export function leagueSixTeamsFixturePath(): string {
   return path.join(process.cwd(), 'tests', 'fixtures', LEAGUE_SIX_TEAMS_FIXTURE);
 }
 
-if (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) {
+function writeLeagueSixTeamsFixture(): void {
   writeFileSync(leagueSixTeamsFixturePath(), leagueSixTeamsScrkprJson(), 'utf-8');
+}
+
+const invokedAsScript =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  process.argv[1] != null &&
+  /league-six-teams\.(ts|js|mjs|cjs)$/.test(process.argv[1].replace(/\\/g, '/'));
+
+if (invokedAsScript) {
+  writeLeagueSixTeamsFixture();
 }

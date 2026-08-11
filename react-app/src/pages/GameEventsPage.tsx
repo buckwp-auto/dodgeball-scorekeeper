@@ -40,6 +40,7 @@ import {
   getGameEventsNewestFirst,
   getGamePlayerInfos,
   getInsertBelowTargetEventId,
+  getGameStartEvent,
   initialVideoSeekSeconds,
   isErrorDraftComplete,
   isFinishDraftComplete,
@@ -52,6 +53,7 @@ import {
   restoreGameEventSnapshot,
   setGameEventHighlight,
   setGameEventVideoOffset,
+  trackGameOpenSeekSeconds,
   undoLastGameEvent,
   type ErrorDraft,
   type FinishDraft,
@@ -72,7 +74,9 @@ import {
   findGamePlayerIdByHotkey,
   getTrackGameActionForKey,
 } from '../domain/hotkeys';
+import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
 import { useDatabase } from '../state/DatabaseContext';
+import { useYoutubePopout } from '../state/YoutubePopoutContext';
 
 type TabKey = Exclude<GameEventType, 'start'>;
 
@@ -148,6 +152,7 @@ export function GameEventsPage() {
     dockBack,
     popoutPlayback,
   } = useYoutubeControls(youtubeUrl);
+  const { attachedGameId, setAttachedGameId } = useYoutubePopout();
 
   const updateThrowDrafts = useCallback(
     (next: ThrowDraft[] | ((prev: ThrowDraft[]) => ThrowDraft[])) => {
@@ -185,6 +190,80 @@ export function GameEventsPage() {
     // Snapshot once per game open — later edits should not recreate the player
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
+
+  const gameStartOffsetSeconds = gameId
+    ? (getGameStartEvent(data, gameId)?.VideoOffsetSeconds ?? null)
+    : null;
+
+  // Persisted pop-out: on attaching to a game, seek to game start (finished) or
+  // the latest stamp (in progress). Stay put only when nothing is stamped yet.
+  // Track Game pages mark attachedGameId even in-page so popping out on the same
+  // game does not look like a fresh attach and re-seek.
+  const popoutStartStampRef = useRef<number | null>(null);
+  const popoutStartStampReadyRef = useRef(false);
+  useEffect(() => {
+    if (!gameId) return;
+
+    if (youtubeMode !== 'popout') {
+      if (attachedGameId !== gameId) setAttachedGameId(gameId);
+      popoutStartStampRef.current = null;
+      popoutStartStampReadyRef.current = false;
+      return;
+    }
+
+    if (attachedGameId !== gameId) {
+      const previousAttachedGameId = attachedGameId;
+      setAttachedGameId(gameId);
+      popoutStartStampRef.current = gameStartOffsetSeconds;
+      popoutStartStampReadyRef.current = true;
+      let seekTarget: number | null = null;
+      if (focusEventFromUrl) {
+        const focused = getGameEvents(data, gameId).find(
+          (row) => row.Id === focusEventFromUrl,
+        );
+        if (focused?.VideoOffsetSeconds != null) {
+          seekTarget = focused.VideoOffsetSeconds;
+        }
+      }
+      if (seekTarget == null) {
+        seekTarget = trackGameOpenSeekSeconds(data, gameId);
+      }
+      if (
+        seekTarget != null &&
+        shouldAutoSeekPopoutForGame({
+          attachedGameId: previousAttachedGameId,
+          gameId,
+          seekTargetSeconds: seekTarget,
+        })
+      ) {
+        seekToVideoOffset(seekTarget);
+      }
+      return;
+    }
+
+    // Remount onto the same attached game: seed the ref, don't seek
+    if (!popoutStartStampReadyRef.current) {
+      popoutStartStampRef.current = gameStartOffsetSeconds;
+      popoutStartStampReadyRef.current = true;
+      return;
+    }
+
+    if (popoutStartStampRef.current == null && gameStartOffsetSeconds != null) {
+      popoutStartStampRef.current = gameStartOffsetSeconds;
+      seekToVideoOffset(gameStartOffsetSeconds);
+      return;
+    }
+    popoutStartStampRef.current = gameStartOffsetSeconds;
+    // data / focusEventFromUrl intentionally omitted — game open snapshot + start stamp
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    youtubeMode,
+    gameId,
+    gameStartOffsetSeconds,
+    attachedGameId,
+    setAttachedGameId,
+    seekToVideoOffset,
+  ]);
 
   // Ignore selections that belong to another game after route changes
   const eventIdsInGame = useMemo(
@@ -733,6 +812,7 @@ export function GameEventsPage() {
               ready={popoutPlayback.ready}
               playing={popoutPlayback.playing}
               displayTime={popoutPlayback.displayTime}
+              seekingTo={popoutPlayback.seekingTo}
               blocked={popoutPlayback.blocked}
               handle={popoutPlayback.handle}
               onDockBack={() => dockBack()}

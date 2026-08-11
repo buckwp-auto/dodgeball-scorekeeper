@@ -28,6 +28,7 @@ import { useAnalyticsPageViews } from './hooks/useAnalyticsPageViews';
 import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
+import { YoutubePopoutProvider } from './state/YoutubePopoutContext';
 import { CloudSyncBar } from './components/CloudSyncBar';
 import { ColorModeToggle } from './components/ColorModeToggle';
 import { MadeByFooter } from './components/MadeByFooter';
@@ -88,7 +89,8 @@ export function App() {
     <AuthProvider>
       <LeagueProvider>
         <DatabaseProvider>
-          <Box className="sk-layout" sx={{ display: 'flex', minHeight: '100vh' }}>
+          <YoutubePopoutProvider>
+            <Box className="sk-layout" sx={{ display: 'flex', minHeight: '100vh' }}>
             <Drawer
               variant="permanent"
               sx={{
@@ -156,7 +158,8 @@ export function App() {
                 <Route path="/history" element={<HistoryPage />} />
               </Routes>
             </Box>
-          </Box>
+            </Box>
+          </YoutubePopoutProvider>
         </DatabaseProvider>
       </LeagueProvider>
     </AuthProvider>
