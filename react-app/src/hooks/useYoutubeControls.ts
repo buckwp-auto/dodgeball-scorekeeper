@@ -196,8 +196,11 @@ export function useYoutubeControls(
     (key: string, event: KeyboardEvent) => {
       if (!hasYoutube || mode === 'hidden') return;
 
-      if (document.activeElement instanceof HTMLIFrameElement) {
-        document.activeElement.blur();
+      const active = document.activeElement;
+      if (active instanceof HTMLIFrameElement) {
+        active.blur();
+        if (document.body.tabIndex < 0) document.body.tabIndex = -1;
+        document.body.focus({ preventScroll: true });
       }
 
       if (key === YOUTUBE_LAYOUT_SMALL_HOTKEY) {

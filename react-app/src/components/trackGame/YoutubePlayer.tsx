@@ -91,16 +91,91 @@ function loadYoutubeIframeApi(): Promise<void> {
   return apiLoadPromise;
 }
 
-/** Keep keyboard focus on the page so Space / arrows / , . reach our handlers. */
+/** Move keyboard focus off a YouTube iframe onto the host page. */
+function releaseYoutubeIframeKeyboardFocus(iframe: HTMLIFrameElement): void {
+  if (document.activeElement !== iframe) return;
+  iframe.blur();
+  if (document.body.tabIndex < 0) document.body.tabIndex = -1;
+  document.body.focus({ preventScroll: true });
+}
+
+/**
+ * Keep keyboard focus on the page so Track Game + playback hotkeys reach our
+ * handlers. Cross-origin embeds swallow keydowns while focused; mouse UI on the
+ * iframe still works after we blur.
+ */
 function retainKeyboardFocusOutsideIframe(iframe: HTMLIFrameElement): () => void {
   iframe.setAttribute('tabindex', '-1');
-  const onFocus = () => {
-    iframe.blur();
-    if (document.body.tabIndex < 0) document.body.tabIndex = -1;
-    document.body.focus({ preventScroll: true });
+
+  let rafId = 0;
+  let pollId = 0;
+  let pollUntil = 0;
+
+  const release = () => releaseYoutubeIframeKeyboardFocus(iframe);
+
+  const stopBurst = () => {
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    if (pollId) {
+      window.clearInterval(pollId);
+      pollId = 0;
+    }
+    pollUntil = 0;
   };
+
+  /** YouTube often re-focuses async after click / play; retry briefly. */
+  const scheduleReleaseBurst = () => {
+    release();
+    if (rafId) cancelAnimationFrame(rafId);
+    let frames = 0;
+    const tick = () => {
+      release();
+      frames += 1;
+      if (frames < 10) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = 0;
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+
+    pollUntil = Date.now() + 1200;
+    if (!pollId) {
+      pollId = window.setInterval(() => {
+        release();
+        if (Date.now() >= pollUntil) {
+          window.clearInterval(pollId);
+          pollId = 0;
+          pollUntil = 0;
+        }
+      }, 50);
+    }
+  };
+
+  const onFocus = () => scheduleReleaseBurst();
   iframe.addEventListener('focus', onFocus);
-  return () => iframe.removeEventListener('focus', onFocus);
+
+  const onFocusIn = (event: FocusEvent) => {
+    if (event.target === iframe) scheduleReleaseBurst();
+  };
+  document.addEventListener('focusin', onFocusIn, true);
+
+  const onPointerDown = (event: PointerEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target !== iframe && !target.closest('.sk-youtube-player')) return;
+    scheduleReleaseBurst();
+  };
+  document.addEventListener('pointerdown', onPointerDown, true);
+
+  return () => {
+    stopBurst();
+    iframe.removeEventListener('focus', onFocus);
+    document.removeEventListener('focusin', onFocusIn, true);
+    document.removeEventListener('pointerdown', onPointerDown, true);
+  };
 }
 
 export type { YoutubePlayerHandle };
@@ -476,26 +551,6 @@ export const YoutubePlayer = forwardRef<
       playerRef.current = null;
     };
   }, [videoId, mode === 'hidden' ? 'hidden' : 'visible', startSeconds]);
-
-  useEffect(() => {
-    if (!ready || mode === 'hidden') return;
-    const onPointerDown = () => {
-      // After interacting with the embed, return keyboard focus to the page
-      window.setTimeout(() => {
-        const active = document.activeElement;
-        if (
-          active instanceof HTMLIFrameElement &&
-          active.closest('.sk-youtube-player')
-        ) {
-          active.blur();
-          if (document.body.tabIndex < 0) document.body.tabIndex = -1;
-          document.body.focus({ preventScroll: true });
-        }
-      }, 0);
-    };
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => document.removeEventListener('pointerdown', onPointerDown, true);
-  }, [ready, mode]);
 
   useEffect(() => {
     if (!ready || mode === 'hidden') return;
