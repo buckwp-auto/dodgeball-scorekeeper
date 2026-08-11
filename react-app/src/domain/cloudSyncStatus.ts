@@ -4,11 +4,15 @@ export type CloudSyncMode = 'local' | 'signedInNoLeague' | 'syncing';
 
 export type CloudSyncSaveTone = 'default' | 'warning' | 'error';
 
+export type CloudSyncLeaguePillKind = 'cloud' | 'local';
+
 export type CloudSyncPresentationInput = {
   configured: boolean;
   userDisplayName: string | null;
   activeLeagueId: string | null;
   activeLeagueName: string | null;
+  /** Display name for a file/sample league when no cloud league is open. */
+  localLeagueLabel: string | null;
   syncStatus: SyncStatus;
   lastSavedAt: string | null;
   isDirty: boolean;
@@ -17,8 +21,10 @@ export type CloudSyncPresentationInput = {
 export type CloudSyncPresentation = {
   mode: CloudSyncMode;
   connectionLabel: string;
-  /** Selected cloud league, shown as a pill in the sidebar. */
+  /** Open league name (cloud or local file), shown as a pill in the sidebar. */
   leaguePill: string | null;
+  /** Distinguishes filled cloud pill from outlined local-file pill. */
+  leaguePillKind: CloudSyncLeaguePillKind | null;
   saveCaption: string | null;
   saveLabel: string | null;
   saveTone: CloudSyncSaveTone;
@@ -64,6 +70,16 @@ export function saveStatusTone(status: SyncStatus): CloudSyncSaveTone {
   return 'default';
 }
 
+function localPill(localLeagueLabel: string | null): {
+  leaguePill: string | null;
+  leaguePillKind: CloudSyncLeaguePillKind | null;
+} {
+  const label = localLeagueLabel?.trim() || null;
+  return label
+    ? { leaguePill: label, leaguePillKind: 'local' }
+    : { leaguePill: null, leaguePillKind: null };
+}
+
 export function deriveCloudSyncPresentation(
   input: CloudSyncPresentationInput,
 ): CloudSyncPresentation {
@@ -72,16 +88,19 @@ export function deriveCloudSyncPresentation(
     userDisplayName,
     activeLeagueId,
     activeLeagueName,
+    localLeagueLabel,
     syncStatus,
     lastSavedAt,
     isDirty,
   } = input;
 
   if (!configured || !userDisplayName) {
+    const pill = localPill(localLeagueLabel);
     return {
       mode: 'local',
-      connectionLabel: 'Local only',
-      leaguePill: null,
+      connectionLabel: pill.leaguePill ? 'Local league' : 'Local only',
+      leaguePill: pill.leaguePill,
+      leaguePillKind: pill.leaguePillKind,
       saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
@@ -90,10 +109,12 @@ export function deriveCloudSyncPresentation(
   }
 
   if (!activeLeagueId) {
+    const pill = localPill(localLeagueLabel);
     return {
       mode: 'signedInNoLeague',
       connectionLabel: `Connected as ${userDisplayName}, no league selected`,
-      leaguePill: null,
+      leaguePill: pill.leaguePill,
+      leaguePillKind: pill.leaguePillKind,
       saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
@@ -110,6 +131,7 @@ export function deriveCloudSyncPresentation(
     mode: 'syncing',
     connectionLabel: 'Syncing',
     leaguePill: leagueName,
+    leaguePillKind: 'cloud',
     saveCaption,
     saveLabel,
     saveTone: saveStatusTone(syncStatus),

@@ -3,6 +3,7 @@
 ## Data & sync
 
 - Browser **session storage** (`SCOREKEEPER_DATA`) for the working `.scrkpr` database; Overview import/export unchanged
+- Optional **local league label** in session storage (`SCOREKEEPER_LOCAL_LEAGUE_LABEL`): set when loading a file or the sample league (filename without `.scrkpr`, or “Sample league (demo)”); shown in the drawer sync bar; cleared when cloud data replaces the session
 - Last opened cloud league id in **localStorage** (`SCOREKEEPER_ACTIVE_LEAGUE`): auto-opens on sign-in when membership is still active; cleared on **Leave league**; kept across sign-out for the next session
 - Last scoring target in **localStorage** (`SCOREKEEPER_LAST_SCORING`): **Resume game** / **Resume match** in the drawer and on Overview — jumps to the in-progress game, or to Track Match after a finish is recorded; hidden if the match/game is gone
 - Appearance (System / Light / Dark) in **localStorage** (`SCOREKEEPER_COLOR_MODE`); default **System** follows the OS; Track Game timeline and VOD chrome stay dark
@@ -18,7 +19,7 @@
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game; Match / Game / Player dropdowns jump between those views and player pages
 - **League Stat Settings** — players per team per game (default 6), highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on), plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
-- **MUI shell** — drawer nav (light gray / dark charcoal by theme), primary blue (`#1565c0`), appearance menu next to the Scorekeeper title (System / Light / Dark); larger color pill for the open cloud league in the sync bar; Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
+- **MUI shell** — drawer nav (light gray / dark charcoal by theme), primary blue (`#1565c0`), appearance menu next to the Scorekeeper title (System / Light / Dark); sync bar shows **Local only**, a named **Local league** pill after loading a `.scrkpr`/sample (outlined), or **Syncing** plus a filled primary pill for the open cloud league; Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored
 
 ## Roster & match setup
 

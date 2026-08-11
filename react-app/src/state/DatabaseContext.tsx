@@ -26,6 +26,10 @@ import {
   setTeamImage as setTeamImageOp,
 } from '../domain/database';
 import {
+  loadLocalLeagueLabel,
+  saveLocalLeagueLabel,
+} from '../domain/localLeagueLabel';
+import {
   deleteGame as deleteGameOp,
   deleteMatch as deleteMatchOp,
   getMatchById,
@@ -38,8 +42,16 @@ import { logDeleteItem } from '../cloud/logAnalytics';
 import { useAuth } from './AuthContext';
 import { useLeague } from './LeagueContext';
 
+type ReplaceDatabaseOptions = {
+  overrideCloudLeague?: boolean;
+  /** File/sample display name when working locally (cleared on cloud refresh). */
+  localLabel?: string | null;
+};
+
 type DatabaseContextValue = {
   data: DatabaseDto;
+  /** Label for a loaded local file/sample league; null when none or cloud-backed. */
+  localLeagueLabel: string | null;
   commits: HistoryCommit[];
   addTeam: (name: string) => void;
   addPlayer: (teamId: Guid, name: string) => void;
@@ -58,10 +70,7 @@ type DatabaseContextValue = {
     fn: (data: DatabaseDto) => T,
     commitMessage: string | ((result: T) => string),
   ) => T;
-  replaceDatabase: (
-    raw: unknown,
-    options?: { overrideCloudLeague?: boolean },
-  ) => void;
+  replaceDatabase: (raw: unknown, options?: ReplaceDatabaseOptions) => void;
   exportBytes: () => Uint8Array;
 };
 
@@ -92,6 +101,14 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
   dataRef.current = data;
   const isDirtyRef = useRef(isDirty);
   isDirtyRef.current = isDirty;
+  const [localLeagueLabel, setLocalLeagueLabel] = useState<string | null>(
+    () => loadLocalLeagueLabel(),
+  );
+
+  const setPersistedLocalLabel = useCallback((label: string | null) => {
+    saveLocalLeagueLabel(label);
+    setLocalLeagueLabel(loadLocalLeagueLabel());
+  }, []);
 
   const [commits, setCommits] = useState<HistoryCommit[]>(() =>
     loadFromSession()
@@ -123,6 +140,8 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       dataRef.current = detail;
       setData(detail);
       saveToSession(detail);
+      saveLocalLeagueLabel(null);
+      setLocalLeagueLabel(null);
       setCommits((prevCommits) =>
         pushCommit(prevCommits, 'Synced from cloud.'),
       );
@@ -131,6 +150,11 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     return () =>
       window.removeEventListener('scorekeeper-cloud-refresh', onRefresh);
   }, []);
+
+  useEffect(() => {
+    if (!activeLeagueId) return;
+    setPersistedLocalLabel(null);
+  }, [activeLeagueId, setPersistedLocalLabel]);
 
   const mutate = useCallback(
     <T,>(
@@ -331,7 +355,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
   );
 
   const replaceDatabase = useCallback(
-    (raw: unknown, options?: { overrideCloudLeague?: boolean }) => {
+    (raw: unknown, options?: ReplaceDatabaseOptions) => {
       const prev = dataRef.current;
       const next = normalizeDatabase(raw);
 
@@ -339,6 +363,9 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         dataRef.current = next;
         setData(next);
         saveToSession(next);
+        if (options && 'localLabel' in options) {
+          setPersistedLocalLabel(options.localLabel ?? null);
+        }
         setCommits((prevCommits) => pushCommit(prevCommits, 'Replaced data.'));
         return;
       }
@@ -357,6 +384,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       dataRef.current = next;
       setData(next);
       saveToSession(next);
+      setPersistedLocalLabel(null);
       setCommits((prevCommits) =>
         pushCommit(prevCommits, 'Replaced cloud league from import.'),
       );
@@ -366,6 +394,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       activeLeagueId,
       canOverrideActiveLeague,
       queueImportOverrideFlush,
+      setPersistedLocalLabel,
     ],
   );
 
@@ -376,6 +405,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       data,
+      localLeagueLabel,
       commits,
       addTeam,
       addPlayer,
@@ -396,6 +426,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     }),
     [
       data,
+      localLeagueLabel,
       commits,
       addTeam,
       addPlayer,

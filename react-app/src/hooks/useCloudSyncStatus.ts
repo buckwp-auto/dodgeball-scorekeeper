@@ -4,6 +4,7 @@ import {
   type CloudSyncPresentation,
 } from '../domain/cloudSyncStatus';
 import { useAuth } from '../state/AuthContext';
+import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
 
 export type CloudSyncStatus = CloudSyncPresentation & {
@@ -13,6 +14,7 @@ export type CloudSyncStatus = CloudSyncPresentation & {
 
 export function useCloudSyncStatus(): CloudSyncStatus {
   const { configured, user } = useAuth();
+  const { localLeagueLabel } = useDatabase();
   const {
     leagues,
     activeLeagueId,
@@ -36,6 +38,7 @@ export function useCloudSyncStatus(): CloudSyncStatus {
         userDisplayName,
         activeLeagueId,
         activeLeagueName,
+        localLeagueLabel,
         syncStatus,
         lastSavedAt,
         isDirty,
@@ -45,6 +48,7 @@ export function useCloudSyncStatus(): CloudSyncStatus {
       userDisplayName,
       activeLeagueId,
       activeLeagueName,
+      localLeagueLabel,
       syncStatus,
       lastSavedAt,
       isDirty,

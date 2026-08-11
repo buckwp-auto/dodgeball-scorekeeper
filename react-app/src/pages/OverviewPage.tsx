@@ -29,6 +29,10 @@ import { PageHeader } from '../components/Ui';
 import { imageSrc } from '../domain/imageRef';
 import { getMatches } from '../domain/database';
 import { MAX_LEAGUE_NAME } from '../domain/limits';
+import {
+  SAMPLE_LEAGUE_LABEL,
+  localLeagueLabelFromFilename,
+} from '../domain/localLeagueLabel';
 import { useAuth } from '../state/AuthContext';
 import { useDatabase } from '../state/DatabaseContext';
 import {
@@ -42,6 +46,7 @@ type PendingImport = {
   raw: unknown;
   successLabel: string;
   source: 'file' | 'sample';
+  localLabel: string;
 };
 
 export function OverviewPage() {
@@ -98,6 +103,7 @@ export function OverviewPage() {
     await new Promise((resolve) => setTimeout(resolve, 0));
     replaceDatabase(pending.raw, {
       overrideCloudLeague: overrideCloud,
+      ...(overrideCloud ? {} : { localLabel: pending.localLabel }),
     });
     setSuccessMessage(
       overrideCloud
@@ -107,17 +113,22 @@ export function OverviewPage() {
     setSuccessOpen(true);
   };
 
-  const beginImport = async (raw: unknown, successLabel: string, source: 'file' | 'sample') => {
+  const beginImport = async (
+    raw: unknown,
+    successLabel: string,
+    source: 'file' | 'sample',
+    localLabel: string,
+  ) => {
     if (importBlockedForMember) {
       throw new Error(
         'Only the league admin can replace shared data while a cloud league is open. Leave the league to edit a local copy, or ask the admin to import.',
       );
     }
     if (activeLeagueId && canOverrideActiveLeague) {
-      setPendingImport({ raw, successLabel, source });
+      setPendingImport({ raw, successLabel, source, localLabel });
       return;
     }
-    await applyImport({ raw, successLabel, source }, false);
+    await applyImport({ raw, successLabel, source, localLabel }, false);
   };
 
   const confirmOverride = async () => {
@@ -138,10 +149,12 @@ export function OverviewPage() {
     setLoading('file');
     try {
       const text = await file.text();
+      const localLabel = localLeagueLabelFromFilename(file.name);
       await beginImport(
         JSON.parse(text),
         `Loaded “${file.name}” successfully.`,
         'file',
+        localLabel,
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
@@ -163,6 +176,7 @@ export function OverviewPage() {
         raw,
         'Loaded sample league (demo) — six teams with matches and games.',
         'sample',
+        SAMPLE_LEAGUE_LABEL,
       );
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';

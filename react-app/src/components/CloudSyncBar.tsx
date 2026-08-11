@@ -5,6 +5,7 @@ export function CloudSyncBar() {
   const {
     connectionLabel,
     leaguePill,
+    leaguePillKind,
     saveCaption,
     saveLabel,
     saveTone,
@@ -12,6 +13,8 @@ export function CloudSyncBar() {
     syncError,
     saveNow,
   } = useCloudSyncStatus();
+
+  const isCloudPill = leaguePillKind === 'cloud';
 
   return (
     <Box
@@ -33,9 +36,12 @@ export function CloudSyncBar() {
         </Typography>
         {leaguePill ? (
           <Chip
-            color="primary"
+            color={isCloudPill ? 'primary' : 'default'}
+            variant={isCloudPill ? 'filled' : 'outlined'}
             label={leaguePill}
-            className="sk-cloud-league-pill"
+            className={
+              isCloudPill ? 'sk-cloud-league-pill' : 'sk-local-league-pill'
+            }
             title={leaguePill}
             sx={{
               width: '100%',

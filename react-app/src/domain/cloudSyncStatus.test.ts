@@ -48,22 +48,24 @@ describe('saveStatusTone', () => {
   });
 });
 
+const baseLocal = {
+  configured: false as const,
+  userDisplayName: null,
+  activeLeagueId: null,
+  activeLeagueName: null,
+  localLeagueLabel: null,
+  syncStatus: 'local' as const,
+  lastSavedAt: null,
+  isDirty: false,
+};
+
 describe('deriveCloudSyncPresentation', () => {
   it('shows local only when firebase is off or unsigned', () => {
-    expect(
-      deriveCloudSyncPresentation({
-        configured: false,
-        userDisplayName: null,
-        activeLeagueId: null,
-        activeLeagueName: null,
-        syncStatus: 'local',
-        lastSavedAt: null,
-        isDirty: false,
-      }),
-    ).toMatchObject({
+    expect(deriveCloudSyncPresentation(baseLocal)).toMatchObject({
       mode: 'local',
       connectionLabel: 'Local only',
       leaguePill: null,
+      leaguePillKind: null,
       saveCaption: null,
       saveLabel: null,
       canSaveNow: false,
@@ -71,15 +73,24 @@ describe('deriveCloudSyncPresentation', () => {
 
     expect(
       deriveCloudSyncPresentation({
+        ...baseLocal,
         configured: true,
-        userDisplayName: null,
-        activeLeagueId: null,
-        activeLeagueName: null,
-        syncStatus: 'local',
-        lastSavedAt: null,
-        isDirty: false,
       }).mode,
     ).toBe('local');
+  });
+
+  it('shows a local-file league name in the sync bar', () => {
+    expect(
+      deriveCloudSyncPresentation({
+        ...baseLocal,
+        localLeagueLabel: 'Spring League',
+      }),
+    ).toMatchObject({
+      mode: 'local',
+      connectionLabel: 'Local league',
+      leaguePill: 'Spring League',
+      leaguePillKind: 'local',
+    });
   });
 
   it('shows signed-in with no league selected', () => {
@@ -89,6 +100,7 @@ describe('deriveCloudSyncPresentation', () => {
         userDisplayName: 'Will',
         activeLeagueId: null,
         activeLeagueName: null,
+        localLeagueLabel: null,
         syncStatus: 'local',
         lastSavedAt: null,
         isDirty: false,
@@ -97,10 +109,30 @@ describe('deriveCloudSyncPresentation', () => {
       mode: 'signedInNoLeague',
       connectionLabel: 'Connected as Will, no league selected',
       leaguePill: null,
+      leaguePillKind: null,
       saveCaption: null,
       saveLabel: null,
       saveTone: 'default',
       canSaveNow: false,
+    });
+  });
+
+  it('keeps a local-file name when signed in with no cloud league', () => {
+    expect(
+      deriveCloudSyncPresentation({
+        configured: true,
+        userDisplayName: 'Will',
+        activeLeagueId: null,
+        activeLeagueName: null,
+        localLeagueLabel: 'Demo Night',
+        syncStatus: 'local',
+        lastSavedAt: null,
+        isDirty: false,
+      }),
+    ).toMatchObject({
+      mode: 'signedInNoLeague',
+      leaguePill: 'Demo Night',
+      leaguePillKind: 'local',
     });
   });
 
@@ -110,6 +142,7 @@ describe('deriveCloudSyncPresentation', () => {
       userDisplayName: 'Will',
       activeLeagueId: 'league-1',
       activeLeagueName: 'Spring League',
+      localLeagueLabel: 'Ignored local name',
       syncStatus: 'unsaved',
       lastSavedAt: null,
       isDirty: true,
@@ -118,6 +151,7 @@ describe('deriveCloudSyncPresentation', () => {
       mode: 'syncing',
       connectionLabel: 'Syncing',
       leaguePill: 'Spring League',
+      leaguePillKind: 'cloud',
       saveCaption: null,
       saveLabel: 'Unsaved…',
       saveTone: 'warning',
@@ -131,6 +165,7 @@ describe('deriveCloudSyncPresentation', () => {
       userDisplayName: 'Will',
       activeLeagueId: 'league-1',
       activeLeagueName: 'Spring League',
+      localLeagueLabel: null,
       syncStatus: 'saving',
       lastSavedAt: null,
       isDirty: true,
@@ -146,6 +181,7 @@ describe('deriveCloudSyncPresentation', () => {
         userDisplayName: 'Will',
         activeLeagueId: 'league-1',
         activeLeagueName: null,
+        localLeagueLabel: null,
         syncStatus: 'saved',
         lastSavedAt: null,
         isDirty: false,
