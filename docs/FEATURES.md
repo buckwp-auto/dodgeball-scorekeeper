@@ -38,15 +38,15 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 | Tab | Purpose |
 |-----|---------|
-| **Throw** | Thrower, target, result, optional deflections, catch recovery |
-| **Error** | Offender + mistake (e.g. line-out, illegal block) |
+| **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional deflections, catch recovery |
+| **Other** | Offender + mistake (line-out, wasted ball, illegal block during no blocking), or **No Blocking Started** (player-less game marker) |
 | **Finish** | Winner (home / away / tie) |
 
 ### Editor UX
 
-- Three-column grid (home / away / result) with slightly taller team banners separated from player rows (result column spacer keeps tops aligned); six player buttons stretch to the same total height as the seven result rows
+- Three-column grid (home / away / result) with slightly taller team banners separated from player rows (result column spacer keeps tops aligned); six player buttons stretch to the same total height as the six result rows
 - Throw results shown with **MUI icons**; result can be chosen before thrower
-- **Deflections** chain on eligible results (block, hit, etc.); `Z` focuses the new row so player keys pick the receiver and `R Y U G H` set the deflection result (Dodge/Miss stay on the throw)
+- **Deflections** chain on eligible results (Hit, Block, Disarm); `Z` focuses the new row so player keys pick the receiver and `R Y U G` set the deflection result (Dodge/Miss stay on the throw)
 - **Catch recovery** — pick a teammate (including outs) or **None** (`M`)
 - Auto-commit when a draft is complete and dirty; **Done / Restore / Insert below / Delete**
 - **Undo / Redo** (`-` / `+`) remove or restore the last entered event (session redo stack; cleared when a new event is committed). Distinct from `N` (delete selected) and `V` (restore draft from saved selection)
@@ -57,9 +57,11 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 Derived from persisted events (not a separate toggle):
 
-- Hit / block-failed / catch-failed → target (or deflection receiver) out
+- **Disarm** → target (or deflection receiver) out immediately; a later deflection **Catch** still outs the thrower but does **not** save the disarmed player
+- Hit (and legacy failed block/catch stored on old saves, shown as Hit) → target out unless saved by a deflection catch
 - Catch (throw or deflection) → thrower out
-- Line-out / illegal block → offender out
+- Line-out / wasted ball / illegal block (no blocking) → offender out (illegal block on **Other** tab only)
+- **No Blocking Started** — manual game marker on **Other**; no live elimination effect
 - **Recovered** player on a catch is removed from the eliminated set
 - Outs sort to the bottom and show “(out)”
 - When one side has **zero active players**, the game is live-over
@@ -95,8 +97,8 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Away players (Track Game + roster 1–6) | `J K L ; I O` (`I` badge uses a serif face so it is distinct from `L`) |
 | Match / Game roster 7–12 (home) | `Q 1 2 3 4 5` |
 | Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
-| Throw results | `R T Y U G H P` |
-| Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G H` |
+| Throw results | `R T Y U G H` |
+| Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
 | Undo / redo last event | `-` undo, `+` redo |
@@ -120,7 +122,8 @@ Match / Game roster keys follow on-screen order (starters, then subs; outs last 
 - **Team standings** (game W-L-T + match W-L from finished games) and match series scoreboard
 - Charts (`@mui/x-charts`): throw-result mix, top-N bars, home vs away, game elimination timeline; thrower→target heatmap on match/game
 - Display metrics (catches, recoveries, rates, VOR/WAR) sit on top of the engine — **golden CSV unchanged** under the default Legacy policy
-- Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (hit = incoming Hit or failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − hit/error deaths − 2×times caught (Deaths exclude catch-outs; times caught is separate); **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
+- Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (hit = incoming Hit, Disarm, or legacy failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − hit/error deaths − 2×times caught (Deaths exclude catch-outs; times caught is separate); **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
+- **Legacy CSV export** keeps the original column layout: Disarm and deprecated failed block/catch fold into **Hit**; `BlockFailed` / `CatchFailed` columns emit **0**
 - Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page
 - Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events
 - **Golden fixture** tests vs original WASM/scorekeeper CSV output

@@ -121,24 +121,25 @@ describe('match / game roster hotkeys', () => {
 });
 
 describe('result hotkeys', () => {
-  it('maps rtyughp to throw results in UI order', () => {
-    expect(RESULT_HOTKEYS).toEqual(['r', 't', 'y', 'u', 'g', 'h', 'p']);
+  it('maps rtyugh to throw results in UI order', () => {
+    expect(RESULT_HOTKEYS).toEqual(['r', 't', 'y', 'u', 'g', 'h']);
     expect(RESULT_HOTKEYS).toHaveLength(throwResultUiOrder.length);
     expect(getThrowResultForKey('r')).toBe(ThrowResult.Hit);
     expect(getThrowResultForKey('t')).toBe(ThrowResult.Dodge);
-    expect(getThrowResultForKey('p')).toBe(ThrowResult.Miss);
+    expect(getThrowResultForKey('u')).toBe(ThrowResult.Disarm);
+    expect(getThrowResultForKey('h')).toBe(ThrowResult.Miss);
   });
 
-  it('maps r y u g h to deflection results and skips dodge/miss', () => {
+  it('maps r y u g to deflection results and skips dodge/miss', () => {
     expect(getDeflectionResultForKey('r')).toBe(DeflectionResult.Hit);
     expect(getDeflectionResultForKey('y')).toBe(DeflectionResult.Block);
-    expect(getDeflectionResultForKey('u')).toBe(DeflectionResult.BlockFailed);
+    expect(getDeflectionResultForKey('u')).toBe(DeflectionResult.Disarm);
     expect(getDeflectionResultForKey('g')).toBe(DeflectionResult.Catch);
-    expect(getDeflectionResultForKey('h')).toBe(DeflectionResult.CatchFailed);
+    expect(getDeflectionResultForKey('h')).toBeNull();
     expect(getDeflectionResultForKey('t')).toBeNull();
-    expect(getDeflectionResultForKey('p')).toBeNull();
     expect(hotkeyForDeflectionResult(DeflectionResult.Hit)).toBe('r');
     expect(hotkeyForDeflectionResult(DeflectionResult.Block)).toBe('y');
+    expect(hotkeyForDeflectionResult(DeflectionResult.Disarm)).toBe('u');
   });
 });
 

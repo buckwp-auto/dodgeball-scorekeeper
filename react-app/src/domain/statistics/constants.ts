@@ -30,19 +30,25 @@ export enum EDeathError {
 export enum ThrowResult {
   Hit = 1,
   Block = 2,
+  /** @deprecated Stored on old saves; display and credit as Hit. */
   BlockFailed = 3,
   Catch = 4,
+  /** @deprecated Stored on old saves; display and credit as Hit. */
   CatchFailed = 5,
   Dodge = 6,
   Miss = 7,
+  Disarm = 8,
 }
 
 export enum DeflectionResult {
   Hit = 1,
   Block = 2,
+  /** @deprecated Stored on old saves; display and credit as Hit. */
   BlockFailed = 3,
   Catch = 4,
+  /** @deprecated Stored on old saves; display and credit as Hit. */
   CatchFailed = 5,
+  Disarm = 8,
 }
 
 export enum GameEventFinishResult {

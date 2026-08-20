@@ -6,6 +6,12 @@ import {
   ThrowResult,
 } from './statistics/constants';
 import {
+  isDeprecatedFailedDeflectionResult,
+  isDeprecatedFailedThrowResult,
+  isDisarmDeflectionResult,
+  isDisarmThrowResult,
+} from './throwResults';
+import {
   buildThrowsDetail,
   indexGameEventErrors,
 } from './statistics/databaseViews';
@@ -51,16 +57,16 @@ function throwIsCatch(
 function throwTargetEliminated(resultId: number): boolean {
   return (
     resultId === ThrowResult.Hit ||
-    resultId === ThrowResult.BlockFailed ||
-    resultId === ThrowResult.CatchFailed
+    resultId === ThrowResult.Disarm ||
+    isDeprecatedFailedThrowResult(resultId)
   );
 }
 
 function deflectionEliminatesReceiver(resultId: number): boolean {
   return (
     resultId === DeflectionResult.Hit ||
-    resultId === DeflectionResult.BlockFailed ||
-    resultId === DeflectionResult.CatchFailed
+    resultId === DeflectionResult.Disarm ||
+    isDeprecatedFailedDeflectionResult(resultId)
   );
 }
 
@@ -150,13 +156,30 @@ function applyThrowEliminations(
   },
   deflections: { ReceiverId: Guid; ResultId: number }[],
 ): void {
+  const disarmed = new Set<Guid>();
+
+  if (isDisarmThrowResult(throwRow.ResultId)) {
+    disarmed.add(throwRow.TargetId);
+    eliminated.add(throwRow.TargetId);
+  }
+  for (const deflection of deflections) {
+    if (isDisarmDeflectionResult(deflection.ResultId)) {
+      disarmed.add(deflection.ReceiverId);
+      eliminated.add(deflection.ReceiverId);
+    }
+  }
+
   if (throwIsCatch(throwRow.ResultId, deflections)) {
     eliminated.add(throwRow.ThrowerId);
     if (throwRow.RecoveredId) {
       eliminated.delete(throwRow.RecoveredId);
     }
+    for (const gamePlayerId of disarmed) {
+      eliminated.add(gamePlayerId);
+    }
     return;
   }
+
   if (throwTargetEliminated(throwRow.ResultId)) {
     eliminated.add(throwRow.TargetId);
   }

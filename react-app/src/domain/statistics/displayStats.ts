@@ -1,6 +1,11 @@
 import { getMatchName, getMatches, getPlayer } from '../database';
 import { getGameName, getMatchById, getMatchPlayers } from '../matchGame';
 import { throwResultLabels, throwResultUiOrder } from '../gameEvents';
+import {
+  isDeprecatedFailedThrowResult,
+  isIncomingEluHitDeflectionResult,
+  isIncomingEluHitThrowResult,
+} from '../throwResults';
 import type { DatabaseDto, Guid, PlayerRow } from '../types';
 import {
   DeflectionResult,
@@ -351,7 +356,10 @@ export function aggregateThrowMix(rows: DisplayPlayerStats[]): ThrowMixSlice[] {
     for (const resultId of enumValues(ThrowResult) as ThrowResult[]) {
       const count = row.throwCounts[resultId] ?? 0;
       if (!count) continue;
-      counts.set(resultId, (counts.get(resultId) ?? 0) + count);
+      const bucket = isDeprecatedFailedThrowResult(resultId)
+        ? ThrowResult.Hit
+        : resultId;
+      counts.set(bucket, (counts.get(bucket) ?? 0) + count);
     }
   }
   return throwResultUiOrder
@@ -467,13 +475,21 @@ function toDisplayPlayer(
     row.offenseDeflectionsGroup,
   );
   const throws = totalOf(row.offenseThrowsIndividual, row.offenseThrowsGroup);
-  const throwHits = throwCounts[ThrowResult.Hit] ?? 0;
+  const throwHits =
+    (throwCounts[ThrowResult.Hit] ?? 0) +
+    (throwCounts[ThrowResult.Disarm] ?? 0) +
+    (throwCounts[ThrowResult.BlockFailed] ?? 0) +
+    (throwCounts[ThrowResult.CatchFailed] ?? 0);
   const targets = totalOf(row.defenseTargets, row.defenseDeflections);
-  const targetHits =
-    (row.defenseTargets.get(ThrowResult.Hit) ?? 0) +
-    (row.defenseTargets.get(ThrowResult.BlockFailed) ?? 0) +
-    (row.defenseDeflections.get(DeflectionResult.Hit) ?? 0) +
-    (row.defenseDeflections.get(DeflectionResult.BlockFailed) ?? 0);
+  let targetHits = 0;
+  for (const resultId of enumValues(ThrowResult) as ThrowResult[]) {
+    if (!isIncomingEluHitThrowResult(resultId)) continue;
+    targetHits += row.defenseTargets.get(resultId) ?? 0;
+  }
+  for (const resultId of enumValues(DeflectionResult) as DeflectionResult[]) {
+    if (!isIncomingEluHitDeflectionResult(resultId)) continue;
+    targetHits += row.defenseDeflections.get(resultId) ?? 0;
+  }
   const catchesThrown =
     (throwCounts[ThrowResult.Catch] ?? 0) +
     (deflectionThrown[DeflectionResult.Catch] ?? 0);

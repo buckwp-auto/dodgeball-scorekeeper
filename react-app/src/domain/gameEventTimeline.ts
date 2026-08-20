@@ -7,7 +7,6 @@ import type { DatabaseDto, Guid } from './types';
 import { getTeam } from './database';
 import { getMatchById } from './matchGame';
 import {
-  deflectionResultLabels,
   errorOffenseLabels,
   getGameEventsNewestFirst,
   getGameEventType,
@@ -15,12 +14,13 @@ import {
   loadErrorDraftFromEvent,
   loadFinishDraftFromEvent,
   loadThrowDraftsFromEvent,
-  throwResultLabels,
+  NO_BLOCKING_STARTED_LABEL,
   type GameEventRow,
   type GameEventType,
   type GamePlayerInfo,
   type ThrowDraft,
 } from './gameEvents';
+import { displayDeflectionResultLabel, displayThrowResultLabel } from './throwResults';
 import {
   toneForDeflectionResult,
   toneForThrowResult,
@@ -84,7 +84,7 @@ export function buildThrowTimelineRows(
 ): TimelineRow[] {
   const rows: TimelineRow[] = [];
   const resultLabel = draft.resultId
-    ? throwResultLabels[draft.resultId]
+    ? displayThrowResultLabel(draft.resultId)
     : '?';
   const throwSegments: TimelineSegment[] = [
     { kind: 'player', player: playerRef(players, draft.throwerGamePlayerId) },
@@ -116,7 +116,7 @@ export function buildThrowTimelineRows(
   });
 
   for (const deflection of draft.deflections) {
-    const label = deflectionResultLabels[deflection.resultId];
+    const label = displayDeflectionResultLabel(deflection.resultId);
     rows.push({
       role: 'deflection',
       tone: toneForDeflectionResult(deflection.resultId),
@@ -179,7 +179,7 @@ export function buildTimelineEntry(
     const draft = loadErrorDraftFromEvent(data, event.Id);
     const offenseLabel = draft.offenseId
       ? errorOffenseLabels[draft.offenseId]
-      : 'Error';
+      : 'Other';
     return {
       ...base,
       rows: [
@@ -194,6 +194,19 @@ export function buildTimelineEntry(
             },
             { kind: 'text', text: ` — ${offenseLabel}` },
           ],
+        },
+      ],
+    };
+  }
+  if (type === 'noBlocking') {
+    return {
+      ...base,
+      rows: [
+        {
+          role: 'error',
+          tone: 'neutral',
+          actions: [{ kind: 'error' }],
+          segments: [{ kind: 'text', text: NO_BLOCKING_STARTED_LABEL }],
         },
       ],
     };

@@ -251,4 +251,23 @@ describe('awardThrowEventCredit', () => {
     expect(awards.targetDeaths).toHaveLength(0);
     expect(awards.catchThrownDeaths[0]?.source).toBe('deflection');
   });
+
+  it('awards disarm kills even when a deflection catch outs the thrower', () => {
+    const awards = awardThrowEventCredit(
+      [
+        detail({
+          throwerId: 'a',
+          targetId: 'x',
+          resultId: ThrowResult.Disarm,
+          deflections: [{ receiverId: 'y', resultId: DeflectionResult.Catch }],
+        }),
+      ],
+      LEGACY_POLICY,
+    );
+
+    expect(awards.throwerKills).toHaveLength(1);
+    expect(awards.throwerKills[0]?.killType).toBe(EKillType.Hit);
+    expect(awards.targetDeaths).toHaveLength(1);
+    expect(awards.catchThrownDeaths).toHaveLength(1);
+  });
 });

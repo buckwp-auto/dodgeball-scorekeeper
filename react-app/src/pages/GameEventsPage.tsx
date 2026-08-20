@@ -44,10 +44,10 @@ import {
   initialVideoSeekSeconds,
   isErrorDraftComplete,
   isFinishDraftComplete,
-  loadErrorDraftFromEvent,
+  loadOtherDraftFromEvent,
   loadFinishDraftFromEvent,
   loadThrowDraftsFromEvent,
-  persistErrorGameEvent,
+  persistOtherGameEvent,
   persistFinishGameEvent,
   persistThrowGameEvent,
   restoreGameEventSnapshot,
@@ -78,7 +78,13 @@ import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
 import { useDatabase } from '../state/DatabaseContext';
 import { useYoutubePopout } from '../state/YoutubePopoutContext';
 
-type TabKey = Exclude<GameEventType, 'start'>;
+type TabKey = 'throw' | 'error' | 'finish';
+
+function editorTabForEventType(type: GameEventType | null): TabKey | 'start' | null {
+  if (type === 'noBlocking') return 'error';
+  if (type === 'start') return 'start';
+  return type;
+}
 
 const emptyThrowSnapshot = () => JSON.stringify([emptyThrowDraft()]);
 
@@ -273,10 +279,12 @@ export function GameEventsPage() {
   const effectiveSelectedId =
     selectedEventId && eventIdsInGame.has(selectedEventId) ? selectedEventId : null;
 
-  const lockedTab = effectiveSelectedId
+  const lockedEventType = effectiveSelectedId
     ? getGameEventType(data, effectiveSelectedId)
     : null;
-  const visibleTab: GameEventType = lockedTab ?? activeTab;
+  const lockedTab = editorTabForEventType(lockedEventType);
+  const visibleTab: TabKey | 'start' =
+    lockedTab && lockedTab !== 'start' ? lockedTab : activeTab;
 
   // Editing an existing event judges outs against its stored time, not the player head
   const throwVideoOffsetSeconds = effectiveSelectedId
@@ -335,8 +343,8 @@ export function GameEventsPage() {
         const drafts = loadThrowDraftsFromEvent(data, eventId);
         setThrowDrafts(drafts);
         setSavedSnapshot(JSON.stringify(drafts));
-      } else if (type === 'error') {
-        const draft = loadErrorDraftFromEvent(data, eventId);
+      } else if (type === 'error' || type === 'noBlocking') {
+        const draft = loadOtherDraftFromEvent(data, eventId);
         setErrorDraft(draft);
         setSavedSnapshot(JSON.stringify(draft));
       } else if (type === 'finish') {
@@ -544,15 +552,16 @@ export function GameEventsPage() {
     const target = getInsertBelowTargetEventId(eventsNewestFirst, effectiveSelectedId);
     setInsertBeforeEventId(target);
     setSelectedEventId(null);
-    const type =
-      lockedTab && lockedTab !== 'start' ? lockedTab : activeTab;
+    const rawType =
+      lockedEventType && lockedEventType !== 'start' ? lockedEventType : activeTab;
+    const type = rawType === 'noBlocking' ? 'error' : rawType;
     setActiveTab(type);
     setPendingWipeFinish(false);
     loadDraftsForSelection(null);
   }, [
     effectiveSelectedId,
     eventsNewestFirst,
-    lockedTab,
+    lockedEventType,
     activeTab,
     loadDraftsForSelection,
   ]);
@@ -562,7 +571,9 @@ export function GameEventsPage() {
     setPendingWipeFinish(false);
     setSelectedEventId(eventId);
     const type = getGameEventType(data, eventId);
-    if (type && type !== 'start') setActiveTab(type);
+    if (type && type !== 'start') {
+      setActiveTab(type === 'noBlocking' ? 'error' : type);
+    }
     loadDraftsForSelection(eventId);
     const entry = timeline.find((row) => row.id === eventId);
     if (
@@ -615,7 +626,7 @@ export function GameEventsPage() {
             return persistThrowGameEvent(draft, gameId, matchId, throwDrafts, options);
           }
           if (visibleTab === 'error') {
-            return persistErrorGameEvent(draft, gameId, matchId, errorDraft, options);
+            return persistOtherGameEvent(draft, gameId, matchId, errorDraft, options);
           }
           if (visibleTab === 'finish') {
             return persistFinishGameEvent(draft, gameId, finishDraft, options);
@@ -738,6 +749,7 @@ export function GameEventsPage() {
         return;
       }
       if (visibleTab === 'error') {
+        if (errorDraft.noBlockingStarted) return;
         const hotkeys = buildPermanentPlayerHotkeys(players);
         const gamePlayerId = findGamePlayerIdByHotkey(hotkeys, key);
         if (!gamePlayerId || live.eliminatedGamePlayerIds.has(gamePlayerId)) return;
@@ -950,7 +962,7 @@ export function GameEventsPage() {
                         }}
                         disabled={gameFinished && tab !== 'finish'}
                       >
-                        {tab === 'throw' ? 'Throw' : tab === 'error' ? 'Error' : 'Finish'}
+                        {tab === 'throw' ? 'Throw' : tab === 'error' ? 'Other' : 'Finish'}
                       </Button>
                     </Box>
                   ))}
@@ -960,7 +972,11 @@ export function GameEventsPage() {
                   variant={editorCompact ? 'body2' : 'subtitle1'}
                   sx={{ fontWeight: 700, textTransform: 'capitalize' }}
                 >
-                  {lockedTab === 'start' ? 'Game start' : lockedTab}
+                  {lockedTab === 'start'
+                    ? 'Game start'
+                    : lockedTab === 'error'
+                      ? 'Other'
+                      : lockedTab}
                 </Typography>
               )}
 

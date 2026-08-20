@@ -1,5 +1,6 @@
 import type { SvgIconComponent } from '@mui/icons-material';
 import AirIcon from '@mui/icons-material/Air';
+import BackHandIcon from '@mui/icons-material/BackHand';
 import DoNotTouchIcon from '@mui/icons-material/DoNotTouch';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import FrontHandIcon from '@mui/icons-material/FrontHand';
@@ -24,6 +25,7 @@ const icons: Record<ThrowResult, SvgIconComponent> = {
   [ThrowResult.Catch]: FrontHandIcon,
   [ThrowResult.CatchFailed]: DoNotTouchIcon,
   [ThrowResult.Miss]: PriorityHighIcon,
+  [ThrowResult.Disarm]: BackHandIcon,
 };
 
 /** Deflection result pickers reuse the matching throw-result icons. */
@@ -33,6 +35,7 @@ const deflectionIcons: Record<DeflectionResult, SvgIconComponent> = {
   [DeflectionResult.BlockFailed]: icons[ThrowResult.BlockFailed],
   [DeflectionResult.Catch]: icons[ThrowResult.Catch],
   [DeflectionResult.CatchFailed]: icons[ThrowResult.CatchFailed],
+  [DeflectionResult.Disarm]: icons[ThrowResult.Disarm],
 };
 
 export function getThrowResultIcon(resultId: ThrowResult): SvgIconComponent {

@@ -248,6 +248,54 @@ describe('game live elimination state', () => {
     expect(isPlayerEliminatedInGame(live, awayGp.Id)).toBe(false);
   });
 
+  it('keeps the disarmed target out when a deflection catch saves a hit', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const h1 = addPlayer(data, home.Id, 'H1');
+    const h2 = addPlayer(data, home.Id, 'H2');
+    const a1 = addPlayer(data, away.Id, 'A1');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, h1.Id, true);
+    toggleMatchPlayer(data, match.Id, h2.Id, true);
+    toggleMatchPlayer(data, match.Id, a1.Id, false);
+    const gameId = addGame(data, match.Id);
+    toggleGamePlayer(data, match.Id, gameId, h1.Id);
+    toggleGamePlayer(data, match.Id, gameId, h2.Id);
+    toggleGamePlayer(data, match.Id, gameId, a1.Id);
+    const gamePlayers = data.Tables.GamePlayer as { Id: string; MatchPlayerId: string }[];
+    const matchPlayers = data.Tables.MatchPlayer as {
+      Id: string;
+      PlayerId: string;
+      TeamHome: boolean;
+    }[];
+    const homeGp = gamePlayers.find(
+      (row) => matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === h1.Id,
+    )!;
+    const homeGp2 = gamePlayers.find(
+      (row) => matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === h2.Id,
+    )!;
+    const awayGp = gamePlayers.find(
+      (row) => matchPlayers.find((mp) => mp.Id === row.MatchPlayerId)?.PlayerId === a1.Id,
+    )!;
+
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Disarm,
+        deflections: [
+          { receiverGamePlayerId: homeGp2.Id, resultId: DeflectionResult.Catch },
+        ],
+        recoveredId: null,
+      },
+    ]);
+    const live = computeGameLiveState(data, match.Id, gameId);
+    expect(isPlayerEliminatedInGame(live, awayGp.Id)).toBe(true);
+    expect(isPlayerEliminatedInGame(live, homeGp.Id)).toBe(true);
+    expect(isPlayerEliminatedInGame(live, homeGp2.Id)).toBe(false);
+  });
+
   it('eliminates offender on LineOut', () => {
     const { data, match, gameId, awayGp } = setupGameWithRoster();
     persistErrorGameEvent(data, gameId, match.Id, {

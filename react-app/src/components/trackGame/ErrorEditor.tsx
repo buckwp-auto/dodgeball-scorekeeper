@@ -1,7 +1,7 @@
 import { Box } from '@mui/material';
 import { GameEventErrorOffense } from '../../domain/statistics/constants';
 import type { ErrorDraft, GamePlayerInfo } from '../../domain/gameEvents';
-import { errorOffenseLabels } from '../../domain/gameEvents';
+import { errorOffenseLabels, NO_BLOCKING_STARTED_LABEL } from '../../domain/gameEvents';
 import { sortGamePlayerInfos } from '../../domain/gameElimination';
 import {
   buildPermanentPlayerHotkeys,
@@ -15,6 +15,11 @@ import {
   EditorLabel,
   TeamBanner,
 } from './EditorGrid';
+
+const PLAYER_OFFENSES = Object.entries(errorOffenseLabels) as [
+  string,
+  string,
+][];
 
 export function ErrorEditor({
   draft,
@@ -32,10 +37,12 @@ export function ErrorEditor({
   onChange: (draft: ErrorDraft) => void;
 }) {
   const hotkeys = buildPermanentPlayerHotkeys(players);
+  const noBlockingMode = Boolean(draft.noBlockingStarted);
   const offender = players.find((row) => row.gamePlayerId === draft.offenderGamePlayerId);
-  const showBothTeams = !draft.offenderGamePlayerId;
-  const pendingOffender = !draft.offenderGamePlayerId;
-  const pendingMistake = draft.offenseId === null;
+  const showBothTeams = !noBlockingMode && !draft.offenderGamePlayerId;
+  const pendingOffender = !noBlockingMode && !draft.offenderGamePlayerId;
+  const pendingMistake =
+    !noBlockingMode && draft.offenseId === null && !draft.noBlockingStarted;
 
   const homePlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome),
@@ -51,21 +58,58 @@ export function ErrorEditor({
   const label = (row: GamePlayerInfo) =>
     isOut(row.gamePlayerId) ? `${row.playerName} (out)` : row.playerName;
 
+  const selectPlayerOffense = (offenseId: GameEventErrorOffense) => {
+    onChange({
+      ...draft,
+      noBlockingStarted: false,
+      offenseId,
+    });
+  };
+
+  const selectNoBlockingStarted = () => {
+    onChange({
+      offenderGamePlayerId: '',
+      offenseId: null,
+      noBlockingStarted: true,
+    });
+  };
+
+  const clearMistake = () => {
+    onChange({
+      ...draft,
+      offenseId: null,
+      noBlockingStarted: false,
+    });
+  };
+
+  const mistakeLabel = noBlockingMode
+    ? NO_BLOCKING_STARTED_LABEL
+    : draft.offenseId !== null
+      ? errorOffenseLabels[draft.offenseId]
+      : null;
+
   return (
     <EditorGrid>
-      <EditorLabel gridColumn={showBothTeams ? undefined : offender?.teamHome ? '1' : '2'}>
-        Offender
-      </EditorLabel>
-      {showBothTeams ? <Box /> : null}
-      <EditorLabel>Mistake</EditorLabel>
+      {!noBlockingMode ? (
+        <>
+          <EditorLabel gridColumn={showBothTeams ? undefined : offender?.teamHome ? '1' : '2'}>
+            Offender
+          </EditorLabel>
+          {showBothTeams ? <Box /> : null}
+        </>
+      ) : (
+        <EditorLabel gridColumn="1 / -1">Game event</EditorLabel>
+      )}
+      <EditorLabel>{noBlockingMode ? '' : 'Mistake'}</EditorLabel>
 
-      {showBothTeams ? (
+      {!noBlockingMode && showBothTeams ? (
         <>
           <TeamBanner name={homeTeamName} teamHome />
           <TeamBanner name={awayTeamName} teamHome={false} />
           <Box />
         </>
-      ) : (
+      ) : null}
+      {!noBlockingMode && !showBothTeams ? (
         <>
           {offender?.teamHome ? (
             <>
@@ -81,9 +125,9 @@ export function ErrorEditor({
             </>
           )}
         </>
-      )}
+      ) : null}
 
-      {showBothTeams ? (
+      {!noBlockingMode && showBothTeams ? (
         <>
           <EditorChoiceStack pending={pendingOffender}>
             {homePlayers.map((row) => (
@@ -126,7 +170,9 @@ export function ErrorEditor({
             ))}
           </EditorChoiceStack>
         </>
-      ) : (
+      ) : null}
+
+      {!noBlockingMode && !showBothTeams ? (
         <>
           {offender?.teamHome ? (
             <EditorChoiceStack pending={pendingOffender}>
@@ -135,7 +181,13 @@ export function ErrorEditor({
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.offenderGamePlayerId)}
                   playerId={offender.playerId}
                   teamHome={offender.teamHome}
-                  onClick={() => onChange({ offenderGamePlayerId: '', offenseId: draft.offenseId })}
+                  onClick={() =>
+                    onChange({
+                      offenderGamePlayerId: '',
+                      offenseId: draft.offenseId,
+                      noBlockingStarted: false,
+                    })
+                  }
                 >
                   {label(offender)}
                 </EditorChipButton>
@@ -151,7 +203,13 @@ export function ErrorEditor({
                   hotkey={hotkeyForGamePlayer(hotkeys, draft.offenderGamePlayerId)}
                   playerId={offender!.playerId}
                   teamHome={offender!.teamHome}
-                  onClick={() => onChange({ offenderGamePlayerId: '', offenseId: draft.offenseId })}
+                  onClick={() =>
+                    onChange({
+                      offenderGamePlayerId: '',
+                      offenseId: draft.offenseId,
+                      noBlockingStarted: false,
+                    })
+                  }
                 >
                   {label(offender!)}
                 </EditorChipButton>
@@ -161,24 +219,29 @@ export function ErrorEditor({
             <Box />
           )}
         </>
-      )}
+      ) : null}
 
-      <EditorChoiceStack pending={pendingMistake} gridColumn={3}>
-        {draft.offenseId !== null ? (
-          <EditorChipButton onClick={() => onChange({ ...draft, offenseId: null })}>
-            {errorOffenseLabels[draft.offenseId]}
-          </EditorChipButton>
+      {noBlockingMode ? (
+        <Box gridColumn="1 / -1" />
+      ) : null}
+
+      <EditorChoiceStack pending={pendingMistake} gridColumn={noBlockingMode ? '1 / -1' : 3}>
+        {mistakeLabel ? (
+          <EditorChipButton onClick={clearMistake}>{mistakeLabel}</EditorChipButton>
         ) : (
-          (Object.entries(errorOffenseLabels) as [string, string][]).map(([value, labelText]) => (
-            <EditorChoiceButton
-              key={value}
-              onClick={() =>
-                onChange({ ...draft, offenseId: Number(value) as GameEventErrorOffense })
-              }
-            >
-              {labelText}
+          <>
+            {PLAYER_OFFENSES.map(([value, labelText]) => (
+              <EditorChoiceButton
+                key={value}
+                onClick={() => selectPlayerOffense(Number(value) as GameEventErrorOffense)}
+              >
+                {labelText}
+              </EditorChoiceButton>
+            ))}
+            <EditorChoiceButton onClick={selectNoBlockingStarted}>
+              {NO_BLOCKING_STARTED_LABEL}
             </EditorChoiceButton>
-          ))
+          </>
         )}
       </EditorChoiceStack>
     </EditorGrid>

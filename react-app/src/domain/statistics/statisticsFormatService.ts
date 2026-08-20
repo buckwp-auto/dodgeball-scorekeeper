@@ -1,12 +1,8 @@
 import type { DatabaseDto, Guid } from '../types';
 import {
-  DeflectionResult,
   ECompetitionOutcome,
   EDeathError,
-  EDeathType,
-  EKillType,
   EThrowError,
-  ThrowResult,
   enumValues,
 } from './constants';
 import { type StatisticAggregates } from './statisticAggregates';
@@ -14,6 +10,14 @@ import {
   createStatisticsSummary,
   type PlayerStatistics,
 } from './statisticsService';
+import {
+  enumKey,
+  legacyCsvColumnValue,
+  LEGACY_DEATH_TYPE_COLUMNS,
+  LEGACY_DEFLECTION_RESULT_COLUMNS,
+  LEGACY_KILL_TYPE_COLUMNS,
+  LEGACY_THROW_RESULT_COLUMNS,
+} from './legacyCsvExport';
 
 function getStatisticsSummaryFormat(): {
   header: string;
@@ -22,89 +26,121 @@ function getStatisticsSummaryFormat(): {
   const sections: {
     title: string;
     getAggregate: (stats: PlayerStatistics) => StatisticAggregates<number, number>;
+    keys: readonly number[];
     enumObject: Record<string, number | string>;
+    legacyRemap?: boolean;
   }[] = [
-    { title: 'Matches', getAggregate: (s) => s.matches, enumObject: ECompetitionOutcome },
-    { title: 'Games', getAggregate: (s) => s.games, enumObject: ECompetitionOutcome },
+    { title: 'Matches', getAggregate: (s) => s.matches, keys: enumValues(ECompetitionOutcome), enumObject: ECompetitionOutcome },
+    { title: 'Games', getAggregate: (s) => s.games, keys: enumValues(ECompetitionOutcome), enumObject: ECompetitionOutcome },
     {
       title: 'Kills (Direct) (Individual)',
       getAggregate: (s) => s.killsDirectIndividual,
-      enumObject: EKillType,
+      keys: LEGACY_KILL_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3 },
+      legacyRemap: true,
     },
     {
       title: 'Kills (Direct) (Group)',
       getAggregate: (s) => s.killsDirectGroup,
-      enumObject: EKillType,
+      keys: LEGACY_KILL_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3 },
+      legacyRemap: true,
     },
     {
       title: 'Kills Credit (Direct)',
       getAggregate: (s) => s.killsDirectCredit,
-      enumObject: EKillType,
+      keys: LEGACY_KILL_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3 },
+      legacyRemap: true,
     },
     {
       title: 'Kills (Deflection) (Individual)',
       getAggregate: (s) => s.killsDeflectionsIndividual,
-      enumObject: EKillType,
+      keys: LEGACY_KILL_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3 },
+      legacyRemap: true,
     },
     {
       title: 'Kills (Deflection) (Group)',
       getAggregate: (s) => s.killsDeflectionsGroup,
-      enumObject: EKillType,
+      keys: LEGACY_KILL_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3 },
+      legacyRemap: true,
     },
     {
       title: 'Kills Credit (Deflection)',
       getAggregate: (s) => s.killsDeflectionsCredit,
-      enumObject: EKillType,
+      keys: LEGACY_KILL_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3 },
+      legacyRemap: true,
     },
     {
       title: 'Deaths (Direct)',
       getAggregate: (s) => s.deathsDirect,
-      enumObject: EDeathType,
+      keys: LEGACY_DEATH_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3, CatchThrown: 4 },
+      legacyRemap: true,
     },
     {
       title: 'Deaths (Deflection)',
       getAggregate: (s) => s.deathsDeflections,
-      enumObject: EDeathType,
+      keys: LEGACY_DEATH_TYPE_COLUMNS,
+      enumObject: { Hit: 1, BlockFailed: 2, CatchFailed: 3, CatchThrown: 4 },
+      legacyRemap: true,
     },
     {
       title: 'Deaths (Error)',
       getAggregate: (s) => s.deathsErrors,
+      keys: enumValues(EDeathError),
       enumObject: EDeathError,
     },
     {
       title: 'Throws (Direct) (Individual)',
       getAggregate: (s) => s.offenseThrowsIndividual,
-      enumObject: ThrowResult,
+      keys: LEGACY_THROW_RESULT_COLUMNS,
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5, Dodge: 6, Miss: 7 },
+      legacyRemap: true,
     },
     {
       title: 'Throws (Direct) (Group)',
       getAggregate: (s) => s.offenseThrowsGroup,
-      enumObject: ThrowResult,
+      keys: LEGACY_THROW_RESULT_COLUMNS,
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5, Dodge: 6, Miss: 7 },
+      legacyRemap: true,
     },
     {
       title: 'Throws (Deflection) (Individual)',
       getAggregate: (s) => s.offenseDeflectionsIndividual,
-      enumObject: DeflectionResult,
+      keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5 },
+      legacyRemap: true,
     },
     {
       title: 'Throws (Deflection) (Group)',
       getAggregate: (s) => s.offenseDeflectionsGroup,
-      enumObject: DeflectionResult,
+      keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5 },
+      legacyRemap: true,
     },
     {
       title: 'Throws (Error)',
       getAggregate: (s) => s.offenseErrors,
+      keys: enumValues(EThrowError),
       enumObject: EThrowError,
     },
     {
       title: 'Targeted (Direct)',
       getAggregate: (s) => s.defenseTargets,
-      enumObject: ThrowResult,
+      keys: LEGACY_THROW_RESULT_COLUMNS,
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5, Dodge: 6, Miss: 7 },
+      legacyRemap: true,
     },
     {
       title: 'Targeted (Deflection)',
       getAggregate: (s) => s.defenseDeflections,
-      enumObject: DeflectionResult,
+      keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5 },
+      legacyRemap: true,
     },
   ];
 
@@ -114,18 +150,20 @@ function getStatisticsSummaryFormat(): {
   ];
 
   for (const section of sections) {
-    const keys = enumValues(section.enumObject).sort((a, b) => a - b);
     format.push({
       header: `********** ${section.title}`,
       value: (stats) => formatTotal(section.getAggregate(stats).total),
     });
-    for (const key of keys) {
-      const keyName = Object.entries(section.enumObject).find(
-        ([, value]) => value === key,
-      )?.[0];
+    for (const key of section.keys) {
+      const keyName = enumKey(section.enumObject, key);
       format.push({
-        header: keyName ?? String(key),
-        value: (stats) => formatCount(section.getAggregate(stats).get(key)),
+        header: keyName,
+        value: (stats) =>
+          formatCount(
+            section.legacyRemap
+              ? legacyCsvColumnValue(section.title, key, stats)
+              : section.getAggregate(stats).get(key),
+          ),
       });
     }
   }

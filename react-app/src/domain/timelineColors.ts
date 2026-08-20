@@ -40,6 +40,7 @@ export function toneForThrowResult(resultId: ThrowResult): TimelineRowTone {
     case ThrowResult.Hit:
     case ThrowResult.BlockFailed:
     case ThrowResult.CatchFailed:
+    case ThrowResult.Disarm:
       return 'hit';
     case ThrowResult.Catch:
       return 'catch';
@@ -57,6 +58,7 @@ export function toneForDeflectionResult(resultId: DeflectionResult): TimelineRow
     case DeflectionResult.Hit:
     case DeflectionResult.BlockFailed:
     case DeflectionResult.CatchFailed:
+    case DeflectionResult.Disarm:
       return 'hit';
     case DeflectionResult.Catch:
       return 'catch';

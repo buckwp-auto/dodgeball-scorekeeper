@@ -28,6 +28,7 @@ import {
   loadThrowDraftsFromEvent,
   persistErrorGameEvent,
   persistFinishGameEvent,
+  persistNoBlockingGameEvent,
   persistThrowGameEvent,
   previewRemoveGamePlayer,
   previewRemovePlayerFromMatch,
@@ -146,6 +147,15 @@ describe('game event recording', () => {
       )?.IsHighlight,
     ).toBe(true);
     expect(buildTimelineEntries(data, gameId, match.Id)[0].isHighlight).toBe(true);
+  });
+
+  it('records no blocking started as a player-less other event', () => {
+    const { data, match, gameId } = setupOneGameMatch();
+    const eventId = persistNoBlockingGameEvent(data, gameId, { videoOffsetSeconds: 180 });
+    expect(getGameEventType(data, eventId)).toBe('noBlocking');
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(entry.type).toBe('noBlocking');
+    expect(entry.rows[0].segments.some((seg) => seg.kind === 'text')).toBe(true);
   });
 
   it('slots a new stamped event between earlier and later video times', () => {
@@ -365,7 +375,7 @@ describe('buildTimelineEntries', () => {
     );
   });
 
-  it('uses hit tone for failed block/catch', () => {
+  it('maps deprecated failed block/catch to Hit in timeline copy', () => {
     const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
     persistThrowGameEvent(data, gameId, match.Id, [
       {
@@ -379,7 +389,7 @@ describe('buildTimelineEntries', () => {
 
     const [entry] = buildTimelineEntries(data, gameId, match.Id);
     expect(entry.rows[0].tone).toBe('hit');
-    expect(flattenText(entry.rows[0].segments)).toContain('a Failed Block');
+    expect(flattenText(entry.rows[0].segments)).toContain('a Hit');
   });
 
   it('shows the event timestamp on every throw row of a team throw', () => {

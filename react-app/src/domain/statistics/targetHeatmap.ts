@@ -2,6 +2,7 @@ import { getGamePlayerInfos } from '../gameEvents';
 import { getMatchPlayers } from '../matchGame';
 import type { DatabaseDto, Guid } from '../types';
 import { ThrowResult } from './constants';
+import { isConnectingHitThrowResult } from '../throwResults';
 import { buildPlayerOverviews } from './databaseViews';
 import {
   iterateScopedThrows,
@@ -54,7 +55,7 @@ export function buildTargetHeatmap(
     const key = heatmapCellKey(throwerId, targetId);
     const cell = cells.get(key) ?? { throws: 0, hits: 0 };
     cell.throws += 1;
-    if (detail.throwRow.ResultId === ThrowResult.Hit) cell.hits += 1;
+    if (isConnectingHitThrowResult(detail.throwRow.ResultId)) cell.hits += 1;
     cells.set(key, cell);
   });
 

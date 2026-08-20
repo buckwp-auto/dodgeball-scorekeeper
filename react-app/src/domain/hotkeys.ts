@@ -19,8 +19,8 @@ export const ROSTER_AWAY_HOTKEYS = [
   ...COLUMN_2_HOTKEYS,
   ...ROSTER_AWAY_OVERFLOW_HOTKEYS,
 ] as const;
-/** Result column — order matches throwResultUiOrder */
-export const RESULT_HOTKEYS = ['r', 't', 'y', 'u', 'g', 'h', 'p'] as const;
+/** Result column — order matches throwResultUiOrder (6 throw results). */
+export const RESULT_HOTKEYS = ['r', 't', 'y', 'u', 'g', 'h'] as const;
 /** Recovered "None" choice (not a player) */
 export const RECOVERED_NONE_HOTKEY = 'm';
 

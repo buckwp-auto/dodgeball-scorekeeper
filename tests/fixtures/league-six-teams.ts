@@ -156,6 +156,7 @@ const ThrowResult = {
   CatchFailed: 5,
   Dodge: 6,
   Miss: 7,
+  Disarm: 8,
 } as const;
 const DeflectionResult = {
   Hit: 1,
@@ -163,6 +164,7 @@ const DeflectionResult = {
   BlockFailed: 3,
   Catch: 4,
   CatchFailed: 5,
+  Disarm: 8,
 } as const;
 
 type Guid = string;
@@ -195,6 +197,7 @@ const EMPTY_TABLE_NAMES = [
   'GameEvent',
   'GameEventError',
   'GameEventFinish',
+  'GameEventNoBlocking',
   'GameEventStart',
   'GameEventThrow',
   'GamePlayer',
@@ -252,16 +255,30 @@ function applyThrowToEliminated(
   throwRow: { ThrowerId: Guid; TargetId: Guid; ResultId: number; RecoveredId: Guid | null },
   deflections: { ReceiverId: Guid; ResultId: number }[],
 ): void {
+  const disarmed = new Set<Guid>();
+  if (throwRow.ResultId === ThrowResult.Disarm) {
+    disarmed.add(throwRow.TargetId);
+    eliminated.add(throwRow.TargetId);
+  }
+  for (const deflection of deflections) {
+    if (deflection.ResultId === DeflectionResult.Disarm) {
+      disarmed.add(deflection.ReceiverId);
+      eliminated.add(deflection.ReceiverId);
+    }
+  }
+
   const isCatch =
     throwRow.ResultId === ThrowResult.Catch ||
     deflections.some((row) => row.ResultId === DeflectionResult.Catch);
   if (isCatch) {
     eliminated.add(throwRow.ThrowerId);
     if (throwRow.RecoveredId) eliminated.delete(throwRow.RecoveredId);
+    for (const gamePlayerId of disarmed) eliminated.add(gamePlayerId);
     return;
   }
   if (
     throwRow.ResultId === ThrowResult.Hit ||
+    throwRow.ResultId === ThrowResult.Disarm ||
     throwRow.ResultId === ThrowResult.BlockFailed ||
     throwRow.ResultId === ThrowResult.CatchFailed
   ) {
@@ -272,6 +289,7 @@ function applyThrowToEliminated(
       eliminated.add(throwRow.ThrowerId);
     } else if (
       deflection.ResultId === DeflectionResult.Hit ||
+      deflection.ResultId === DeflectionResult.Disarm ||
       deflection.ResultId === DeflectionResult.BlockFailed ||
       deflection.ResultId === DeflectionResult.CatchFailed
     ) {
@@ -418,11 +436,9 @@ function writeGameEventHistory(
       resultId = ThrowResult.Miss;
     } else if (roll < 0.42) {
       resultId = ThrowResult.Block;
-    } else if (roll < 0.52) {
-      resultId = ThrowResult.BlockFailed;
-    } else if (roll < 0.62) {
-      resultId = ThrowResult.CatchFailed;
-    } else if (roll < 0.74) {
+    } else if (roll < 0.48) {
+      resultId = ThrowResult.Disarm;
+    } else if (roll < 0.58) {
       resultId = ThrowResult.Catch;
       recoveredId =
         outOnCatcherSide.length > 0 && rng() < 0.55 ? pickOne(outOnCatcherSide, rng) : null;
@@ -434,11 +450,11 @@ function writeGameEventHistory(
         resultId: DeflectionResult.Hit,
       });
     } else if (roll < 0.93 && otherTargets.length > 0) {
-      // Hit that glances into a teammate (failed catch / block).
+      // Hit that glances into a teammate.
       resultId = ThrowResult.Hit;
       deflections.push({
         receiverId: pickOne(otherTargets, rng),
-        resultId: rng() < 0.5 ? DeflectionResult.CatchFailed : DeflectionResult.BlockFailed,
+        resultId: rng() < 0.5 ? DeflectionResult.Disarm : DeflectionResult.Hit,
       });
     } else {
       resultId = ThrowResult.Hit;

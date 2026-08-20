@@ -35,7 +35,7 @@ export type GameEventRow = {
   /** Starred for the league highlight reel. */
   IsHighlight?: boolean;
 };
-export type GameEventType = 'start' | 'throw' | 'error' | 'finish';
+export type GameEventType = 'start' | 'throw' | 'error' | 'noBlocking' | 'finish';
 
 export type GamePlayerInfo = {
   gamePlayerId: Guid;
@@ -61,6 +61,8 @@ export type ThrowDraft = {
 export type ErrorDraft = {
   offenderGamePlayerId: Guid;
   offenseId: GameEventErrorOffense | null;
+  /** Player-less game marker on the Other tab. */
+  noBlockingStarted?: boolean;
 };
 
 export type FinishDraft = {
@@ -71,18 +73,16 @@ export const throwResultUiOrder: ThrowResult[] = [
   ThrowResult.Hit,
   ThrowResult.Dodge,
   ThrowResult.Block,
-  ThrowResult.BlockFailed,
+  ThrowResult.Disarm,
   ThrowResult.Catch,
-  ThrowResult.CatchFailed,
   ThrowResult.Miss,
 ];
 
 export const deflectionResultUiOrder: DeflectionResult[] = [
   DeflectionResult.Hit,
   DeflectionResult.Block,
-  DeflectionResult.BlockFailed,
+  DeflectionResult.Disarm,
   DeflectionResult.Catch,
-  DeflectionResult.CatchFailed,
 ];
 
 export const throwResultLabels: Record<ThrowResult, string> = {
@@ -93,6 +93,7 @@ export const throwResultLabels: Record<ThrowResult, string> = {
   [ThrowResult.CatchFailed]: 'Failed Catch',
   [ThrowResult.Dodge]: 'Dodge',
   [ThrowResult.Miss]: 'Miss',
+  [ThrowResult.Disarm]: 'Disarm',
 };
 
 export const deflectionResultLabels: Record<DeflectionResult, string> = {
@@ -101,13 +102,16 @@ export const deflectionResultLabels: Record<DeflectionResult, string> = {
   [DeflectionResult.BlockFailed]: 'Failed Block',
   [DeflectionResult.Catch]: 'Catch',
   [DeflectionResult.CatchFailed]: 'Failed Catch',
+  [DeflectionResult.Disarm]: 'Disarm',
 };
 
 export const errorOffenseLabels: Record<GameEventErrorOffense, string> = {
   [GameEventErrorOffense.LineOut]: 'Line Out',
   [GameEventErrorOffense.WastedBall]: 'Wasted Ball',
-  [GameEventErrorOffense.BlockIllegal]: 'Illegal Block',
+  [GameEventErrorOffense.BlockIllegal]: 'Illegal Block (No Blocking)',
 };
+
+export const NO_BLOCKING_STARTED_LABEL = 'No Blocking Started';
 
 export const finishResultLabels: Record<GameEventFinishResult, string> = {
   [GameEventFinishResult.WinHome]: 'Home win',
@@ -126,7 +130,7 @@ export function emptyThrowDraft(): ThrowDraft {
 }
 
 export function emptyErrorDraft(): ErrorDraft {
-  return { offenderGamePlayerId: '', offenseId: null };
+  return { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: false };
 }
 
 export function emptyFinishDraft(): FinishDraft {
@@ -158,6 +162,13 @@ export function getGameEventType(data: DatabaseDto, gameEventId: Guid): GameEven
   }
   if (table(data, 'GameEventError').some((row) => (row as { GameEventId: Guid }).GameEventId === gameEventId)) {
     return 'error';
+  }
+  if (
+    table(data, 'GameEventNoBlocking').some(
+      (row) => (row as { GameEventId: Guid }).GameEventId === gameEventId,
+    )
+  ) {
+    return 'noBlocking';
   }
   if (table(data, 'GameEventFinish').some((row) => (row as { GameEventId: Guid }).GameEventId === gameEventId)) {
     return 'finish';
@@ -291,8 +302,7 @@ export function throwResultAllowsDeflections(resultId: ThrowResult | null): bool
   return (
     resultId === ThrowResult.Hit ||
     resultId === ThrowResult.Block ||
-    resultId === ThrowResult.BlockFailed ||
-    resultId === ThrowResult.CatchFailed
+    resultId === ThrowResult.Disarm
   );
 }
 
@@ -319,6 +329,7 @@ export function areThrowDraftsComplete(drafts: ThrowDraft[]): boolean {
 }
 
 export function isErrorDraftComplete(draft: ErrorDraft): boolean {
+  if (draft.noBlockingStarted) return true;
   return Boolean(draft.offenderGamePlayerId && draft.offenseId !== null);
 }
 
@@ -496,7 +507,15 @@ export function loadErrorDraftFromEvent(data: DatabaseDto, gameEventId: Guid): E
   return {
     offenderGamePlayerId: row.OffenderId,
     offenseId: row.OffenseId as GameEventErrorOffense,
+    noBlockingStarted: false,
   };
+}
+
+export function loadOtherDraftFromEvent(data: DatabaseDto, gameEventId: Guid): ErrorDraft {
+  if (getGameEventType(data, gameEventId) === 'noBlocking') {
+    return { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: true };
+  }
+  return loadErrorDraftFromEvent(data, gameEventId);
 }
 
 export function loadFinishDraftFromEvent(data: DatabaseDto, gameEventId: Guid): FinishDraft {
@@ -608,6 +627,79 @@ export function persistErrorGameEvent(
     OffenseId: draft.offenseId!,
   });
   return gameEventId;
+}
+
+function removeNoBlockingRow(data: DatabaseDto, gameEventId: Guid): void {
+  data.Tables.GameEventNoBlocking = table(data, 'GameEventNoBlocking').filter(
+    (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
+  );
+}
+
+function removeErrorRow(data: DatabaseDto, gameEventId: Guid): void {
+  data.Tables.GameEventError = table(data, 'GameEventError').filter(
+    (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
+  );
+}
+
+export function persistNoBlockingGameEvent(
+  data: DatabaseDto,
+  gameId: Guid,
+  options?: PersistGameEventOptions,
+): Guid {
+  const editing = options?.gameEventId;
+  if (!editing && gameHasFinishEvent(data, gameId)) {
+    throw new Error('Cannot add events after the game is finished');
+  }
+
+  if (editing) {
+    const type = getGameEventType(data, editing);
+    if (type === 'noBlocking') {
+      applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
+      return editing;
+    }
+    if (type === 'error') {
+      removeErrorRow(data, editing);
+      pushRow(data, 'GameEventNoBlocking', { GameEventId: editing });
+      applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
+      return editing;
+    }
+    throw new Error('Cannot convert this event to no blocking started');
+  }
+
+  const gameEventId = newIdTimestamp();
+  pushRow(data, 'GameEvent', {
+    Id: gameEventId,
+    GameId: gameId,
+    Ordinal: allocateOrdinal(
+      data,
+      gameId,
+      options?.insertBeforeEventId,
+      options?.videoOffsetSeconds,
+    ),
+    VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
+  });
+  pushRow(data, 'GameEventNoBlocking', { GameEventId: gameEventId });
+  return gameEventId;
+}
+
+/** Persist an Other-tab draft (player offense or no blocking started). */
+export function persistOtherGameEvent(
+  data: DatabaseDto,
+  gameId: Guid,
+  matchId: Guid,
+  draft: ErrorDraft,
+  options?: PersistGameEventOptions,
+): Guid {
+  if (!isErrorDraftComplete(draft)) throw new Error('Incomplete other event');
+  if (draft.noBlockingStarted) {
+    return persistNoBlockingGameEvent(data, gameId, options);
+  }
+
+  const editing = options?.gameEventId;
+  if (editing && getGameEventType(data, editing) === 'noBlocking') {
+    removeNoBlockingRow(data, editing);
+  }
+  return persistErrorGameEvent(data, gameId, matchId, draft, options);
 }
 
 export function persistFinishGameEvent(
@@ -892,6 +984,9 @@ export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {
   data.Tables.GameEventError = table(data, 'GameEventError').filter(
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
   );
+  data.Tables.GameEventNoBlocking = table(data, 'GameEventNoBlocking').filter(
+    (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
+  );
   data.Tables.GameEventFinish = table(data, 'GameEventFinish').filter(
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
   );
@@ -928,6 +1023,7 @@ export type GameEventSnapshot = {
   event: GameEventRow;
   type: Exclude<GameEventType, 'start'>;
   error?: { OffenderId: Guid; OffenseId: number };
+  noBlocking?: true;
   finish?: { ResultId: number };
   throws?: ThrowSnapshot[];
 };
@@ -971,6 +1067,10 @@ export function snapshotGameEvent(
       ...base,
       error: { OffenderId: row.OffenderId, OffenseId: row.OffenseId },
     };
+  }
+
+  if (type === 'noBlocking') {
+    return { ...base, noBlocking: true };
   }
 
   if (type === 'finish') {
@@ -1059,6 +1159,11 @@ export function restoreGameEventSnapshot(
       OffenderId: snapshot.error.OffenderId,
       OffenseId: snapshot.error.OffenseId,
     });
+    return event.Id;
+  }
+
+  if (type === 'noBlocking') {
+    pushRow(data, 'GameEventNoBlocking', { GameEventId: event.Id });
     return event.Id;
   }
 

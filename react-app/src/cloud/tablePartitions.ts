@@ -19,6 +19,7 @@ export const MATCH_TABLES = [
   'GameEvent',
   'GameEventError',
   'GameEventFinish',
+  'GameEventNoBlocking',
   'GameEventStart',
   'GameEventThrow',
   'Throw',

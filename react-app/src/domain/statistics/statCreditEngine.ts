@@ -1,5 +1,9 @@
 import type { Guid } from '../types';
 import { DeflectionResult, EDeathType, EKillType, ThrowResult } from './constants';
+import {
+  isDisarmDeflectionResult,
+  isDisarmThrowResult,
+} from '../throwResults';
 import type { ThrowDetail } from './databaseViews';
 import type { StatCreditPolicy } from './statCreditPolicy';
 
@@ -82,11 +86,11 @@ export function tryGetKillFromThrow(
 ): { killType: EKillType; deathType: EDeathType } | undefined {
   switch (result) {
     case ThrowResult.Hit:
+    case ThrowResult.Disarm:
       return { killType: EKillType.Hit, deathType: EDeathType.Hit };
     case ThrowResult.BlockFailed:
-      return { killType: EKillType.BlockFailed, deathType: EDeathType.BlockFailed };
     case ThrowResult.CatchFailed:
-      return { killType: EKillType.CatchFailed, deathType: EDeathType.CatchFailed };
+      return { killType: EKillType.Hit, deathType: EDeathType.Hit };
     default:
       return undefined;
   }
@@ -97,14 +101,22 @@ export function tryGetKillFromDeflection(
 ): { killType: EKillType; deathType: EDeathType } | undefined {
   switch (result) {
     case DeflectionResult.Hit:
+    case DeflectionResult.Disarm:
       return { killType: EKillType.Hit, deathType: EDeathType.Hit };
     case DeflectionResult.BlockFailed:
-      return { killType: EKillType.BlockFailed, deathType: EDeathType.BlockFailed };
     case DeflectionResult.CatchFailed:
-      return { killType: EKillType.CatchFailed, deathType: EDeathType.CatchFailed };
+      return { killType: EKillType.Hit, deathType: EDeathType.Hit };
     default:
       return undefined;
   }
+}
+
+function throwKillSurvivesCatch(resultId: number): boolean {
+  return isDisarmThrowResult(resultId);
+}
+
+function deflectionKillSurvivesCatch(resultId: number): boolean {
+  return isDisarmDeflectionResult(resultId);
 }
 
 export function uniqueThrowerIds(details: ThrowDetail[]): Guid[] {
@@ -171,10 +183,13 @@ function collectCatchThrown(
 function collectKillResults(details: ThrowDetail[]): KillResult[] {
   const results: KillResult[] = [];
   for (const detail of details) {
-    if (isCatch(detail).caught) continue;
+    const catchResult = isCatch(detail);
     const ordinal = detail.throwRow.Ordinal;
     const throwKill = tryGetKillFromThrow(detail.throwRow.ResultId);
-    if (throwKill) {
+    if (
+      throwKill &&
+      (!catchResult.caught || throwKillSurvivesCatch(detail.throwRow.ResultId))
+    ) {
       results.push({
         throwerId: detail.throwRow.ThrowerId,
         targetId: detail.throwRow.TargetId,
@@ -186,7 +201,12 @@ function collectKillResults(details: ThrowDetail[]): KillResult[] {
     }
     for (const deflection of detail.deflections) {
       const deflKill = tryGetKillFromDeflection(deflection.ResultId);
-      if (!deflKill) continue;
+      if (
+        !deflKill ||
+        (catchResult.caught && !deflectionKillSurvivesCatch(deflection.ResultId))
+      ) {
+        continue;
+      }
       results.push({
         throwerId: detail.throwRow.ThrowerId,
         targetId: deflection.ReceiverId,
@@ -344,10 +364,13 @@ function awardLegacyKills(
   const killCredit = throwers.length > 0 ? 1 / throwers.length : 1;
 
   for (const detail of details) {
-    if (isCatch(detail).caught) continue;
+    const catchResult = isCatch(detail);
 
     const throwKill = tryGetKillFromThrow(detail.throwRow.ResultId);
-    if (throwKill) {
+    if (
+      throwKill &&
+      (!catchResult.caught || throwKillSurvivesCatch(detail.throwRow.ResultId))
+    ) {
       awards.throwerKills.push({
         throwerId: detail.throwRow.ThrowerId,
         source: 'direct',
@@ -374,7 +397,12 @@ function awardLegacyKills(
 
     for (const deflection of detail.deflections) {
       const deflKill = tryGetKillFromDeflection(deflection.ResultId);
-      if (!deflKill) continue;
+      if (
+        !deflKill ||
+        (catchResult.caught && !deflectionKillSurvivesCatch(deflection.ResultId))
+      ) {
+        continue;
+      }
       awards.throwerKills.push({
         throwerId: detail.throwRow.ThrowerId,
         source: 'deflection',
