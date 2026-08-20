@@ -41,7 +41,6 @@ import {
   getGamePlayerInfos,
   getInsertBelowTargetEventId,
   getGameStartEvent,
-  initialVideoSeekSeconds,
   isErrorDraftComplete,
   isFinishDraftComplete,
   loadOtherDraftFromEvent,
@@ -53,6 +52,7 @@ import {
   restoreGameEventSnapshot,
   setGameEventHighlight,
   setGameEventVideoOffset,
+  inPageOpenSeekSeconds,
   trackGameOpenSeekSeconds,
   undoLastGameEvent,
   type ErrorDraft,
@@ -70,10 +70,13 @@ import {
   finishResultForLiveWinner,
 } from '../domain/gameElimination';
 import {
+  applyOtherOffenseHotkey,
   buildPermanentPlayerHotkeys,
   findGamePlayerIdByHotkey,
+  getOtherOffenseChoiceForKey,
   getTrackGameActionForKey,
 } from '../domain/hotkeys';
+import { releaseActiveIframeFocus } from '../domain/youtube';
 import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
 import { useDatabase } from '../state/DatabaseContext';
 import { useYoutubePopout } from '../state/YoutubePopoutContext';
@@ -192,7 +195,7 @@ export function GameEventsPage() {
       );
       if (focused?.VideoOffsetSeconds != null) return focused.VideoOffsetSeconds;
     }
-    return gameId ? initialVideoSeekSeconds(data, gameId) : 0;
+    return gameId ? inPageOpenSeekSeconds(data, gameId) : null;
     // Snapshot once per game open — later edits should not recreate the player
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
@@ -687,6 +690,8 @@ export function GameEventsPage() {
 
   const handleTrackGameHotkey = useCallback(
     (key: string, event: KeyboardEvent) => {
+      releaseActiveIframeFocus();
+
       if (isYoutubeControlHotkey(key)) return;
 
       const undoRedoAction = getTrackGameActionForKey(key);
@@ -749,6 +754,12 @@ export function GameEventsPage() {
         return;
       }
       if (visibleTab === 'error') {
+        const offenseChoice = getOtherOffenseChoiceForKey(key);
+        if (offenseChoice) {
+          event.preventDefault();
+          setErrorDraft((prev) => applyOtherOffenseHotkey(prev, offenseChoice));
+          return;
+        }
         if (errorDraft.noBlockingStarted) return;
         const hotkeys = buildPermanentPlayerHotkeys(players);
         const gamePlayerId = findGamePlayerIdByHotkey(hotkeys, key);
@@ -778,6 +789,7 @@ export function GameEventsPage() {
       updateThrowDrafts,
       visibleTab,
       live.eliminatedGamePlayerIds,
+      errorDraft.noBlockingStarted,
     ],
   );
 
@@ -836,7 +848,7 @@ export function GameEventsPage() {
               youtubeUrl={youtubeUrl}
               mode={youtubeMode}
               onModeChange={setYoutubeModeAndPersist}
-              startSeconds={cueSeconds ?? openSeekSeconds}
+              startSeconds={cueSeconds ?? openSeekSeconds ?? undefined}
               onPopOut={popOut}
               popoutBlocked={popoutPlayback.blocked}
             />

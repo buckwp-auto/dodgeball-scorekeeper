@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   COLUMN_1_HOTKEYS,
   COLUMN_2_HOTKEYS,
+  OTHER_OFFENSE_HOTKEYS,
   RECOVERED_NONE_HOTKEY,
   RESULT_HOTKEYS,
   ROSTER_AWAY_HOTKEYS,
   ROSTER_AWAY_OVERFLOW_HOTKEYS,
   ROSTER_HOME_HOTKEYS,
   ROSTER_HOME_OVERFLOW_HOTKEYS,
+  applyOtherOffenseHotkey,
   assignColumn1Hotkey,
   assignColumn2Hotkey,
   buildPermanentPlayerHotkeys,
@@ -15,12 +17,16 @@ import {
   findGamePlayerIdByHotkey,
   findPlayerByHotkey,
   getDeflectionResultForKey,
+  getOtherOffenseChoiceForKey,
   getThrowResultForKey,
   getTrackGameActionForKey,
   hotkeyForDeflectionResult,
   hotkeyForGamePlayer,
+  hotkeyForOtherOffenseIndex,
+  isOtherOffenseChoiceActive,
+  otherOffenseUiOrder,
 } from './hotkeys';
-import { DeflectionResult, ThrowResult } from './statistics/constants';
+import { DeflectionResult, GameEventErrorOffense, ThrowResult } from './statistics/constants';
 import { throwResultUiOrder } from './gameEvents';
 
 describe('permanent player hotkeys', () => {
@@ -155,5 +161,49 @@ describe('undo / redo hotkeys', () => {
     expect(getTrackGameActionForKey('+')).toBe('redo');
     expect(getTrackGameActionForKey('Add')).toBe('redo');
     expect(getTrackGameActionForKey('Subtract')).toBe('undo');
+  });
+});
+
+describe('other tab offense hotkeys', () => {
+  it('maps 1-4 to fixed offense choices in UI order', () => {
+    expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4']);
+    expect(otherOffenseUiOrder).toHaveLength(4);
+    expect(hotkeyForOtherOffenseIndex(0)).toBe('1');
+    expect(getOtherOffenseChoiceForKey('2')?.kind).toBe('offense');
+    expect(
+      getOtherOffenseChoiceForKey('2') &&
+        getOtherOffenseChoiceForKey('2')!.kind === 'offense' &&
+        getOtherOffenseChoiceForKey('2')!.offenseId,
+    ).toBe(GameEventErrorOffense.WastedBall);
+    expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
+  });
+
+  it('toggles offense choices without shifting hotkey slots', () => {
+    const draft = { offenderGamePlayerId: 'gp-1', offenseId: null as GameEventErrorOffense | null };
+    const lineOut = otherOffenseUiOrder[0]!;
+    const next = applyOtherOffenseHotkey(draft, lineOut);
+    expect(next.offenseId).toBe(GameEventErrorOffense.LineOut);
+    expect(isOtherOffenseChoiceActive(next, lineOut)).toBe(true);
+    expect(isOtherOffenseChoiceActive(next, otherOffenseUiOrder[1]!)).toBe(false);
+
+    const cleared = applyOtherOffenseHotkey(next, lineOut);
+    expect(cleared.offenseId).toBeNull();
+  });
+
+  it('toggles no-blocking started and clears offender fields', () => {
+    const draft = {
+      offenderGamePlayerId: 'gp-1',
+      offenseId: GameEventErrorOffense.LineOut,
+      noBlockingStarted: false,
+    };
+    const noBlocking = otherOffenseUiOrder[3]!;
+    const started = applyOtherOffenseHotkey(draft, noBlocking);
+    expect(started).toEqual({
+      offenderGamePlayerId: '',
+      offenseId: null,
+      noBlockingStarted: true,
+    });
+    const cleared = applyOtherOffenseHotkey(started, noBlocking);
+    expect(cleared.noBlockingStarted).toBe(false);
   });
 });

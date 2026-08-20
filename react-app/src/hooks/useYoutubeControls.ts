@@ -14,6 +14,7 @@ import {
   YOUTUBE_SEEK_BACK_HOTKEY,
   YOUTUBE_SEEK_FORWARD_HOTKEY,
   YOUTUBE_SEEK_SECONDS,
+  releaseActiveIframeFocus,
   type YoutubeInPageMode,
   type YoutubePlayerMode,
 } from '../domain/youtube';
@@ -196,12 +197,7 @@ export function useYoutubeControls(
     (key: string, event: KeyboardEvent) => {
       if (!hasYoutube || mode === 'hidden') return;
 
-      const active = document.activeElement;
-      if (active instanceof HTMLIFrameElement) {
-        active.blur();
-        if (document.body.tabIndex < 0) document.body.tabIndex = -1;
-        document.body.focus({ preventScroll: true });
-      }
+      releaseActiveIframeFocus();
 
       if (key === YOUTUBE_LAYOUT_SMALL_HOTKEY) {
         if (!enableLayoutHotkeys) return;

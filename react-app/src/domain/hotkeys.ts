@@ -1,5 +1,10 @@
-import { DeflectionResult, ThrowResult } from './statistics/constants';
-import { deflectionResultUiOrder, throwResultUiOrder } from './gameEvents';
+import { GameEventErrorOffense, DeflectionResult, ThrowResult } from './statistics/constants';
+import {
+  deflectionResultUiOrder,
+  errorOffenseLabels,
+  NO_BLOCKING_STARTED_LABEL,
+  throwResultUiOrder,
+} from './gameEvents';
 
 /** Home / left-side permanent keys (Track Game throw/error; roster slots 1–6) */
 export const COLUMN_1_HOTKEYS = ['a', 's', 'd', 'f', 'w', 'e'] as const;
@@ -23,6 +28,63 @@ export const ROSTER_AWAY_HOTKEYS = [
 export const RESULT_HOTKEYS = ['r', 't', 'y', 'u', 'g', 'h'] as const;
 /** Recovered "None" choice (not a player) */
 export const RECOVERED_NONE_HOTKEY = 'm';
+
+/** Fixed Other-tab offense keys (stable layout; do not overlap player/result keys). */
+export const OTHER_OFFENSE_HOTKEYS = ['1', '2', '3', '4'] as const;
+
+export type OtherOffenseChoice =
+  | { kind: 'offense'; offenseId: GameEventErrorOffense }
+  | { kind: 'noBlocking' };
+
+export const otherOffenseUiOrder: OtherOffenseChoice[] = [
+  { kind: 'offense', offenseId: GameEventErrorOffense.LineOut },
+  { kind: 'offense', offenseId: GameEventErrorOffense.WastedBall },
+  { kind: 'offense', offenseId: GameEventErrorOffense.BlockIllegal },
+  { kind: 'noBlocking' },
+];
+
+export function labelForOtherOffenseChoice(choice: OtherOffenseChoice): string {
+  if (choice.kind === 'noBlocking') return NO_BLOCKING_STARTED_LABEL;
+  return errorOffenseLabels[choice.offenseId];
+}
+
+export function hotkeyForOtherOffenseIndex(index: number): string | null {
+  return OTHER_OFFENSE_HOTKEYS[index] ?? null;
+}
+
+export function getOtherOffenseChoiceForKey(key: string): OtherOffenseChoice | null {
+  const normalized = key.length === 1 ? key.toLowerCase() : key;
+  const index = OTHER_OFFENSE_HOTKEYS.indexOf(
+    normalized as (typeof OTHER_OFFENSE_HOTKEYS)[number],
+  );
+  if (index < 0) return null;
+  return otherOffenseUiOrder[index] ?? null;
+}
+
+export function isOtherOffenseChoiceActive(
+  draft: { offenseId: GameEventErrorOffense | null; noBlockingStarted?: boolean },
+  choice: OtherOffenseChoice,
+): boolean {
+  if (choice.kind === 'noBlocking') return Boolean(draft.noBlockingStarted);
+  return !draft.noBlockingStarted && draft.offenseId === choice.offenseId;
+}
+
+export function applyOtherOffenseHotkey(
+  draft: { offenderGamePlayerId: string; offenseId: GameEventErrorOffense | null; noBlockingStarted?: boolean },
+  choice: OtherOffenseChoice,
+): typeof draft {
+  if (choice.kind === 'noBlocking') {
+    return draft.noBlockingStarted
+      ? { ...draft, noBlockingStarted: false }
+      : { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: true };
+  }
+  const nextOffense = draft.offenseId === choice.offenseId ? null : choice.offenseId;
+  return {
+    ...draft,
+    noBlockingStarted: false,
+    offenseId: nextOffense,
+  };
+}
 
 export const HOME_PLAYER_HOTKEYS = COLUMN_1_HOTKEYS;
 export const AWAY_PLAYER_HOTKEYS = COLUMN_2_HOTKEYS;

@@ -8,8 +8,10 @@ import {
 import { deletePlayer, getPlayer, playerIsUsedInMatches } from './database';
 import type { DatabaseDto, Guid } from './types';
 import {
+  getAdjacentGameId,
   getGamePlayers,
   getMatchGames,
+  getMatchIdForGame,
   getMatchPlayers,
   isPlayerInGame,
   isPlayerInMatch,
@@ -211,11 +213,57 @@ export function trackGameOpenSeekSeconds(
 }
 
 /**
+ * Latest stamped offset in a game: finish when complete, otherwise the last
+ * non-start event (or game start if that is all that exists).
+ */
+export function lastStampedVideoOffsetInGame(
+  data: DatabaseDto,
+  gameId: Guid,
+): number | null {
+  if (gameHasFinishEvent(data, gameId)) {
+    const events = getGameEvents(data, gameId);
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index];
+      if (getGameEventType(data, event.Id) === 'finish') {
+        return event.VideoOffsetSeconds ?? null;
+      }
+    }
+  }
+
+  const events = getGameEvents(data, gameId);
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index];
+    if (getGameEventType(data, event.Id) === 'start') continue;
+    if (event.VideoOffsetSeconds != null) return event.VideoOffsetSeconds;
+  }
+
+  return getGameStartEvent(data, gameId)?.VideoOffsetSeconds ?? null;
+}
+
+/**
+ * In-page Track Game cue: current game rules, then prior game in the match when
+ * nothing is stamped yet (continue after the previous game's end).
+ */
+export function inPageOpenSeekSeconds(
+  data: DatabaseDto,
+  gameId: Guid,
+): number | null {
+  const direct = trackGameOpenSeekSeconds(data, gameId);
+  if (direct != null) return direct;
+
+  const matchId = getMatchIdForGame(data, gameId);
+  if (!matchId) return null;
+  const previousGameId = getAdjacentGameId(data, matchId, gameId, -1);
+  if (!previousGameId) return null;
+  return lastStampedVideoOffsetInGame(data, previousGameId);
+}
+
+/**
  * Where the in-page YouTube player should cue when entering Track Game.
- * Same rules as {@link trackGameOpenSeekSeconds}, falling back to 0 when unstamped.
+ * Same rules as {@link inPageOpenSeekSeconds}, falling back to 0 when unstamped.
  */
 export function initialVideoSeekSeconds(data: DatabaseDto, gameId: Guid): number {
-  return trackGameOpenSeekSeconds(data, gameId) ?? 0;
+  return inPageOpenSeekSeconds(data, gameId) ?? 0;
 }
 
 /**

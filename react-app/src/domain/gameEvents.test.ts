@@ -24,6 +24,7 @@ import {
   getGameEvents,
   getGameStartEvent,
   initialVideoSeekSeconds,
+  inPageOpenSeekSeconds,
   trackGameOpenSeekSeconds,
   loadThrowDraftsFromEvent,
   persistErrorGameEvent,
@@ -501,6 +502,38 @@ describe('initialVideoSeekSeconds / trackGameOpenSeekSeconds', () => {
     setGameEventVideoOffset(data, getGameStartEvent(data, gameId)!.Id, 33);
     expect(trackGameOpenSeekSeconds(data, gameId)).toBe(33);
     expect(initialVideoSeekSeconds(data, gameId)).toBe(33);
+  });
+
+  it('in-page seek continues from the previous game finish when unstamped', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    setGameEventVideoOffset(data, getGameStartEvent(data, gameId)!.Id, 12);
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 80 },
+    );
+    persistFinishGameEvent(
+      data,
+      gameId,
+      { resultId: GameEventFinishResult.WinHome },
+      { videoOffsetSeconds: 100 },
+    );
+
+    const game2Id = addGame(data, match.Id);
+
+    expect(trackGameOpenSeekSeconds(data, game2Id)).toBeNull();
+    expect(inPageOpenSeekSeconds(data, game2Id)).toBe(100);
+    expect(initialVideoSeekSeconds(data, game2Id)).toBe(100);
   });
 });
 

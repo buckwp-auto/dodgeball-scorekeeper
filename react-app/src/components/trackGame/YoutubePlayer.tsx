@@ -550,7 +550,18 @@ export const YoutubePlayer = forwardRef<
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [videoId, mode === 'hidden' ? 'hidden' : 'visible', startSeconds]);
+  }, [videoId, mode === 'hidden' ? 'hidden' : 'visible']);
+
+  useEffect(() => {
+    if (!ready || mode === 'hidden') return;
+    if (startSeconds == null || !Number.isFinite(startSeconds)) return;
+    try {
+      playerRef.current?.seekTo(Math.max(0, startSeconds), true);
+      setDisplayTime(Math.max(0, startSeconds));
+    } catch {
+      pendingSeekSecondsRef.current = startSeconds;
+    }
+  }, [ready, mode, startSeconds]);
 
   useEffect(() => {
     if (!ready || mode === 'hidden') return;

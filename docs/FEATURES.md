@@ -98,6 +98,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Match / Game roster 7–12 (home) | `Q 1 2 3 4 5` |
 | Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
 | Throw results | `R T Y U G H` |
+| Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off) |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |

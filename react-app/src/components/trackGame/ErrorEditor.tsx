@@ -1,11 +1,13 @@
 import { Box } from '@mui/material';
-import { GameEventErrorOffense } from '../../domain/statistics/constants';
 import type { ErrorDraft, GamePlayerInfo } from '../../domain/gameEvents';
-import { errorOffenseLabels, NO_BLOCKING_STARTED_LABEL } from '../../domain/gameEvents';
 import { sortGamePlayerInfos } from '../../domain/gameElimination';
 import {
   buildPermanentPlayerHotkeys,
   hotkeyForGamePlayer,
+  hotkeyForOtherOffenseIndex,
+  isOtherOffenseChoiceActive,
+  labelForOtherOffenseChoice,
+  otherOffenseUiOrder,
 } from '../../domain/hotkeys';
 import {
   EditorChoiceButton,
@@ -15,11 +17,6 @@ import {
   EditorLabel,
   TeamBanner,
 } from './EditorGrid';
-
-const PLAYER_OFFENSES = Object.entries(errorOffenseLabels) as [
-  string,
-  string,
-][];
 
 export function ErrorEditor({
   draft,
@@ -58,35 +55,23 @@ export function ErrorEditor({
   const label = (row: GamePlayerInfo) =>
     isOut(row.gamePlayerId) ? `${row.playerName} (out)` : row.playerName;
 
-  const selectPlayerOffense = (offenseId: GameEventErrorOffense) => {
+  const toggleOffenseChoice = (index: number) => {
+    const choice = otherOffenseUiOrder[index];
+    if (!choice) return;
+    if (choice.kind === 'noBlocking') {
+      onChange(
+        draft.noBlockingStarted
+          ? { ...draft, noBlockingStarted: false }
+          : { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: true },
+      );
+      return;
+    }
     onChange({
       ...draft,
       noBlockingStarted: false,
-      offenseId,
+      offenseId: draft.offenseId === choice.offenseId ? null : choice.offenseId,
     });
   };
-
-  const selectNoBlockingStarted = () => {
-    onChange({
-      offenderGamePlayerId: '',
-      offenseId: null,
-      noBlockingStarted: true,
-    });
-  };
-
-  const clearMistake = () => {
-    onChange({
-      ...draft,
-      offenseId: null,
-      noBlockingStarted: false,
-    });
-  };
-
-  const mistakeLabel = noBlockingMode
-    ? NO_BLOCKING_STARTED_LABEL
-    : draft.offenseId !== null
-      ? errorOffenseLabels[draft.offenseId]
-      : null;
 
   return (
     <EditorGrid>
@@ -225,24 +210,20 @@ export function ErrorEditor({
         <Box gridColumn="1 / -1" />
       ) : null}
 
-      <EditorChoiceStack pending={pendingMistake} gridColumn={noBlockingMode ? '1 / -1' : 3}>
-        {mistakeLabel ? (
-          <EditorChipButton onClick={clearMistake}>{mistakeLabel}</EditorChipButton>
-        ) : (
-          <>
-            {PLAYER_OFFENSES.map(([value, labelText]) => (
-              <EditorChoiceButton
-                key={value}
-                onClick={() => selectPlayerOffense(Number(value) as GameEventErrorOffense)}
-              >
-                {labelText}
-              </EditorChoiceButton>
-            ))}
-            <EditorChoiceButton onClick={selectNoBlockingStarted}>
-              {NO_BLOCKING_STARTED_LABEL}
-            </EditorChoiceButton>
-          </>
-        )}
+      <EditorChoiceStack
+        pending={pendingMistake && !noBlockingMode}
+        gridColumn={noBlockingMode ? '1 / -1' : 3}
+      >
+        {otherOffenseUiOrder.map((choice, index) => (
+          <EditorChoiceButton
+            key={choice.kind === 'noBlocking' ? 'noBlocking' : choice.offenseId}
+            hotkey={hotkeyForOtherOffenseIndex(index)}
+            selected={isOtherOffenseChoiceActive(draft, choice)}
+            onClick={() => toggleOffenseChoice(index)}
+          >
+            {labelForOtherOffenseChoice(choice)}
+          </EditorChoiceButton>
+        ))}
       </EditorChoiceStack>
     </EditorGrid>
   );

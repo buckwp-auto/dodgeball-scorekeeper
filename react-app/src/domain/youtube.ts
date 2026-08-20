@@ -145,3 +145,12 @@ export function saveYoutubePlayerMode(mode: YoutubeInPageMode): void {
     /* ignore */
   }
 }
+
+/** Blur a focused YouTube iframe so page-level hotkeys keep working. */
+export function releaseActiveIframeFocus(): void {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLIFrameElement)) return;
+  active.blur();
+  if (document.body.tabIndex < 0) document.body.tabIndex = -1;
+  document.body.focus({ preventScroll: true });
+}
