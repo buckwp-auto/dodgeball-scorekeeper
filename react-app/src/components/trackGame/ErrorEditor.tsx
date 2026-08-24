@@ -207,7 +207,7 @@ export function ErrorEditor({
       ) : null}
 
       {noBlockingMode ? (
-        <Box gridColumn="1 / -1" />
+        <Box sx={{ gridColumn: '1 / -1' }} />
       ) : null}
 
       <EditorChoiceStack
