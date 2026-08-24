@@ -1,7 +1,6 @@
 import { getGamePlayerInfos } from '../gameEvents';
 import { getMatchPlayers } from '../matchGame';
 import type { DatabaseDto, Guid } from '../types';
-import { ThrowResult } from './constants';
 import { isConnectingHitThrowResult } from '../throwResults';
 import { buildPlayerOverviews } from './databaseViews';
 import {

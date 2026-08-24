@@ -169,12 +169,11 @@ describe('other tab offense hotkeys', () => {
     expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4']);
     expect(otherOffenseUiOrder).toHaveLength(4);
     expect(hotkeyForOtherOffenseIndex(0)).toBe('1');
-    expect(getOtherOffenseChoiceForKey('2')?.kind).toBe('offense');
-    expect(
-      getOtherOffenseChoiceForKey('2') &&
-        getOtherOffenseChoiceForKey('2')!.kind === 'offense' &&
-        getOtherOffenseChoiceForKey('2')!.offenseId,
-    ).toBe(GameEventErrorOffense.WastedBall);
+    const choice2 = getOtherOffenseChoiceForKey('2');
+    expect(choice2?.kind).toBe('offense');
+    expect(choice2?.kind === 'offense' ? choice2.offenseId : null).toBe(
+      GameEventErrorOffense.WastedBall,
+    );
     expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
   });
 

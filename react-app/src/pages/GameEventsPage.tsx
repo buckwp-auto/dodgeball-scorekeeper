@@ -286,8 +286,7 @@ export function GameEventsPage() {
     ? getGameEventType(data, effectiveSelectedId)
     : null;
   const lockedTab = editorTabForEventType(lockedEventType);
-  const visibleTab: TabKey | 'start' =
-    lockedTab && lockedTab !== 'start' ? lockedTab : activeTab;
+  const visibleTab: TabKey | 'start' = lockedTab ?? activeTab;
 
   // Editing an existing event judges outs against its stored time, not the player head
   const throwVideoOffsetSeconds = effectiveSelectedId
