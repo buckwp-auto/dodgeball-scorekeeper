@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { COLOR_MODE_KEY } from '../react-app/src/domain/colorMode';
+import { COLOR_MODE_KEY } from '../src/domain/colorMode';
 import { clearScorekeeperStorage, gotoScorekeeper } from './helpers/scorekeeper-page';
 
 test.describe('Color mode', () => {

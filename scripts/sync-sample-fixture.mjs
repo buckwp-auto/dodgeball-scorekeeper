@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureName = 'league-six-teams.scrkpr';
-const source = path.resolve(appDir, '..', 'tests', 'fixtures', fixtureName);
+const source = path.resolve(appDir, 'tests', 'fixtures', fixtureName);
 const samplesDir = path.join(appDir, 'public', 'samples');
 
 mkdirSync(samplesDir, { recursive: true });
