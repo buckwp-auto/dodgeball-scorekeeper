@@ -165,20 +165,24 @@ test.describe('Game tracking (full roster)', () => {
     ).toBeVisible();
     await expect(page.getByText(/Eliminated! \(Home Hawks win\)/)).toBeVisible();
 
-    const eventsUrl = page.url();
-    await page.goto(eventsUrl.replace(/\/events.*$/, '/stats'));
+    await page.locator('.sk-menu-link').filter({ hasText: 'Stats' }).first().click();
+    await expect(page.getByRole('heading', { name: /stats/i })).toBeVisible();
+    await page.getByLabel('Match').click();
+    await page.getByRole('option', { name: / vs\. / }).first().click();
+    await page.getByLabel('Game').click();
+    await page.getByRole('option', { name: 'Game 1', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Game 1 stats/ })).toBeVisible();
     await page.getByRole('tab', { name: 'Players' }).click();
     const stats = page.locator('.sk-stats-table');
-    await expect(stats).toContainText('H1');
-    await expect(stats).toContainText('A1');
     const killsIndex = await stats.locator('thead th').evaluateAll((ths) =>
       ths.findIndex((th) => (th.textContent ?? '').trim() === 'Kills'),
     );
     expect(killsIndex).toBeGreaterThan(0);
-    const h1Kills = stats.locator('tbody tr').filter({ hasText: 'H1' }).locator('td').nth(killsIndex);
-    const a1Kills = stats.locator('tbody tr').filter({ hasText: 'A1' }).locator('td').nth(killsIndex);
-    await expect(h1Kills).toHaveText('1');
-    await expect(a1Kills).toHaveText('0');
+    await expect(
+      stats.locator('tbody tr').filter({ hasText: 'H1' }).locator('td').nth(killsIndex),
+    ).toHaveText('1');
+    await expect(
+      stats.locator('tbody tr').filter({ hasText: 'A1' }).locator('td').nth(killsIndex),
+    ).toHaveText('0');
   });
 });
