@@ -10,6 +10,7 @@ import {
   ROSTER_HOME_HOTKEYS,
   ROSTER_HOME_OVERFLOW_HOTKEYS,
   applyOtherOffenseHotkey,
+  applyPlayerHotkeyToErrorDraft,
   assignColumn1Hotkey,
   assignColumn2Hotkey,
   buildPermanentPlayerHotkeys,
@@ -192,6 +193,7 @@ describe('other tab offense hotkeys', () => {
   it('toggles no-blocking started and clears offender fields', () => {
     const draft = {
       offenderGamePlayerId: 'gp-1',
+      throwerGamePlayerId: 'gp-2',
       offenseId: GameEventErrorOffense.LineOut,
       noBlockingStarted: false,
     };
@@ -199,10 +201,42 @@ describe('other tab offense hotkeys', () => {
     const started = applyOtherOffenseHotkey(draft, noBlocking);
     expect(started).toEqual({
       offenderGamePlayerId: '',
+      throwerGamePlayerId: '',
       offenseId: null,
       noBlockingStarted: true,
     });
     const cleared = applyOtherOffenseHotkey(started, noBlocking);
     expect(cleared.noBlockingStarted).toBe(false);
+  });
+
+  it('clears thrower when leaving illegal block', () => {
+    const draft = {
+      offenderGamePlayerId: 'gp-off',
+      throwerGamePlayerId: 'gp-throw',
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    };
+    const lineOut = otherOffenseUiOrder[0]!;
+    const next = applyOtherOffenseHotkey(draft, lineOut);
+    expect(next.offenseId).toBe(GameEventErrorOffense.LineOut);
+    expect(next.throwerGamePlayerId).toBe('');
+    expect(next.offenderGamePlayerId).toBe('gp-off');
+  });
+
+  it('picks thrower then offender by team for illegal block', () => {
+    const players = [
+      { gamePlayerId: 'h1', playerName: 'Alex', teamHome: true },
+      { gamePlayerId: 'a1', playerName: 'Casey', teamHome: false },
+    ];
+    let draft = {
+      offenderGamePlayerId: '',
+      throwerGamePlayerId: '',
+      offenseId: GameEventErrorOffense.BlockIllegal as GameEventErrorOffense | null,
+    };
+    draft = applyPlayerHotkeyToErrorDraft(draft, players, 'a')!;
+    expect(draft.throwerGamePlayerId).toBe('h1');
+    expect(draft.offenderGamePlayerId).toBe('');
+    draft = applyPlayerHotkeyToErrorDraft(draft, players, 'j')!;
+    expect(draft.throwerGamePlayerId).toBe('h1');
+    expect(draft.offenderGamePlayerId).toBe('a1');
   });
 });

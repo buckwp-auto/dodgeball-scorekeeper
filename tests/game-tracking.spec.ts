@@ -135,4 +135,49 @@ test.describe('Game tracking (full roster)', () => {
     await expect(page.locator('.sk-game-timeline')).toContainText('H2');
     await expect(page.locator('.sk-game-timeline')).not.toContainText('H1');
   });
+
+  test('records illegal block with thrower and offender as one kill', async ({ page }) => {
+    await clearScorekeeperStorage(page);
+    await gotoScorekeeper(page);
+    await addTeam(page, 'Home Hawks');
+    await openTeam(page, 'Home Hawks');
+    await addPlayer(page, 'H1');
+    await addTeam(page, 'Away Owls');
+    await openTeam(page, 'Away Owls');
+    await addPlayer(page, 'A1');
+    await createMatch(page, 'Home Hawks', 'Away Owls');
+    await selectMatchRoster(page, 'H1', 'A1');
+    await addGame(page);
+    await selectGameRoster(page, 'H1', 'A1');
+    await page.getByRole('button', { name: 'Track Game' }).click();
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Other', exact: true }).click();
+    await page.getByRole('button', { name: 'Illegal Block (No Blocking)' }).click();
+    await page.getByRole('button', { name: 'H1', exact: true }).click();
+    await page.getByRole('button', { name: 'A1', exact: true }).click();
+
+    const timeline = page.locator('.sk-game-timeline');
+    await expect(timeline).toContainText('H1 threw at A1');
+    await expect(timeline).toContainText('Illegal Block (No Blocking)');
+
+    await page.getByRole('button', { name: 'Throw', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'A1 (out)' })).toBeVisible();
+
+    const eventsUrl = page.url();
+    await page.goto(eventsUrl.replace(/\/events.*$/, '/stats'));
+    await expect(page.getByRole('heading', { name: /Game 1 stats/ })).toBeVisible();
+    await page.getByRole('tab', { name: 'Players' }).click();
+    const stats = page.locator('.sk-stats-table');
+    await expect(stats).toContainText('H1');
+    await expect(stats).toContainText('A1');
+    const killsIndex = await stats.locator('thead th').evaluateAll((ths) =>
+      ths.findIndex((th) => (th.textContent ?? '').trim() === 'Kills'),
+    );
+    expect(killsIndex).toBeGreaterThan(0);
+    const h1Kills = stats.locator('tbody tr').filter({ hasText: 'H1' }).locator('td').nth(killsIndex);
+    const a1Kills = stats.locator('tbody tr').filter({ hasText: 'A1' }).locator('td').nth(killsIndex);
+    await expect(h1Kills).toHaveText('1');
+    await expect(a1Kills).toHaveText('0');
+  });
 });

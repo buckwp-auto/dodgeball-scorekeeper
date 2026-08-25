@@ -39,7 +39,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 | Tab | Purpose |
 |-----|---------|
 | **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional deflections, catch recovery |
-| **Other** | Offender + mistake (line-out, wasted ball, illegal block during no blocking), or **No Blocking Started** (player-less game marker) |
+| **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), or **No Blocking Started** (player-less game marker) |
 | **Finish** | Winner (home / away / tie) |
 
 ### Editor UX
@@ -60,7 +60,8 @@ Derived from persisted events (not a separate toggle):
 - **Disarm** → target (or deflection receiver) out immediately; a later deflection **Catch** still outs the thrower but does **not** save the disarmed player
 - Hit (and legacy failed block/catch stored on old saves, shown as Hit) → target out unless saved by a deflection catch
 - Catch (throw or deflection) → thrower out
-- Line-out / wasted ball / illegal block (no blocking) → offender out (illegal block on **Other** tab only)
+- Line-out / wasted ball → offender out
+- **Illegal block** (Other tab only) → offender out; requires a thrower on the opposite team. Still an error event (not a Throw Hit). Old saves without `ThrowerId` still load and still out the offender.
 - **No Blocking Started** — manual game marker on **Other**; no live elimination effect
 - **Recovered** player on a catch is removed from the eliminated set
 - Outs sort to the bottom and show “(out)”
@@ -98,7 +99,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Match / Game roster 7–12 (home) | `Q 1 2 3 4 5` |
 | Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
 | Throw results | `R T Y U G H` |
-| Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off) |
+| Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off). Player keys pick the offender; for illegal block they pick thrower then offender by team, same as Throw |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
@@ -126,7 +127,7 @@ Match / Game roster keys follow on-screen order (starters, then subs; outs last 
 - Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (hit = incoming Hit, Disarm, or legacy failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − hit/error deaths − 2×times caught (Deaths exclude catch-outs; times caught is separate); **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
 - **Legacy CSV export** keeps the original column layout: Disarm and deprecated failed block/catch fold into **Hit**; `BlockFailed` / `CatchFailed` columns emit **0**
 - Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page
-- Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events
+- Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events. Illegal-block errors with a thrower add a direct Hit kill (and kill credit) for that thrower without changing throw counts
 - **Golden fixture** tests vs original WASM/scorekeeper CSV output
 - Playwright coverage for workflow, import/export, and statistics
 
