@@ -154,15 +154,15 @@ test.describe('Game tracking (full roster)', () => {
 
     await page.getByRole('button', { name: 'Other', exact: true }).click();
     await page.getByRole('button', { name: 'Illegal Block (No Blocking)' }).click();
-    await page.getByRole('button', { name: 'H1', exact: true }).click();
-    await page.getByRole('button', { name: 'A1', exact: true }).click();
+    await page.locator('.sk-editor-grid').getByRole('button', { name: /H1/ }).click();
+    await page.locator('.sk-editor-grid').getByRole('button', { name: /A1/ }).click();
 
     const timeline = page.locator('.sk-game-timeline');
     await expect(timeline).toContainText('H1 threw at A1');
     await expect(timeline).toContainText('Illegal Block (No Blocking)');
 
     await page.getByRole('button', { name: 'Throw', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'A1 (out)' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /A1 \(out\)/ })).toBeVisible();
 
     const eventsUrl = page.url();
     await page.goto(eventsUrl.replace(/\/events.*$/, '/stats'));
