@@ -236,7 +236,7 @@ export function MatchPage() {
     <>
       <PageHeader>Match</PageHeader>
       <MatchScoreLine matchId={matchId} />
-      <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2 }}>
+      <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2, rowGap: 1 }}>
         <Button
           type="button"
           className="bw-button bw-button--text"

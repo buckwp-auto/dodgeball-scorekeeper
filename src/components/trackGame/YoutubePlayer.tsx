@@ -342,6 +342,8 @@ export const YoutubePlayer = forwardRef<
     popoutBlocked?: boolean;
     showTrackGameHints?: boolean;
     allowLayoutToggle?: boolean;
+    /** Live VOD clock from the existing player interval — not a second timer. */
+    onDisplayTime?: (seconds: number | null) => void;
   }
 >(function YoutubePlayer(
   {
@@ -355,6 +357,7 @@ export const YoutubePlayer = forwardRef<
     popoutBlocked = false,
     showTrackGameHints = true,
     allowLayoutToggle = true,
+    onDisplayTime,
   },
   ref,
 ) {
@@ -363,11 +366,20 @@ export const YoutubePlayer = forwardRef<
   const playerRef = useRef<YtPlayer | null>(null);
   const releaseIframeFocusRef = useRef<(() => void) | null>(null);
   const pendingSeekSecondsRef = useRef<number | null>(null);
+  const onDisplayTimeRef = useRef(onDisplayTime);
+  onDisplayTimeRef.current = onDisplayTime;
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
   const [videoTitle, setVideoTitle] = useState('');
   const [embedError, setEmbedError] = useState<string | null>(null);
+
+  const publishDisplayTime = (seconds: number | null) => {
+    if (seconds != null && Number.isFinite(seconds)) {
+      setDisplayTime(seconds);
+    }
+    onDisplayTimeRef.current?.(seconds);
+  };
 
   const seekBy = (deltaSeconds: number) => {
     const player = playerRef.current;
@@ -375,7 +387,7 @@ export const YoutubePlayer = forwardRef<
     try {
       const next = Math.max(0, player.getCurrentTime() + deltaSeconds);
       player.seekTo(next, true);
-      setDisplayTime(next);
+      publishDisplayTime(next);
     } catch {
       /* ignore */
     }
@@ -403,7 +415,7 @@ export const YoutubePlayer = forwardRef<
       player.seekTo(next, true);
       // Nudge pause so the iframe paints the new frame
       player.pauseVideo();
-      setDisplayTime(next);
+      publishDisplayTime(next);
     } catch {
       /* ignore */
     }
@@ -427,7 +439,7 @@ export const YoutubePlayer = forwardRef<
         }
         try {
           playerRef.current.seekTo(seconds, true);
-          setDisplayTime(seconds);
+          publishDisplayTime(seconds);
           pendingSeekSecondsRef.current = null;
         } catch {
           pendingSeekSecondsRef.current = seconds;
@@ -456,6 +468,7 @@ export const YoutubePlayer = forwardRef<
       playerRef.current = null;
       pendingSeekSecondsRef.current = null;
       setReady(false);
+      onDisplayTimeRef.current?.(null);
       return;
     }
 
@@ -524,12 +537,12 @@ export const YoutubePlayer = forwardRef<
                   videoId,
                   startSeconds: lateSeek,
                 });
-                setDisplayTime(lateSeek);
+                publishDisplayTime(lateSeek);
               } catch {
                 /* playerVars.start already applied */
               }
             } else if (cueAt > 0) {
-              setDisplayTime(cueAt);
+              publishDisplayTime(cueAt);
             }
           },
           onError: () => {
@@ -549,6 +562,7 @@ export const YoutubePlayer = forwardRef<
       releaseIframeFocusRef.current = null;
       playerRef.current?.destroy();
       playerRef.current = null;
+      onDisplayTimeRef.current?.(null);
     };
   }, [videoId, mode === 'hidden' ? 'hidden' : 'visible']);
 
@@ -557,7 +571,7 @@ export const YoutubePlayer = forwardRef<
     if (startSeconds == null || !Number.isFinite(startSeconds)) return;
     try {
       playerRef.current?.seekTo(Math.max(0, startSeconds), true);
-      setDisplayTime(Math.max(0, startSeconds));
+      publishDisplayTime(Math.max(0, startSeconds));
     } catch {
       pendingSeekSecondsRef.current = startSeconds;
     }
@@ -569,7 +583,7 @@ export const YoutubePlayer = forwardRef<
       try {
         const player = playerRef.current;
         if (!player) return;
-        setDisplayTime(player.getCurrentTime());
+        publishDisplayTime(player.getCurrentTime());
         setPlaying(player.getPlayerState() === 1);
       } catch {
         /* ignore */
