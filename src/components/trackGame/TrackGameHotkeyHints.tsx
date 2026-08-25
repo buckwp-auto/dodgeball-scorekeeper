@@ -6,7 +6,7 @@ import {
   YOUTUBE_LAYOUT_SMALL_HOTKEY,
   YOUTUBE_LAYOUT_TALL_HOTKEY,
 } from '../../domain/youtube';
-import { GAME_ACTION_HOTKEYS } from '../../domain/hotkeys';
+import { GAME_ACTION_HOTKEYS, hotkeysForTrackGameAction } from '../../domain/hotkeys';
 import { HotkeyBadge } from '../HotkeyBadge';
 
 function Hint({
@@ -31,8 +31,8 @@ function Hint({
 function ActionHints() {
   return (
     <>
-      {GAME_ACTION_HOTKEYS.map(({ key, label }) => (
-        <Hint key={key} hotkeys={[key]} label={label} />
+      {GAME_ACTION_HOTKEYS.map(({ key, action, label }) => (
+        <Hint key={key} hotkeys={hotkeysForTrackGameAction(action)} label={label} />
       ))}
     </>
   );

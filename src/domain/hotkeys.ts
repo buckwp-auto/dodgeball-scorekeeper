@@ -29,7 +29,11 @@ export const RESULT_HOTKEYS = ['r', 't', 'y', 'u', 'g', 'h'] as const;
 /** Recovered "None" choice (not a player) */
 export const RECOVERED_NONE_HOTKEY = 'm';
 
-/** Fixed Other-tab offense keys (stable layout; do not overlap player/result keys). */
+/**
+ * Fixed Other-tab offense keys (stable layout; do not overlap player/result keys).
+ * There is no dedicated key to *open* the Other tab: every digit is already used
+ * here (1–4) or as Match/Game roster overflow (home `Q 1 2 3 4 5`, away `P 0 9 8 7 6`).
+ */
 export const OTHER_OFFENSE_HOTKEYS = ['1', '2', '3', '4'] as const;
 
 export type OtherOffenseChoice =
@@ -113,6 +117,15 @@ export const GAME_ACTION_HOTKEYS: ReadonlyArray<{
   { key: '-', action: 'undo', label: 'Undo last event' },
   { key: '+', action: 'redo', label: 'Redo last event' },
 ];
+
+/** Done is `X` plus `Enter` (Enter is not listed above so hints can show both keys). */
+export const DONE_HOTKEYS = ['x', 'Enter'] as const;
+
+export function hotkeysForTrackGameAction(action: TrackGameAction): string[] {
+  if (action === 'done') return [...DONE_HOTKEYS];
+  const row = GAME_ACTION_HOTKEYS.find((entry) => entry.action === action);
+  return row ? [row.key] : [];
+}
 
 export type PlayerHotkeySource = {
   gamePlayerId: string;
@@ -239,6 +252,7 @@ export function getDeflectionResultForKey(key: string): DeflectionResult | null 
 }
 
 export function getTrackGameActionForKey(key: string): TrackGameAction | null {
+  if (key === 'Enter') return 'done';
   if (key === '+' || key === 'Add') return 'redo';
   if (key === '-' || key === '_' || key === 'Subtract') return 'undo';
   const normalized = key.length === 1 ? key.toLowerCase() : key;

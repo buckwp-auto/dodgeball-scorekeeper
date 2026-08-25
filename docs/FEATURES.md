@@ -50,7 +50,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 - **Catch recovery** — pick a teammate (including outs) or **None** (`M`)
 - Auto-commit when a draft is complete and dirty; **Done / Restore / Insert below / Delete**
 - **Undo / Redo** (`-` / `+`) remove or restore the last entered event (session redo stack; cleared when a new event is committed). Distinct from `N` (delete selected) and `V` (restore draft from saved selection)
-- **Game Complete** idle state after a finish is recorded (undo/redo still work); **Edit roster** still available there
+- **Game Complete** idle state after a finish is recorded (undo/redo still work); **Edit roster** still available there; **Enter** goes to **Next game**
 - Timeline lists events (newest-oriented virtualized list); select to edit
 
 ### Live elimination
@@ -82,10 +82,10 @@ Derived from persisted events (not a separate toggle):
 
 ### Finish after team wipe
 
-- Last elimination stays on the **Throw** tab — press **Done** (`X`) before advancing to Finish
+- Last elimination stays on the **Throw** tab — press **Done** (`X` or `Enter`) before advancing to Finish
 - Finish then opens with the surviving team pre-selected
 - **Enter** (or Done) confirms; wipe prompt does not auto-commit the finish
-- Then lands on **Game Complete** with timeline still visible
+- Then lands on **Game Complete** with timeline still visible; **Enter** continues to **Next game** (same match, not a different match)
 
 ## Hotkeys
 
@@ -101,14 +101,15 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off) |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
 | Recovered None | `M` |
-| Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
+| Actions | `Z` deflect, `X` or `Enter` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
 | Undo / redo last event | `-` undo, `+` redo |
-| Confirm wipe finish | `X` Done after last out, then `Enter` |
+| Confirm wipe finish | `X` or `Enter` Done after last out, then `Enter` |
+| Game Complete | `Enter` Next game (same match) |
 | YouTube layout | `[` small/docked, `]` tall |
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |
 
-Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable.
+Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable. There is no hotkey to open the **Other** tab — every digit is already bound (offenses `1–4` on that tab; roster overflow `Q 1 2 3 4 5` / `P 0 9 8 7 6`). `Enter` in a timestamp or other text field still commits that field (document hotkeys ignore focused inputs).
 
 ## Statistics & interop
 

@@ -2,6 +2,7 @@ import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
+import { HotkeyBadge } from '../components/HotkeyBadge';
 import { MatchScoreLine, useMatchSeriesScore } from '../components/MatchScoreLine';
 import { PageHeader } from '../components/Ui';
 import {
@@ -693,36 +694,39 @@ export function GameEventsPage() {
 
       if (isYoutubeControlHotkey(key)) return;
 
-      const undoRedoAction = getTrackGameActionForKey(key);
-      if (undoRedoAction === 'undo') {
+      const action = getTrackGameActionForKey(key);
+      if (action === 'undo') {
         event.preventDefault();
         handleUndo();
         return;
       }
-      if (undoRedoAction === 'redo') {
+      if (action === 'redo') {
         event.preventDefault();
         handleRedo();
         return;
       }
 
-      if (gameCompleteIdle) return;
-
-      if (key === 'Enter') {
-        if (
-          (awaitingFinishConfirm ||
-            (visibleTab === 'finish' &&
-              isFinishDraftComplete(finishDraft) &&
-              !gameFinished &&
-              !effectiveSelectedId))
-        ) {
+      if (gameCompleteIdle) {
+        if (key === 'Enter') {
           event.preventDefault();
-          confirmFinishEvent();
+          goToNextGame();
         }
         return;
       }
 
-      const action = undoRedoAction;
       if (action === 'done') {
+        // Enter is Done only when a draft can be committed or Done is on screen.
+        // Do not reset an incomplete throw/error with a stray Enter.
+        if (
+          key === 'Enter' &&
+          !wipeAwaitingDone &&
+          !awaitingFinishConfirm &&
+          !isComplete &&
+          !lockedTab
+        ) {
+          return;
+        }
+        event.preventDefault();
         handleDone();
         return;
       }
@@ -772,11 +776,11 @@ export function GameEventsPage() {
     },
     [
       awaitingFinishConfirm,
-      confirmFinishEvent,
-      finishDraft,
-      gameFinished,
       gameCompleteIdle,
-      effectiveSelectedId,
+      goToNextGame,
+      wipeAwaitingDone,
+      isComplete,
+      lockedTab,
       handleDelete,
       handleUndo,
       handleRedo,
@@ -893,7 +897,7 @@ export function GameEventsPage() {
 
         {wipeAwaitingDone && !gameFinished ? (
           <Typography color="warning.main" sx={{ mb: editorCompact ? 1 : 2 }}>
-            All players on one team are out — press Done to finish.
+            All players on one team are out — press Done (X or Enter) to finish.
           </Typography>
         ) : null}
 
@@ -923,14 +927,17 @@ export function GameEventsPage() {
               >
                 Back to match
               </Button>
-              <Button
-                type="button"
-                className="bw-button bw-button--text"
-                variant="contained"
-                onClick={goToNextGame}
-              >
-                Next game
-              </Button>
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                <Button
+                  type="button"
+                  className="bw-button bw-button--text"
+                  variant="contained"
+                  onClick={goToNextGame}
+                >
+                  Next game
+                </Button>
+                <HotkeyBadge hotkey="Enter" />
+              </Stack>
             </Stack>
           </Stack>
         ) : (

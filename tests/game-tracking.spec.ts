@@ -57,12 +57,12 @@ test.describe('Game tracking (full roster)', () => {
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
     await page.getByRole('button', { name: 'Home Hawks', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
-    await page.getByRole('button', { name: 'Done' }).click();
+    await page.keyboard.press('Enter');
     await expect(page.getByText('Game Complete!')).toBeVisible();
 
     await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
 
-    await page.getByRole('button', { name: 'Next game' }).click();
+    await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { name: 'Game 2', exact: true })).toBeVisible();
     await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
     await expect(page.getByRole('button', { name: 'Track Game' })).toBeVisible();

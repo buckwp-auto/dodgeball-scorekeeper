@@ -21,6 +21,7 @@ import {
   getThrowResultForKey,
   getTrackGameActionForKey,
   hotkeyForDeflectionResult,
+  hotkeysForTrackGameAction,
   hotkeyForGamePlayer,
   hotkeyForOtherOffenseIndex,
   isOtherOffenseChoiceActive,
@@ -164,6 +165,15 @@ describe('undo / redo hotkeys', () => {
   });
 });
 
+describe('done hotkeys', () => {
+  it('maps X and Enter to done', () => {
+    expect(getTrackGameActionForKey('x')).toBe('done');
+    expect(getTrackGameActionForKey('X')).toBe('done');
+    expect(getTrackGameActionForKey('Enter')).toBe('done');
+    expect(hotkeysForTrackGameAction('done')).toEqual(['x', 'Enter']);
+  });
+});
+
 describe('other tab offense hotkeys', () => {
   it('maps 1-4 to fixed offense choices in UI order', () => {
     expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4']);
@@ -175,6 +185,18 @@ describe('other tab offense hotkeys', () => {
       GameEventErrorOffense.WastedBall,
     );
     expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
+  });
+
+  it('leaves no digit free for an Other-tab switch key', () => {
+    const rosterDigits = new Set(
+      [...ROSTER_HOME_OVERFLOW_HOTKEYS, ...ROSTER_AWAY_OVERFLOW_HOTKEYS].filter(
+        (key) => key >= '0' && key <= '9',
+      ),
+    );
+    const otherDigits = new Set(OTHER_OFFENSE_HOTKEYS);
+    for (const digit of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+      expect(rosterDigits.has(digit) || otherDigits.has(digit)).toBe(true);
+    }
   });
 
   it('toggles offense choices without shifting hotkey slots', () => {

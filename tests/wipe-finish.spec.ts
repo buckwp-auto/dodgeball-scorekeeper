@@ -55,13 +55,21 @@ test.describe('Wipe finish prompt', () => {
     await page.keyboard.press('r');
 
     await expect(
-      page.getByText('All players on one team are out — press Done to finish.'),
+      page.getByText('All players on one team are out — press Done (X or Enter) to finish.'),
     ).toBeVisible();
     await expect(page.getByRole('heading', { name: 'throw', exact: true })).toBeVisible();
     await expect(page.getByText('confirm the winner with Enter.')).toHaveCount(0);
     await expect(page.getByText('Game Complete!')).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Done' }).click();
+    await page.getByPlaceholder('m:ss').first().click();
+    await page.keyboard.press('Enter');
+    await expect(
+      page.getByText('All players on one team are out — press Done (X or Enter) to finish.'),
+    ).toBeVisible();
+    await expect(page.getByText('confirm the winner with Enter.')).toHaveCount(0);
+
+    await page.locator('body').click();
+    await page.keyboard.press('Enter');
     await expect(
       page.getByText('All players on one team are out — confirm the winner with Enter.'),
     ).toBeVisible();
@@ -69,5 +77,9 @@ test.describe('Wipe finish prompt', () => {
 
     await page.keyboard.press('Enter');
     await expect(page.getByText('Game Complete!')).toBeVisible();
+
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Game 2', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Track Game' })).toBeVisible();
   });
 });
