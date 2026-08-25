@@ -135,4 +135,72 @@ test.describe('Game tracking (full roster)', () => {
     await expect(page.locator('.sk-game-timeline')).toContainText('H2');
     await expect(page.locator('.sk-game-timeline')).not.toContainText('H1');
   });
+
+  test('reorders the timeline when an event timestamp is edited', async ({ page }) => {
+    const data = createEmptyDatabase();
+    const home = addTeamRow(data, 'Home Hawks');
+    const away = addTeamRow(data, 'Away Owls');
+    const h1 = addPlayerRow(data, home.Id, 'H1');
+    const h2 = addPlayerRow(data, home.Id, 'H2');
+    const a1 = addPlayerRow(data, away.Id, 'A1');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, h1.Id, true);
+    toggleMatchPlayer(data, match.Id, h2.Id, true);
+    toggleMatchPlayer(data, match.Id, a1.Id, false);
+    const gameId = addGameRow(data, match.Id);
+    toggleGamePlayer(data, match.Id, gameId, h1.Id);
+    toggleGamePlayer(data, match.Id, gameId, h2.Id);
+    toggleGamePlayer(data, match.Id, gameId, a1.Id);
+
+    const infos = getGamePlayerInfos(data, match.Id, gameId);
+    const gp = (name: string) => infos.find((row) => row.playerName === name)!.gamePlayerId;
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: gp('H2'),
+          targetGamePlayerId: gp('A1'),
+          resultId: ThrowResult.Miss,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 10 },
+    );
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: gp('H1'),
+          targetGamePlayerId: gp('A1'),
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 40 },
+    );
+
+    await page.addInitScript(
+      ({ key, value }) => sessionStorage.setItem(key, value),
+      { key: STORAGE_KEY, value: serializeDatabase(data) },
+    );
+    await page.goto(`/matches/${match.Id}/games/${gameId}/events`);
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+
+    const timeline = page.locator('.sk-game-timeline');
+    await expect(timeline).toHaveText(/0:40[\s\S]*H1[\s\S]*0:10[\s\S]*H2[\s\S]*Game start/);
+
+    await timeline.getByRole('button', { name: /H2 threw/ }).click();
+    const timeField = timeline.getByPlaceholder('m:ss');
+    await expect(timeField).toBeVisible();
+    await timeField.fill('1:00');
+    await timeField.press('Enter');
+
+    await expect(timeline).toHaveText(/1:00[\s\S]*H2[\s\S]*0:40[\s\S]*H1[\s\S]*Game start/);
+  });
 });
