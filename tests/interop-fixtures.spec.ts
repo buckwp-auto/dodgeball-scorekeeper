@@ -43,7 +43,10 @@ test.describe('Interop fixtures (.scrkpr)', () => {
 
     await navigateMenu(page, 'Matches');
     await expect(
-      page.getByRole('button', { name: matchLabelFromFixture('interop-basic.scrkpr') }),
+      page.getByRole('button', {
+        name: matchLabelFromFixture('interop-basic.scrkpr'),
+        exact: true,
+      }),
     ).toBeVisible();
   });
 
@@ -60,7 +63,10 @@ test.describe('Interop fixtures (.scrkpr)', () => {
 
     await gotoScorekeeper(page);
     await navigateMenu(page, 'Matches');
-    await page.getByRole('button', { name: matchLabelFromFixture('interop-basic.scrkpr') }).click();
+    await page.getByRole('button', {
+      name: matchLabelFromFixture('interop-basic.scrkpr'),
+      exact: true,
+    }).click();
 
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download Match Statistics' }).click();
@@ -81,7 +87,10 @@ test.describe('Interop fixtures (.scrkpr)', () => {
 
     await navigateMenu(page, 'Matches');
     await page
-      .getByRole('button', { name: matchLabelFromFixture('interop-with-throw.scrkpr') })
+      .getByRole('button', {
+        name: matchLabelFromFixture('interop-with-throw.scrkpr'),
+        exact: true,
+      })
       .click();
     await expect(page.getByRole('button', { name: 'Track Match' })).toBeEnabled();
   });
@@ -100,7 +109,10 @@ test.describe('Interop fixtures (.scrkpr)', () => {
     await gotoScorekeeper(page);
     await navigateMenu(page, 'Matches');
     await page
-      .getByRole('button', { name: matchLabelFromFixture('interop-with-throw.scrkpr') })
+      .getByRole('button', {
+        name: matchLabelFromFixture('interop-with-throw.scrkpr'),
+        exact: true,
+      })
       .click();
 
     const downloadPromise = page.waitForEvent('download');
