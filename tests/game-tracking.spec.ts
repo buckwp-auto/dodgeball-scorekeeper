@@ -200,6 +200,7 @@ test.describe('Game tracking (full roster)', () => {
     await expect(timeField).toBeVisible();
     await timeField.fill('1:00');
     await timeField.press('Enter');
+    await page.getByRole('button', { name: 'Done' }).click();
 
     await expect(timeline).toHaveText(/1:00[\s\S]*H2[\s\S]*0:40[\s\S]*H1[\s\S]*Game start/);
   });
