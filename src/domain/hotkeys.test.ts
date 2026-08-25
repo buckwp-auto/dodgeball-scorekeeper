@@ -26,6 +26,7 @@ import {
   hotkeyForOtherOffenseIndex,
   isOtherOffenseChoiceActive,
   otherOffenseUiOrder,
+  type OtherTabDraft,
 } from './hotkeys';
 import { DeflectionResult, GameEventErrorOffense, ThrowResult } from './statistics/constants';
 import { throwResultUiOrder } from './gameEvents';
@@ -227,10 +228,10 @@ describe('other tab offense hotkeys', () => {
       { gamePlayerId: 'h1', playerName: 'Alex', teamHome: true },
       { gamePlayerId: 'a1', playerName: 'Casey', teamHome: false },
     ];
-    let draft = {
+    let draft: OtherTabDraft = {
       offenderGamePlayerId: '',
       throwerGamePlayerId: '',
-      offenseId: GameEventErrorOffense.BlockIllegal as GameEventErrorOffense | null,
+      offenseId: GameEventErrorOffense.BlockIllegal,
     };
     draft = applyPlayerHotkeyToErrorDraft(draft, players, 'a')!;
     expect(draft.throwerGamePlayerId).toBe('h1');
