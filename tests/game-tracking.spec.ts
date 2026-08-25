@@ -160,9 +160,10 @@ test.describe('Game tracking (full roster)', () => {
     const timeline = page.locator('.sk-game-timeline');
     await expect(timeline).toContainText('H1 threw at A1');
     await expect(timeline).toContainText('Illegal Block (No Blocking)');
-
-    await page.getByRole('button', { name: 'Throw', exact: true }).click();
-    await expect(page.getByRole('button', { name: /A1 \(out\)/ })).toBeVisible();
+    await expect(
+      page.locator('.sk-editor-grid').getByRole('button', { name: /A1 \(out\)/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/Eliminated! \(Home Hawks win\)/)).toBeVisible();
 
     const eventsUrl = page.url();
     await page.goto(eventsUrl.replace(/\/events.*$/, '/stats'));
