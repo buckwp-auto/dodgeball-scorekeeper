@@ -188,14 +188,13 @@ describe('other tab offense hotkeys', () => {
   });
 
   it('leaves no digit free for an Other-tab switch key', () => {
-    const rosterDigits = new Set(
-      [...ROSTER_HOME_OVERFLOW_HOTKEYS, ...ROSTER_AWAY_OVERFLOW_HOTKEYS].filter(
-        (key) => key >= '0' && key <= '9',
-      ),
-    );
-    const otherDigits = new Set(OTHER_OFFENSE_HOTKEYS);
+    const occupied = new Set<string>([
+      ...ROSTER_HOME_OVERFLOW_HOTKEYS,
+      ...ROSTER_AWAY_OVERFLOW_HOTKEYS,
+      ...OTHER_OFFENSE_HOTKEYS,
+    ]);
     for (const digit of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
-      expect(rosterDigits.has(digit) || otherDigits.has(digit)).toBe(true);
+      expect(occupied.has(digit)).toBe(true);
     }
   });
 
