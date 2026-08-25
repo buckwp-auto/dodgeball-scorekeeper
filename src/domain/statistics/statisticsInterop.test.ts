@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeDatabase } from '../database';
 import { getStatisticsSummaryCsvText } from './statisticsFormatService';
 
-const fixturesDir = path.resolve(__dirname, '../../../../tests/fixtures');
+const fixturesDir = path.resolve(__dirname, '../../../tests/fixtures');
 
 function loadFixture(name: string) {
   const raw = readFileSync(path.join(fixturesDir, name), 'utf-8');

@@ -16,7 +16,7 @@ import {
 } from './leagueSplitMerge';
 import { MATCH_TABLES, ROSTER_TABLES } from './tablePartitions';
 
-const fixturesDir = path.resolve(__dirname, '../../../tests/fixtures');
+const fixturesDir = path.resolve(__dirname, '../../tests/fixtures');
 
 function loadSixTeamFixture() {
   const raw = readFileSync(

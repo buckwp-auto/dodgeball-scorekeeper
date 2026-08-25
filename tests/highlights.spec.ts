@@ -6,17 +6,17 @@ import {
   addTeam,
   createEmptyDatabase,
   serializeDatabase,
-} from '../react-app/src/domain/database';
+} from '../src/domain/database';
 import {
   addGame,
   toggleGamePlayer,
   toggleMatchPlayer,
-} from '../react-app/src/domain/matchGame';
+} from '../src/domain/matchGame';
 import {
   getGamePlayerInfos,
   persistThrowGameEvent,
-} from '../react-app/src/domain/gameEvents';
-import { ThrowResult } from '../react-app/src/domain/statistics/constants';
+} from '../src/domain/gameEvents';
+import { ThrowResult } from '../src/domain/statistics/constants';
 
 function seedGameWithThrow() {
   const data = createEmptyDatabase();

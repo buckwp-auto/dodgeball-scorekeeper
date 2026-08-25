@@ -6,14 +6,14 @@ import {
   addTeam,
   createEmptyDatabase,
   serializeDatabase,
-} from '../react-app/src/domain/database';
+} from '../src/domain/database';
 import {
   addGame,
   toggleGamePlayer,
   toggleMatchPlayer,
-} from '../react-app/src/domain/matchGame';
-import { getGamePlayerInfos } from '../react-app/src/domain/gameEvents';
-import { buildPermanentPlayerHotkeys } from '../react-app/src/domain/hotkeys';
+} from '../src/domain/matchGame';
+import { getGamePlayerInfos } from '../src/domain/gameEvents';
+import { buildPermanentPlayerHotkeys } from '../src/domain/hotkeys';
 
 function seedOneVOneGame() {
   const data = createEmptyDatabase();

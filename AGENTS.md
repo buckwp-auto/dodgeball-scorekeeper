@@ -8,20 +8,20 @@ Claude Code also loads [CLAUDE.md](CLAUDE.md), which points back here.
 
 ```bash
 npm run dev          # Vite at http://127.0.0.1:5173/
-npm test             # Vitest (react-app/src/**/*.test.ts)
+npm test             # Vitest (src/**/*.test.ts)
 npm run test:e2e     # Playwright (tests/*.spec.ts)
 npm run test:interop # golden CSV + fixture e2e
 ```
 
-Firebase is optional. Without `react-app/.env.local`, the app is local-only (session storage + `.scrkpr`).
+Firebase is optional. Without `.env.local`, the app is local-only (session storage + `.scrkpr`).
 
 ## Non-negotiables
 
-- Domain logic in `react-app/src/domain/` — pure TypeScript, no React/MUI.
-- UI in `react-app/src/pages/` and `react-app/src/components/`; cloud I/O in `react-app/src/cloud/`; React context in `react-app/src/state/`.
+- Domain logic in `src/domain/` — pure TypeScript, no React/MUI.
+- UI in `src/pages/` and `src/components/`; cloud I/O in `src/cloud/`; React context in `src/state/`.
 - `.scrkpr` / `DatabaseDto` fields and table names stay **PascalCase** (`Id`, `TeamIdHome`, `Tables.Team`). Newer types (`ImageRef`, `LeagueMeta`) are camelCase.
 - Do **not** change `tests/fixtures/*.golden.csv` under the default Legacy stat-credit policy.
-- Keep `react-app/src/domain/limits.ts` in sync with `firestore.rules`.
+- Keep `src/domain/limits.ts` in sync with `firestore.rules`.
 - Mutate the working DB through `useDatabase().mutate`, not ad-hoc `sessionStorage`.
 - MUI + `sx`; stable e2e classes use the `sk-` prefix. Prefer `getByRole` in Playwright.
 - Named exports, strict TypeScript, match surrounding style (no ESLint/Prettier config).

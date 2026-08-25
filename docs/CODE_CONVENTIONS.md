@@ -6,10 +6,10 @@ Related: [FEATURES.md](./FEATURES.md) (product behavior), [FIREBASE_SETUP.md](./
 
 ## Principles
 
-- **Domain first.** Scoring, stats, roster, and `.scrkpr` shape live in `react-app/src/domain/` as pure TypeScript. Pages and components call domain functions; they do not reimplement rules.
+- **Domain first.** Scoring, stats, roster, and `.scrkpr` shape live in `src/domain/` as pure TypeScript. Pages and components call domain functions; they do not reimplement rules.
 - **Keep the legacy format stable.** Table names and row fields on `DatabaseDto` are PascalCase (`Id`, `TeamIdHome`, `Tables.Team`) to stay compatible with the original WASM scorekeeper. Do not rename them for “modern” style.
 - **Golden CSV is a contract.** Under the default **Legacy** stat-credit policy, `tests/fixtures/*.golden.csv` must stay byte-identical. Display stats / credit views sit *on top* of the engine — they do not change CSV output.
-- **Limits are shared.** String lengths and write quotas in `react-app/src/domain/limits.ts` must stay in sync with [`firestore.rules`](../firestore.rules). Changing one without the other is a bug.
+- **Limits are shared.** String lengths and write quotas in `src/domain/limits.ts` must stay in sync with [`firestore.rules`](../firestore.rules). Changing one without the other is a bug.
 - **UI is MUI, not custom CSS.** Layout and theming use `@mui/material` + `sx`. Global CSS is only for Playwright hooks, a few layout grids, and legacy `bw-*` search widgets.
 - **Admins mass-destroy; scorers undo their game.** League admins (and local-only mode) own league-wide destructive actions: delete teams/core roster players, delete matches, replace shared league data, change league settings. People entering a match or game must be able to **undo their own scoring work** without being admin: change who’s active in a game, remove a player they added by mistake from Match/Game add, roll back events when editing that game’s roster, undo/delete events they recorded. Do not require admin for those, and do not let match/game entry delete the core team roster or other mass-destroy paths.
 
@@ -17,19 +17,19 @@ Related: [FEATURES.md](./FEATURES.md) (product behavior), [FIREBASE_SETUP.md](./
 
 | Path | Purpose |
 |------|---------|
-| `react-app/src/domain/` | Pure logic: database, events, elimination, hotkeys, statistics, limits |
-| `react-app/src/pages/` | Route screens (`OverviewPage`, `GamePage`, …) |
-| `react-app/src/components/` | Shared UI (`stats/`, `trackGame/`, `Ui.tsx`, …) |
-| `react-app/src/state/` | React context: `DatabaseContext`, `AuthContext`, `LeagueContext`, `ColorModeContext` |
-| `react-app/src/cloud/` | Firebase Auth / Firestore API (no UI) |
-| `react-app/src/hooks/` | Reusable hooks (`useDocumentHotkeys`, `useLastScoring`, …) |
-| `react-app/src/theme.ts` | MUI theme (`createAppTheme`, primary `#1565c0`, light/dark) |
+| `src/domain/` | Pure logic: database, events, elimination, hotkeys, statistics, limits |
+| `src/pages/` | Route screens (`OverviewPage`, `GamePage`, …) |
+| `src/components/` | Shared UI (`stats/`, `trackGame/`, `Ui.tsx`, …) |
+| `src/state/` | React context: `DatabaseContext`, `AuthContext`, `LeagueContext`, `ColorModeContext` |
+| `src/cloud/` | Firebase Auth / Firestore API (no UI) |
+| `src/hooks/` | Reusable hooks (`useDocumentHotkeys`, `useLastScoring`, …) |
+| `src/theme.ts` | MUI theme (`createAppTheme`, primary `#1565c0`, light/dark) |
 | `tests/` | Playwright e2e (`*.spec.ts`) + helpers |
 | `tests/fixtures/` | `.scrkpr` + golden CSV + sample league |
 | `docs/` | Product and contributor docs |
 | `firestore.rules` | Cloud security rules |
 
-Root `package.json` scripts proxy into `react-app/` (`dev`, `build`, `test`) and run Playwright from the repo root (`test:e2e`).
+Root `package.json` runs the Vite app (`dev`, `build`, `test`) and Playwright e2e (`test:e2e`).
 
 ## TypeScript & formatting
 
@@ -112,7 +112,7 @@ Don’t invent `data-testid` unless a control can’t be reached by role + `sk-*
 
 | Kind | Where | Command |
 |------|--------|---------|
-| Unit / domain | `react-app/src/**/*.test.ts` (Vitest, next to source) | `npm test` |
+| Unit / domain | `src/**/*.test.ts` (Vitest, next to source) | `npm test` |
 | E2e | `tests/*.spec.ts` (Playwright + `tests/helpers/scorekeeper-page.ts`) | `npm run test:e2e` |
 | Interop | Vitest golden CSV + Playwright fixture load | `npm run test:interop` |
 

@@ -6,21 +6,21 @@ import {
   addTeam,
   createEmptyDatabase,
   serializeDatabase,
-} from '../react-app/src/domain/database';
+} from '../src/domain/database';
 import {
   addGame,
   toggleGamePlayer,
   toggleMatchPlayer,
-} from '../react-app/src/domain/matchGame';
+} from '../src/domain/matchGame';
 import {
   getGamePlayerInfos,
   persistThrowGameEvent,
-} from '../react-app/src/domain/gameEvents';
+} from '../src/domain/gameEvents';
 import {
   buildPermanentPlayerHotkeys,
   hotkeyForResult,
-} from '../react-app/src/domain/hotkeys';
-import { ThrowResult } from '../react-app/src/domain/statistics/constants';
+} from '../src/domain/hotkeys';
+import { ThrowResult } from '../src/domain/statistics/constants';
 
 /** A1 hits H1, so H1 is out while the ball he already released is still live. */
 function seedGameWithOutHomePlayer() {

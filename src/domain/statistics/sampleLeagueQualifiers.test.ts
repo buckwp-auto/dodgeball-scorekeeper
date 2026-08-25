@@ -11,7 +11,7 @@ import {
 
 const fixturePath = path.resolve(
   __dirname,
-  '../../../../tests/fixtures/league-six-teams.scrkpr',
+  '../../../tests/fixtures/league-six-teams.scrkpr',
 );
 
 describe('sample league highlight qualifiers', () => {

@@ -10,7 +10,6 @@ Thanks for helping with the dodgeball scorekeeper. This is a small MIT-licensed 
 
 ```bash
 npm install
-npm ci --prefix react-app
 npx playwright install chromium
 
 npm run dev          # http://127.0.0.1:5173/
@@ -23,7 +22,7 @@ See the [README](README.md) for layout, GitHub Pages, and data keys. You do not 
 
 ## What we look for
 
-1. Domain logic in `react-app/src/domain/`, UI in `pages/` + `components/`.
+1. Domain logic in `src/domain/`, UI in `pages/` + `components/`.
 2. Tests: Vitest next to changed domain code; Playwright if a workflow changed.
 3. Golden CSV unchanged unless you intentionally changed the Legacy stats engine.
 4. `docs/FEATURES.md` updated for user-facing behavior.
@@ -47,7 +46,7 @@ Read CONTRIBUTING.md and docs/CODE_CONVENTIONS.md (and docs/FEATURES.md if this 
 
 Implement: <describe the change and acceptance criteria>.
 
-Follow existing patterns. Keep scoring/stats/roster rules in react-app/src/domain/ with no React. Keep .scrkpr DTO fields PascalCase. Do not change tests/fixtures/*.golden.csv under the default Legacy policy. Sync react-app/src/domain/limits.ts with firestore.rules if you add/change string limits. Update docs/FEATURES.md if players or admins see new behavior. Add Vitest tests next to domain modules; extend Playwright specs in tests/ if a UI workflow changed. Admins mass-destroy; scorers undo the game they are managing (not the core team roster).
+Follow existing patterns. Keep scoring/stats/roster rules in src/domain/ with no React. Keep .scrkpr DTO fields PascalCase. Do not change tests/fixtures/*.golden.csv under the default Legacy policy. Sync src/domain/limits.ts with firestore.rules if you add/change string limits. Update docs/FEATURES.md if players or admins see new behavior. Add Vitest tests next to domain modules; extend Playwright specs in tests/ if a UI workflow changed. Admins mass-destroy; scorers undo the game they are managing (not the core team roster).
 
 Run npm test. If you touched Track Game, roster, Overview, import/export, or stats UI, also run npm run test:e2e and/or npm run test:interop.
 

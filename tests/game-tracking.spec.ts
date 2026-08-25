@@ -17,17 +17,17 @@ import {
   addTeam as addTeamRow,
   createEmptyDatabase,
   serializeDatabase,
-} from '../react-app/src/domain/database';
+} from '../src/domain/database';
 import {
   addGame as addGameRow,
   toggleGamePlayer,
   toggleMatchPlayer,
-} from '../react-app/src/domain/matchGame';
+} from '../src/domain/matchGame';
 import {
   getGamePlayerInfos,
   persistThrowGameEvent,
-} from '../react-app/src/domain/gameEvents';
-import { ThrowResult } from '../react-app/src/domain/statistics/constants';
+} from '../src/domain/gameEvents';
+import { ThrowResult } from '../src/domain/statistics/constants';
 
 /** End-to-end roster and game tracking. */
 test.describe('Game tracking (full roster)', () => {
@@ -122,7 +122,7 @@ test.describe('Game tracking (full roster)', () => {
     await expect(page.locator('.sk-game-timeline')).toContainText('H1');
     await expect(page.locator('.sk-game-timeline')).toContainText('H2');
 
-    await page.getByRole('button', { name: 'Edit roster' }).click();
+    await page.getByRole('button', { name: 'Edit active players' }).click();
     await expect(page.getByRole('heading', { name: /^Game \d+$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Track Game' })).toBeVisible();
 

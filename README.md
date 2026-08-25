@@ -6,7 +6,6 @@ Static React scorekeeper for dodgeball matches: teams, rosters, games, `.scrkpr`
 
 ```bash
 npm install
-npm ci --prefix react-app
 npx playwright install chromium
 
 npm run dev          # http://127.0.0.1:5173/
@@ -20,7 +19,7 @@ npm run test:e2e     # Playwright
 
 | Path | Purpose |
 |------|---------|
-| `react-app/` | Vite + React 19 app (`src/`, domain logic, UI) |
+| `src/` | Vite + React 19 app (domain logic, UI) |
 | `tests/` | Playwright e2e + `fixtures/` (`.scrkpr` + golden CSV) |
 | `.github/workflows/gh-pages.yml` | Deploy to GitHub Pages |
 
@@ -29,7 +28,7 @@ npm run test:e2e     # Playwright
 - Session storage key: `SCOREKEEPER_DATA` (working database)
 - Local storage key: `SCOREKEEPER_ACTIVE_LEAGUE` (last opened cloud league; reopened on sign-in)
 - Export/import: **Download Database** / **Load from file** on Overview (`.scrkpr` JSON); **Load sample league (demo)** for the six-team fixture
-- Optional **Firebase** shared leagues (Google sign-in, per-match sync): see [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) and `react-app/.env.example`
+- Optional **Firebase** shared leagues (Google sign-in, per-match sync): see [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) and `.env.example`
 
 ## GitHub Pages
 

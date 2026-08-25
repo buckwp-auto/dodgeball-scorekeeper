@@ -2,7 +2,7 @@
 
 Step-by-step console and CLI setup for shared cloud leagues. The web app config is public by design; security comes from Auth, App Check, and Firestore rules—not from hiding keys.
 
-Related: [`firestore.rules`](../firestore.rules), [`react-app/.env.example`](../react-app/.env.example).
+Related: [`firestore.rules`](../firestore.rules), [`.env.example`](../.env.example).
 
 ---
 
@@ -175,7 +175,7 @@ Optional but recommended: Firebase Emulator Suite + rules unit tests in CI later
 
 ## 8. Vite environment variables
 
-In `react-app` (local `.env` / `.env.local`, and GitHub Actions secrets or vars for Pages builds):
+In the repo root (local `.env` / `.env.local`, and GitHub Actions secrets or vars for Pages builds):
 
 ```bash
 VITE_FIREBASE_API_KEY=
@@ -192,7 +192,7 @@ Map 1:1 from the Firebase web config + App Check site key.
 
 **GitHub Pages:** add the same values under repo **Settings → Secrets and variables → Actions**, then pass them into the build step in `.github/workflows/gh-pages.yml` as `VITE_*` env vars. Never put service account JSON or reCAPTCHA **secrets** in the workflow.
 
-Local example: `react-app/.env.local` (gitignored).
+Local example: `.env.local` (gitignored).
 
 ---
 
