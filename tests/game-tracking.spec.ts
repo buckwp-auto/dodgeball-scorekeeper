@@ -74,6 +74,7 @@ test.describe('Game tracking (full roster)', () => {
     await expect(page.getByRole('heading', { name: 'Track Match' })).toBeVisible();
     await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
     await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'End Match' })).toBeVisible();
   });
 
   test('edit roster from track game rolls back events after confirm', async ({ page }) => {

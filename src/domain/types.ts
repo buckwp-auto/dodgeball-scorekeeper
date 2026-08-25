@@ -35,6 +35,10 @@ export type MatchRow = {
   YoutubeUrl?: string | null;
   /** Cloud uid of the user who created the match (match scorer). */
   CreatedByUid?: string | null;
+  /** True when the scorer recorded that the match has ended. */
+  Ended?: boolean;
+  /** Video offset (seconds) of the match-end log row, aligned with last game finish. */
+  EndedVideoOffsetSeconds?: number | null;
 };
 
 export type MatchPlayerRow = {

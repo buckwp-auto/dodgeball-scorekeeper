@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
-import { canDeleteMatchGame } from './matchPermissions';
+import { canDeleteMatchGame, canUndoMatchEnd } from './matchPermissions';
 
 describe('canDeleteMatchGame', () => {
   it('allows anyone when there is no cloud league', () => {
@@ -53,6 +53,40 @@ describe('canDeleteMatchGame', () => {
         createdByUid: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe('canUndoMatchEnd', () => {
+  it('matches canDeleteMatchGame so scorers can undo without being admin', () => {
+    const cases = [
+      {
+        hasActiveLeague: false,
+        isLeagueAdmin: false,
+        userUid: null,
+        createdByUid: null,
+      },
+      {
+        hasActiveLeague: true,
+        isLeagueAdmin: true,
+        userUid: 'admin-1',
+        createdByUid: 'scorer-1',
+      },
+      {
+        hasActiveLeague: true,
+        isLeagueAdmin: false,
+        userUid: 'scorer-1',
+        createdByUid: 'scorer-1',
+      },
+      {
+        hasActiveLeague: true,
+        isLeagueAdmin: false,
+        userUid: 'member-2',
+        createdByUid: 'scorer-1',
+      },
+    ] as const;
+    for (const options of cases) {
+      expect(canUndoMatchEnd(options)).toBe(canDeleteMatchGame(options));
+    }
   });
 });
 

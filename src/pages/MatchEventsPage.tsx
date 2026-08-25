@@ -5,12 +5,14 @@ import { MatchScoreLine } from '../components/MatchScoreLine';
 import { PageHeader, TextButton } from '../components/Ui';
 import { getMatchName } from '../domain/database';
 import { addGameWithAutoRoster } from '../domain/rosterAutoSelect';
+import { endMatch, isMatchEnded, undoEndMatch } from '../domain/matchEnd';
 import {
   canNavigateToGameEvents,
   getMatchById,
   getMatchGames,
 } from '../domain/matchGame';
 import type { DatabaseDto } from '../domain/types';
+import { formatVideoTime } from '../domain/youtube';
 import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
 
@@ -29,6 +31,9 @@ export function MatchEventsPage() {
   const match = getMatchById(data, matchId);
   const games = getMatchGames(data, matchId);
   const showDeleteGame = canDeleteGame(match?.CreatedByUid);
+  const matchEnded = isMatchEnded(match);
+  const endedTimeLabel = formatVideoTime(match?.EndedVideoOffsetSeconds);
+  const showMatchEvents = games.length > 0 || matchEnded;
 
   const onAddGame = () => {
     const { gameId } = mutate(
@@ -48,6 +53,35 @@ export function MatchEventsPage() {
     navigate(`/matches/${matchId}/games/${gameId}`);
   };
 
+  const onEndMatch = () => {
+    if (!window.confirm('End this match? You can undo this from the match events list.')) {
+      return;
+    }
+    mutate(
+      (draft) => {
+        endMatch(draft, matchId);
+        const match = getMatchById(draft, matchId);
+        return match
+          ? `Ended match (${getMatchName(draft, match)}).`
+          : 'Ended match.';
+      },
+      (message) => message,
+    );
+  };
+
+  const onUndoEndMatch = () => {
+    mutate(
+      (draft) => {
+        undoEndMatch(draft, matchId);
+        const match = getMatchById(draft, matchId);
+        return match
+          ? `Undid match end (${getMatchName(draft, match)}).`
+          : 'Undid match end.';
+      },
+      (message) => message,
+    );
+  };
+
   const onDeleteGame = (gameId: string, label: string) => {
     if (!window.confirm(`Delete ${label} and all of its events?`)) return;
     deleteGame(matchId, gameId);
@@ -57,17 +91,30 @@ export function MatchEventsPage() {
     <>
       <PageHeader>Track Match</PageHeader>
       <MatchScoreLine matchId={matchId} />
-      <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2 }}>
-        <Button
-          type="button"
-          className="bw-button bw-button--text"
-          variant="contained"
-          onClick={onAddGame}
-        >
-          Add Game
-        </Button>
+      <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2, flexWrap: 'wrap' }}>
+        {matchEnded ? null : (
+          <>
+            <Button
+              type="button"
+              className="bw-button bw-button--text"
+              variant="contained"
+              onClick={onAddGame}
+            >
+              Add Game
+            </Button>
+            <Button
+              type="button"
+              className="bw-button bw-button--text sk-end-match"
+              variant="outlined"
+              onClick={onEndMatch}
+              sx={{ textTransform: 'none' }}
+            >
+              End Match
+            </Button>
+          </>
+        )}
       </Stack>
-      {games.length > 0 ? (
+      {showMatchEvents ? (
         <Box>
           <Typography variant="h6" gutterBottom>
             Match Events
@@ -99,6 +146,28 @@ export function MatchEventsPage() {
                 ) : null}
               </Stack>
             ))}
+            {matchEnded ? (
+              <Stack
+                className="sk-match-ended"
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center' }}
+              >
+                <Typography className="sk-match-ended-label" sx={{ flex: 1, py: 0.5 }}>
+                  {endedTimeLabel ? `Match ended — ${endedTimeLabel}` : 'Match ended'}
+                </Typography>
+                {showDeleteGame ? (
+                  <Button
+                    size="small"
+                    className="bw-button bw-button--text sk-undo-end-match"
+                    onClick={onUndoEndMatch}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Undo
+                  </Button>
+                ) : null}
+              </Stack>
+            ) : null}
           </Stack>
         </Box>
       ) : null}

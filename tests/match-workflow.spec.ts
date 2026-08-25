@@ -5,6 +5,7 @@ import {
   clearScorekeeperStorage,
   createMatch,
   gotoScorekeeper,
+  loadSampleLeague,
   navigateMenu,
   openTeam,
 } from './helpers/scorekeeper-page';
@@ -118,6 +119,37 @@ test.describe('Match workflow', () => {
     await expect(page.locator('.history')).toContainText('Added team (Home Hawks)');
     await expect(page.locator('.history')).toContainText('Added team (Away Owls)');
     await expect(page.locator('.history')).toContainText('Added match');
+  });
+
+  test('ends a sample match and lists a timestamped match-ended event', async ({
+    page,
+  }) => {
+    await loadSampleLeague(page);
+    await navigateMenu(page, 'Matches');
+    await page.getByRole('button', { name: / vs\. / }).first().click();
+    await expect(page.getByRole('heading', { name: 'Match' })).toBeVisible();
+    await page.getByRole('button', { name: 'Track Match' }).click();
+    await expect(page.getByRole('heading', { name: 'Track Match' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'End Match' })).toBeVisible();
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'End Match' }).click();
+
+    const ended = page.locator('.sk-match-ended');
+    await expect(ended).toBeVisible();
+    await expect(ended).toContainText(/Match ended — \d+:\d{2}/);
+    await expect(page.getByRole('button', { name: 'Add Game' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'End Match' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.locator('.sk-match-ended')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'End Match' })).toBeVisible();
+
+    await navigateMenu(page, 'History');
+    await expect(page.locator('.history')).toContainText('Ended match');
+    await expect(page.locator('.history')).toContainText('Undid match end');
   });
 });
 
