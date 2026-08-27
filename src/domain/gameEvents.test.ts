@@ -22,6 +22,7 @@ import {
   gameHasFinishEvent,
   getGameEventType,
   getGameEvents,
+  getGameEventsNewestFirst,
   getGameStartEvent,
   initialVideoSeekSeconds,
   inPageOpenSeekSeconds,
@@ -204,6 +205,135 @@ describe('game event recording', () => {
     const unstampedId = persistThrowGameEvent(data, gameId, match.Id, [draft]);
     const events = getGameEvents(data, gameId);
     expect(events[events.length - 1]?.Id).toBe(unstampedId);
+  });
+
+  it('re-slots an event when its video timestamp is edited', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const draft = {
+      throwerGamePlayerId: homeGp.Id,
+      targetGamePlayerId: awayGp.Id,
+      resultId: ThrowResult.Hit,
+      deflections: [],
+      recoveredId: undefined,
+    };
+    const earlyId = persistThrowGameEvent(data, gameId, match.Id, [draft], {
+      videoOffsetSeconds: 10,
+    });
+    const lateId = persistThrowGameEvent(data, gameId, match.Id, [draft], {
+      videoOffsetSeconds: 40,
+    });
+    const startId = getGameStartEvent(data, gameId)!.Id;
+
+    setGameEventVideoOffset(data, earlyId, 50);
+
+    const ordered = getGameEvents(data, gameId);
+    expect(ordered.map((row) => row.Id)).toEqual([startId, lateId, earlyId]);
+    expect(ordered.map((row) => row.Ordinal)).toEqual([1, 2, 3]);
+    expect(getGameEventsNewestFirst(data, gameId).map((row) => row.Id)).toEqual([
+      earlyId,
+      lateId,
+      startId,
+    ]);
+  });
+
+  it('keeps game start at ordinal 1 when its timestamp changes', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 10 },
+    );
+    const start = getGameStartEvent(data, gameId)!;
+    setGameEventVideoOffset(data, start.Id, 99);
+    expect(getGameStartEvent(data, gameId)?.Ordinal).toBe(1);
+    expect(getGameEvents(data, gameId)[0]?.Id).toBe(start.Id);
+  });
+
+  it('appends an event again when its timestamp is cleared', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const draft = {
+      throwerGamePlayerId: homeGp.Id,
+      targetGamePlayerId: awayGp.Id,
+      resultId: ThrowResult.Hit,
+      deflections: [],
+      recoveredId: undefined,
+    };
+    const midId = persistThrowGameEvent(data, gameId, match.Id, [draft], {
+      videoOffsetSeconds: 20,
+    });
+    const lateId = persistThrowGameEvent(data, gameId, match.Id, [draft], {
+      videoOffsetSeconds: 40,
+    });
+
+    setGameEventVideoOffset(data, midId, null);
+
+    const ordered = getGameEvents(data, gameId);
+    expect(ordered.map((row) => row.Id)).toEqual([
+      getGameStartEvent(data, gameId)!.Id,
+      lateId,
+      midId,
+    ]);
+    expect(ordered.at(-1)?.VideoOffsetSeconds ?? null).toBeNull();
+  });
+
+  it('slots a newly stamped edit among existing video times', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    const lateId = persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Hit,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { videoOffsetSeconds: 40 },
+    );
+    const unstampedId = persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp2!.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Miss,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+
+    persistThrowGameEvent(
+      data,
+      gameId,
+      match.Id,
+      [
+        {
+          throwerGamePlayerId: homeGp2!.Id,
+          targetGamePlayerId: awayGp.Id,
+          resultId: ThrowResult.Miss,
+          deflections: [],
+          recoveredId: undefined,
+        },
+      ],
+      { gameEventId: unstampedId, videoOffsetSeconds: 20 },
+    );
+
+    expect(getGameEvents(data, gameId).map((row) => row.Id)).toEqual([
+      getGameStartEvent(data, gameId)!.Id,
+      unstampedId,
+      lateId,
+    ]);
   });
 
   it('rejects a group whose throwers are on opposing teams', () => {

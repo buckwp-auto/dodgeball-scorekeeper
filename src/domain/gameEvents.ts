@@ -334,13 +334,17 @@ export function setGameEventVideoOffset(
 ): void {
   const row = table<GameEventRow>(data, 'GameEvent').find((entry) => entry.Id === gameEventId);
   if (!row) return;
+  const previous = row.VideoOffsetSeconds ?? null;
   row.VideoOffsetSeconds = videoOffsetSeconds;
   if (getGameEventType(data, gameEventId) === 'start') {
     const game = table<{ Id: Guid; VideoStartSeconds?: number | null }>(data, 'Game').find(
       (entry) => entry.Id === row.GameId,
     );
     if (game) game.VideoStartSeconds = videoOffsetSeconds;
+    return;
   }
+  if (previous === videoOffsetSeconds) return;
+  reslotGameEventByVideoTime(data, gameEventId);
 }
 
 /** Star or unstar a timeline event for the league highlight reel. */
@@ -439,8 +443,10 @@ function findInsertBeforeEventIdForVideoTime(
   data: DatabaseDto,
   gameId: Guid,
   videoOffsetSeconds: number,
+  excludeEventId?: Guid,
 ): Guid | null {
   for (const event of getGameEvents(data, gameId)) {
+    if (event.Id === excludeEventId) continue;
     if (getGameEventType(data, event.Id) === 'start') continue;
     const offset = event.VideoOffsetSeconds;
     if (offset == null || !Number.isFinite(offset)) continue;
@@ -454,6 +460,7 @@ function allocateOrdinal(
   gameId: Guid,
   insertBeforeEventId: Guid | null | undefined,
   videoOffsetSeconds?: number | null,
+  excludeEventId?: Guid,
 ): number {
   let anchorId = insertBeforeEventId ?? null;
   if (
@@ -461,10 +468,15 @@ function allocateOrdinal(
     videoOffsetSeconds != null &&
     Number.isFinite(videoOffsetSeconds)
   ) {
-    anchorId = findInsertBeforeEventIdForVideoTime(data, gameId, videoOffsetSeconds);
+    anchorId = findInsertBeforeEventIdForVideoTime(
+      data,
+      gameId,
+      videoOffsetSeconds,
+      excludeEventId,
+    );
   }
+  const events = getGameEvents(data, gameId).filter((row) => row.Id !== excludeEventId);
   if (!anchorId) {
-    const events = getGameEvents(data, gameId);
     return events.length === 0 ? 1 : Math.max(...events.map((row) => row.Ordinal)) + 1;
   }
   const anchor = table<GameEventRow>(data, 'GameEvent').find((row) => row.Id === anchorId);
@@ -477,6 +489,31 @@ function allocateOrdinal(
   }
   shiftOrdinalsFrom(data, gameId, ordinal, 1);
   return ordinal;
+}
+
+/**
+ * Re-place a non-start event using the same slot-by-video-time rules as create.
+ * Unstamped events append; Game start stays at ordinal 1.
+ */
+function reslotGameEventByVideoTime(data: DatabaseDto, gameEventId: Guid): void {
+  const row = table<GameEventRow>(data, 'GameEvent').find((entry) => entry.Id === gameEventId);
+  if (!row) return;
+  if (getGameEventType(data, gameEventId) === 'start') return;
+
+  const oldOrdinal = row.Ordinal;
+  row.Ordinal = Number.MAX_SAFE_INTEGER;
+  for (const event of table<GameEventRow>(data, 'GameEvent')) {
+    if (event.GameId === row.GameId && event.Id !== gameEventId && event.Ordinal > oldOrdinal) {
+      event.Ordinal -= 1;
+    }
+  }
+  row.Ordinal = allocateOrdinal(
+    data,
+    row.GameId,
+    null,
+    row.VideoOffsetSeconds,
+    gameEventId,
+  );
 }
 
 function removeThrowChildren(data: DatabaseDto, gameEventId: Guid): void {
@@ -640,8 +677,7 @@ function applyVideoOffsetToEvent(
   videoOffsetSeconds: number | null | undefined,
 ): void {
   if (videoOffsetSeconds === undefined) return;
-  const row = table<GameEventRow>(data, 'GameEvent').find((entry) => entry.Id === gameEventId);
-  if (row) row.VideoOffsetSeconds = videoOffsetSeconds;
+  setGameEventVideoOffset(data, gameEventId, videoOffsetSeconds);
 }
 
 export function persistThrowGameEvent(
