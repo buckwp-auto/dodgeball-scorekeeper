@@ -21,11 +21,15 @@ import {
   getOtherOffenseChoiceForKey,
   getThrowResultForKey,
   getTrackGameActionForKey,
+  getTrackGameTabForKey,
   hotkeyForDeflectionResult,
+  hotkeysForTrackGameAction,
   hotkeyForGamePlayer,
   hotkeyForOtherOffenseIndex,
+  hotkeyForTrackGameTab,
   isOtherOffenseChoiceActive,
   otherOffenseUiOrder,
+  TRACK_GAME_TAB_HOTKEYS,
   type OtherTabDraft,
 } from './hotkeys';
 import { DeflectionResult, GameEventErrorOffense, ThrowResult } from './statistics/constants';
@@ -166,6 +170,33 @@ describe('undo / redo hotkeys', () => {
   });
 });
 
+describe('done hotkeys', () => {
+  it('maps X and Enter to done', () => {
+    expect(getTrackGameActionForKey('x')).toBe('done');
+    expect(getTrackGameActionForKey('X')).toBe('done');
+    expect(getTrackGameActionForKey('Enter')).toBe('done');
+    expect(hotkeysForTrackGameAction('done')).toEqual(['x', 'Enter']);
+  });
+});
+
+describe('track game tab hotkeys', () => {
+  it('maps / \' \\ to Throw, Other, and Finish', () => {
+    expect(TRACK_GAME_TAB_HOTKEYS).toEqual({
+      throw: '/',
+      error: "'",
+      finish: '\\',
+    });
+    expect(hotkeyForTrackGameTab('throw')).toBe('/');
+    expect(hotkeyForTrackGameTab('error')).toBe("'");
+    expect(hotkeyForTrackGameTab('finish')).toBe('\\');
+    expect(getTrackGameTabForKey('/')).toBe('throw');
+    expect(getTrackGameTabForKey("'")).toBe('error');
+    expect(getTrackGameTabForKey('\\')).toBe('finish');
+    expect(getTrackGameTabForKey('"')).toBeNull();
+    expect(getTrackGameTabForKey('|')).toBeNull();
+  });
+});
+
 describe('other tab offense hotkeys', () => {
   it('maps 1-4 to fixed offense choices in UI order', () => {
     expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4']);
@@ -177,6 +208,17 @@ describe('other tab offense hotkeys', () => {
       GameEventErrorOffense.WastedBall,
     );
     expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
+  });
+
+  it('leaves no digit free (tab switch uses / \' \\ instead)', () => {
+    const occupied = new Set<string>([
+      ...ROSTER_HOME_OVERFLOW_HOTKEYS,
+      ...ROSTER_AWAY_OVERFLOW_HOTKEYS,
+      ...OTHER_OFFENSE_HOTKEYS,
+    ]);
+    for (const digit of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+      expect(occupied.has(digit)).toBe(true);
+    }
   });
 
   it('toggles offense choices without shifting hotkey slots', () => {
