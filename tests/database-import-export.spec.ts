@@ -62,7 +62,7 @@ test.describe('Database JSON (.scrkpr)', () => {
 
     await navigateMenu(page, 'Matches');
     await expect(
-      page.getByRole('button', { name: 'Big Dogs vs. Quick Cats' }),
+      page.getByRole('button', { name: 'Big Dogs vs. Quick Cats', exact: true }),
     ).toBeVisible();
   });
 });

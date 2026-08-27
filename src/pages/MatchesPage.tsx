@@ -1,9 +1,11 @@
 import { Button, Stack } from '@mui/material';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { MatchScoreSpoiler } from '../components/MatchScoreSpoiler';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader, TeamSearch, TextButton } from '../components/Ui';
 import { getMatches, getTeams } from '../domain/database';
+import { buildMatchListSpoiler } from '../domain/matchListSpoiler';
 import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
 
@@ -71,32 +73,38 @@ export function MatchesPage() {
       </div>
       <table className="sk-grid">
         <tbody>
-          {matches.map(({ match, matchName }) => (
-            <tr key={match.Id}>
-              <td>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
-                >
-                  <TextButton onClick={() => navigate(`/matches/${match.Id}`)}>
-                    {matchName}
-                  </TextButton>
-                  <SeeStatsButton to={`/matches/${match.Id}/stats`} />
-                  {canDeleteMatchesAndGames ? (
-                    <Button
-                      size="small"
-                      color="error"
-                      className="bw-button bw-button--text"
-                      onClick={() => onDeleteMatch(match.Id, matchName)}
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
-                </Stack>
-              </td>
-            </tr>
-          ))}
+          {matches.map(({ match, matchName }) => {
+            const spoiler = buildMatchListSpoiler(data, match.Id);
+            return (
+              <tr key={match.Id} className="sk-match-row">
+                <td>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+                  >
+                    <TextButton onClick={() => navigate(`/matches/${match.Id}`)}>
+                      {matchName}
+                    </TextButton>
+                    {spoiler ? (
+                      <MatchScoreSpoiler matchName={matchName} spoiler={spoiler} />
+                    ) : null}
+                    <SeeStatsButton to={`/matches/${match.Id}/stats`} />
+                    {canDeleteMatchesAndGames ? (
+                      <Button
+                        size="small"
+                        color="error"
+                        className="bw-button bw-button--text"
+                        onClick={() => onDeleteMatch(match.Id, matchName)}
+                      >
+                        Delete
+                      </Button>
+                    ) : null}
+                  </Stack>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </>

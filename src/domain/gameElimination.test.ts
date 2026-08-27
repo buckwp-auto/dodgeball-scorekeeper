@@ -307,6 +307,18 @@ describe('game live elimination state', () => {
     ).toBe(true);
   });
 
+  it('eliminates the offender on illegal block without outing the thrower', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupGameWithRoster();
+    persistErrorGameEvent(data, gameId, match.Id, {
+      throwerGamePlayerId: homeGp.Id,
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    });
+    const live = computeGameLiveState(data, match.Id, gameId);
+    expect(isPlayerEliminatedInGame(live, awayGp.Id)).toBe(true);
+    expect(isPlayerEliminatedInGame(live, homeGp.Id)).toBe(false);
+  });
+
   it('sorts game player infos with outs at the bottom', () => {
     const { data, match, gameId, homeGp, awayGp } = setupGameWithRoster();
     persistThrowGameEvent(data, gameId, match.Id, [

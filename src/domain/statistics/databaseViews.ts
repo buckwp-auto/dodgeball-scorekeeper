@@ -32,6 +32,8 @@ export type GameEventErrorRow = {
   GameEventId: Guid;
   OffenderId: Guid;
   OffenseId: number;
+  /** Opposite-team thrower for illegal block; omitted on old saves. */
+  ThrowerId?: Guid | null;
 };
 export type GameEventFinishRow = { GameEventId: Guid; ResultId: number };
 export type GameEventStartRow = { GameEventId: Guid };
