@@ -99,6 +99,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
 | Throw results | `R T Y U G H` |
 | Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off) |
+| Editor tabs | `/` Throw, `'` Other, `\` Finish |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` or `Enter` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
@@ -109,7 +110,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |
 
-Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable. There is no hotkey to open the **Other** tab — every digit is already bound (offenses `1–4` on that tab; roster overflow `Q 1 2 3 4 5` / `P 0 9 8 7 6`). `Enter` in a timestamp or other text field still commits that field (document hotkeys ignore focused inputs).
+Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable. Switch editor tabs with `/` (Throw), `'` (Other), and `\` (Finish) — digits stay bound to Other offenses (`1–4`) and roster overflow (`Q 1 2 3 4 5` / `P 0 9 8 7 6`). `Enter` in a timestamp or other text field still commits that field (document hotkeys ignore focused inputs).
 
 ## Statistics & interop
 

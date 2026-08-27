@@ -76,13 +76,16 @@ import {
   findGamePlayerIdByHotkey,
   getOtherOffenseChoiceForKey,
   getTrackGameActionForKey,
+  getTrackGameTabForKey,
+  hotkeyForTrackGameTab,
+  type TrackGameTab,
 } from '../domain/hotkeys';
 import { releaseActiveIframeFocus } from '../domain/youtube';
 import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
 import { useDatabase } from '../state/DatabaseContext';
 import { useYoutubePopout } from '../state/YoutubePopoutContext';
 
-type TabKey = 'throw' | 'error' | 'finish';
+type TabKey = TrackGameTab;
 
 function editorTabForEventType(type: GameEventType | null): TabKey | 'start' | null {
   if (type === 'noBlocking') return 'error';
@@ -415,6 +418,20 @@ export function GameEventsPage() {
     setSavedSnapshot(JSON.stringify(nextDraft));
   }, [live.winningTeamHome]);
 
+  const selectEditorTab = useCallback(
+    (tab: TabKey) => {
+      if (lockedTab) return;
+      if (gameFinished && tab !== 'finish') return;
+      if (tab === 'finish' && isGameOver && !gameFinished) {
+        openWipeFinishPrompt();
+        return;
+      }
+      setPendingWipeFinish(false);
+      setActiveTab(tab);
+    },
+    [lockedTab, gameFinished, isGameOver, openWipeFinishPrompt],
+  );
+
   const handleDone = useCallback(() => {
     if (wipeAwaitingDone && !gameFinished) {
       openWipeFinishPrompt();
@@ -714,6 +731,13 @@ export function GameEventsPage() {
         return;
       }
 
+      const tab = getTrackGameTabForKey(key);
+      if (tab) {
+        event.preventDefault();
+        selectEditorTab(tab);
+        return;
+      }
+
       if (action === 'done') {
         // Enter is Done only when a draft can be committed or Done is on screen.
         // Do not reset an incomplete throw/error with a stray Enter.
@@ -781,6 +805,7 @@ export function GameEventsPage() {
       wipeAwaitingDone,
       isComplete,
       lockedTab,
+      selectEditorTab,
       handleDelete,
       handleUndo,
       handleRedo,
@@ -963,27 +988,28 @@ export function GameEventsPage() {
                   >
                     Edit active players
                   </Button>
-                  {(['throw', 'error', 'finish'] as const).map((tab) => (
-                    <Box key={tab} className="tab tab--attached">
-                      <Button
-                        type="button"
-                        className="bw-button bw-button--text"
-                        size={editorCompact ? 'small' : 'medium'}
-                        variant={visibleTab === tab ? 'contained' : 'text'}
-                        onClick={() => {
-                          if (tab === 'finish' && isGameOver && !gameFinished) {
-                            openWipeFinishPrompt();
-                            return;
-                          }
-                          setPendingWipeFinish(false);
-                          setActiveTab(tab);
-                        }}
-                        disabled={gameFinished && tab !== 'finish'}
-                      >
-                        {tab === 'throw' ? 'Throw' : tab === 'error' ? 'Other' : 'Finish'}
-                      </Button>
-                    </Box>
-                  ))}
+                  {(['throw', 'error', 'finish'] as const).map((tab) => {
+                    const label =
+                      tab === 'throw' ? 'Throw' : tab === 'error' ? 'Other' : 'Finish';
+                    return (
+                      <Box key={tab} className="tab tab--attached">
+                        <Button
+                          type="button"
+                          className="bw-button bw-button--text"
+                          size={editorCompact ? 'small' : 'medium'}
+                          variant={visibleTab === tab ? 'contained' : 'text'}
+                          onClick={() => selectEditorTab(tab)}
+                          disabled={gameFinished && tab !== 'finish'}
+                          aria-label={label}
+                        >
+                          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                            <HotkeyBadge hotkey={hotkeyForTrackGameTab(tab)} />
+                            <Box component="span">{label}</Box>
+                          </Stack>
+                        </Button>
+                      </Box>
+                    );
+                  })}
                 </>
               ) : (
                 <Typography

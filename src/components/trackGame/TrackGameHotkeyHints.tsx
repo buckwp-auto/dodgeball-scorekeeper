@@ -6,7 +6,7 @@ import {
   YOUTUBE_LAYOUT_SMALL_HOTKEY,
   YOUTUBE_LAYOUT_TALL_HOTKEY,
 } from '../../domain/youtube';
-import { GAME_ACTION_HOTKEYS, hotkeysForTrackGameAction } from '../../domain/hotkeys';
+import { GAME_ACTION_HOTKEYS, hotkeysForTrackGameAction, TRACK_GAME_TAB_HOTKEY_ROWS } from '../../domain/hotkeys';
 import { HotkeyBadge } from '../HotkeyBadge';
 
 function Hint({
@@ -25,6 +25,16 @@ function Hint({
         {label}
       </Typography>
     </Stack>
+  );
+}
+
+function TabHints() {
+  return (
+    <>
+      {TRACK_GAME_TAB_HOTKEY_ROWS.map(({ key, label }) => (
+        <Hint key={key} hotkeys={[key]} label={label} />
+      ))}
+    </>
   );
 }
 
@@ -70,6 +80,7 @@ export function TrackGameHotkeyHints({
       }}
     >
       <ActionHints />
+      <TabHints />
       {hasYoutube ? (
         <>
           <Hint
@@ -131,6 +142,7 @@ export function TrackGameHotkeysTooltip() {
               sx={{ flexWrap: 'wrap', rowGap: 0.5, alignItems: 'center' }}
             >
               <ActionHints />
+              <TabHints />
             </Stack>
           </Stack>
         </Stack>

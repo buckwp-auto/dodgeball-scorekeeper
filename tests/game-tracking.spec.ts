@@ -47,6 +47,22 @@ test.describe('Game tracking (full roster)', () => {
     await page.getByRole('button', { name: 'Track Game' }).click();
     await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
 
+    await page.keyboard.press('Quote');
+    await expect(page.getByRole('button', { name: 'Other', exact: true })).toHaveAttribute(
+      'class',
+      /MuiButton-contained/,
+    );
+    await page.keyboard.press('Backslash');
+    await expect(page.getByRole('button', { name: 'Finish', exact: true })).toHaveAttribute(
+      'class',
+      /MuiButton-contained/,
+    );
+    await page.keyboard.press('Slash');
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toHaveAttribute(
+      'class',
+      /MuiButton-contained/,
+    );
+
     await page.locator('.sk-menu-link').filter({ hasText: 'Overview' }).first().click();
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
     const resume = page.locator('.sk-resume-scoring').first();

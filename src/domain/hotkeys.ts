@@ -31,10 +31,42 @@ export const RECOVERED_NONE_HOTKEY = 'm';
 
 /**
  * Fixed Other-tab offense keys (stable layout; do not overlap player/result keys).
- * There is no dedicated key to *open* the Other tab: every digit is already used
- * here (1–4) or as Match/Game roster overflow (home `Q 1 2 3 4 5`, away `P 0 9 8 7 6`).
+ * Digits are not used to *switch* tabs — they are bound here (1–4) and as Match/Game
+ * roster overflow (home `Q 1 2 3 4 5`, away `P 0 9 8 7 6`). Tab switch keys are
+ * {@link TRACK_GAME_TAB_HOTKEYS} (`/` `'` `\`).
  */
 export const OTHER_OFFENSE_HOTKEYS = ['1', '2', '3', '4'] as const;
+
+/** Track Game editor tabs — Throw / Other / Finish. */
+export type TrackGameTab = 'throw' | 'error' | 'finish';
+
+/** Tab switch keys (left→right matches Throw → Other → Finish). */
+export const TRACK_GAME_TAB_HOTKEYS: Readonly<Record<TrackGameTab, string>> = {
+  throw: '/',
+  error: "'",
+  finish: '\\',
+};
+
+export const TRACK_GAME_TAB_HOTKEY_ROWS: ReadonlyArray<{
+  key: string;
+  tab: TrackGameTab;
+  label: string;
+}> = [
+  { key: TRACK_GAME_TAB_HOTKEYS.throw, tab: 'throw', label: 'Throw tab' },
+  { key: TRACK_GAME_TAB_HOTKEYS.error, tab: 'error', label: 'Other tab' },
+  { key: TRACK_GAME_TAB_HOTKEYS.finish, tab: 'finish', label: 'Finish tab' },
+];
+
+export function hotkeyForTrackGameTab(tab: TrackGameTab): string {
+  return TRACK_GAME_TAB_HOTKEYS[tab];
+}
+
+export function getTrackGameTabForKey(key: string): TrackGameTab | null {
+  for (const row of TRACK_GAME_TAB_HOTKEY_ROWS) {
+    if (row.key === key) return row.tab;
+  }
+  return null;
+}
 
 export type OtherOffenseChoice =
   | { kind: 'offense'; offenseId: GameEventErrorOffense }
