@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router';
+import { HelpPage } from './pages/HelpPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { HighlightsPage } from './pages/HighlightsPage';
 import { MatchPage } from './pages/MatchPage';
@@ -28,15 +29,18 @@ import { TeamPage } from './pages/TeamPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { YoutubePopoutPage } from './pages/YoutubePopoutPage';
 import { YOUTUBE_POPOUT_PATH } from './domain/youtubePopout';
+import type { OnboardingAnchor } from './domain/onboarding';
 import { useAnalyticsPageViews } from './hooks/useAnalyticsPageViews';
 import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
+import { OnboardingProvider } from './state/OnboardingContext';
 import { YoutubePopoutProvider } from './state/YoutubePopoutContext';
 import {
   TrackGameImmersiveProvider,
   useTrackGameImmersive,
 } from './state/TrackGameImmersiveContext';
+import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { CloudSyncBar } from './components/CloudSyncBar';
 import { ColorModeToggle } from './components/ColorModeToggle';
 import { MadeByFooter } from './components/MadeByFooter';
@@ -44,13 +48,14 @@ import { ResumeScoringNavItem } from './components/ResumeScoringButton';
 
 const drawerWidth = 200;
 
-const navItems = [
+const navItems: { to: string; label: string; onboarding?: OnboardingAnchor }[] = [
   { to: '/', label: 'Overview' },
-  { to: '/teams', label: 'Teams' },
-  { to: '/matches', label: 'Matches' },
+  { to: '/teams', label: 'Teams', onboarding: 'nav-teams' },
+  { to: '/matches', label: 'Matches', onboarding: 'nav-matches' },
   { to: '/highlights', label: 'Highlights' },
-  { to: '/stats', label: 'Stats' },
-  { to: '/settings', label: 'League Stat Settings' },
+  { to: '/stats', label: 'Stats', onboarding: 'nav-stats' },
+  { to: '/settings', label: 'League Stat Settings', onboarding: 'nav-settings' },
+  { to: '/help', label: 'Help', onboarding: 'nav-help' },
   { to: '/history', label: 'History' },
 ];
 
@@ -71,6 +76,7 @@ function AppNav({ onNavigate }: { onNavigate?: () => void }) {
             to={item.to}
             selected={selected}
             onClick={onNavigate}
+            data-onboarding={item.onboarding}
             className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}`}
             sx={{ py: 0.75 }}
           >
@@ -188,9 +194,11 @@ function AppShell() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/highlights" element={<HighlightsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/history" element={<HistoryPage />} />
         </Routes>
       </Box>
+      <OnboardingTour />
     </Box>
   );
 }
@@ -206,11 +214,13 @@ export function App() {
     <AuthProvider>
       <LeagueProvider>
         <DatabaseProvider>
-          <YoutubePopoutProvider>
-            <TrackGameImmersiveProvider>
-              <AppShell />
-            </TrackGameImmersiveProvider>
-          </YoutubePopoutProvider>
+          <OnboardingProvider>
+            <YoutubePopoutProvider>
+              <TrackGameImmersiveProvider>
+                <AppShell />
+              </TrackGameImmersiveProvider>
+            </YoutubePopoutProvider>
+          </OnboardingProvider>
         </DatabaseProvider>
       </LeagueProvider>
     </AuthProvider>

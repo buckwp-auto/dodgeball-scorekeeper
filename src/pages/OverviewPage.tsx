@@ -201,8 +201,11 @@ export function OverviewPage() {
   const bannerSrc = imageSrc(activeLeague?.banner);
 
   return (
-    <>
+    <Box data-onboarding="overview-main">
       <PageHeader>Overview</PageHeader>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
+        Load a league file or the sample league to explore scoring, stats, and highlights.
+      </Typography>
       {bannerSrc ? (
         <Box
           component="img"
@@ -653,6 +656,6 @@ export function OverviewPage() {
           event.target.value = '';
         }}
       />
-    </>
+    </Box>
   );
 }
