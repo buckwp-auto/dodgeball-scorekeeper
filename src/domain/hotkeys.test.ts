@@ -10,6 +10,7 @@ import {
   ROSTER_HOME_HOTKEYS,
   ROSTER_HOME_OVERFLOW_HOTKEYS,
   applyOtherOffenseHotkey,
+  applyPlayerHotkeyToErrorDraft,
   assignColumn1Hotkey,
   assignColumn2Hotkey,
   buildPermanentPlayerHotkeys,
@@ -20,11 +21,16 @@ import {
   getOtherOffenseChoiceForKey,
   getThrowResultForKey,
   getTrackGameActionForKey,
+  getTrackGameTabForKey,
   hotkeyForDeflectionResult,
+  hotkeysForTrackGameAction,
   hotkeyForGamePlayer,
   hotkeyForOtherOffenseIndex,
+  hotkeyForTrackGameTab,
   isOtherOffenseChoiceActive,
   otherOffenseUiOrder,
+  TRACK_GAME_TAB_HOTKEYS,
+  type OtherTabDraft,
 } from './hotkeys';
 import { DeflectionResult, GameEventErrorOffense, ThrowResult } from './statistics/constants';
 import { throwResultUiOrder } from './gameEvents';
@@ -164,6 +170,33 @@ describe('undo / redo hotkeys', () => {
   });
 });
 
+describe('done hotkeys', () => {
+  it('maps X and Enter to done', () => {
+    expect(getTrackGameActionForKey('x')).toBe('done');
+    expect(getTrackGameActionForKey('X')).toBe('done');
+    expect(getTrackGameActionForKey('Enter')).toBe('done');
+    expect(hotkeysForTrackGameAction('done')).toEqual(['x', 'Enter']);
+  });
+});
+
+describe('track game tab hotkeys', () => {
+  it('maps / \' \\ to Throw, Other, and Finish', () => {
+    expect(TRACK_GAME_TAB_HOTKEYS).toEqual({
+      throw: '/',
+      error: "'",
+      finish: '\\',
+    });
+    expect(hotkeyForTrackGameTab('throw')).toBe('/');
+    expect(hotkeyForTrackGameTab('error')).toBe("'");
+    expect(hotkeyForTrackGameTab('finish')).toBe('\\');
+    expect(getTrackGameTabForKey('/')).toBe('throw');
+    expect(getTrackGameTabForKey("'")).toBe('error');
+    expect(getTrackGameTabForKey('\\')).toBe('finish');
+    expect(getTrackGameTabForKey('"')).toBeNull();
+    expect(getTrackGameTabForKey('|')).toBeNull();
+  });
+});
+
 describe('other tab offense hotkeys', () => {
   it('maps 1-4 to fixed offense choices in UI order', () => {
     expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4']);
@@ -175,6 +208,17 @@ describe('other tab offense hotkeys', () => {
       GameEventErrorOffense.WastedBall,
     );
     expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
+  });
+
+  it('leaves no digit free (tab switch uses / \' \\ instead)', () => {
+    const occupied = new Set<string>([
+      ...ROSTER_HOME_OVERFLOW_HOTKEYS,
+      ...ROSTER_AWAY_OVERFLOW_HOTKEYS,
+      ...OTHER_OFFENSE_HOTKEYS,
+    ]);
+    for (const digit of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+      expect(occupied.has(digit)).toBe(true);
+    }
   });
 
   it('toggles offense choices without shifting hotkey slots', () => {
@@ -192,6 +236,7 @@ describe('other tab offense hotkeys', () => {
   it('toggles no-blocking started and clears offender fields', () => {
     const draft = {
       offenderGamePlayerId: 'gp-1',
+      throwerGamePlayerId: 'gp-2',
       offenseId: GameEventErrorOffense.LineOut,
       noBlockingStarted: false,
     };
@@ -199,10 +244,42 @@ describe('other tab offense hotkeys', () => {
     const started = applyOtherOffenseHotkey(draft, noBlocking);
     expect(started).toEqual({
       offenderGamePlayerId: '',
+      throwerGamePlayerId: '',
       offenseId: null,
       noBlockingStarted: true,
     });
     const cleared = applyOtherOffenseHotkey(started, noBlocking);
     expect(cleared.noBlockingStarted).toBe(false);
+  });
+
+  it('clears thrower when leaving illegal block', () => {
+    const draft = {
+      offenderGamePlayerId: 'gp-off',
+      throwerGamePlayerId: 'gp-throw',
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    };
+    const lineOut = otherOffenseUiOrder[0]!;
+    const next = applyOtherOffenseHotkey(draft, lineOut);
+    expect(next.offenseId).toBe(GameEventErrorOffense.LineOut);
+    expect(next.throwerGamePlayerId).toBe('');
+    expect(next.offenderGamePlayerId).toBe('gp-off');
+  });
+
+  it('picks thrower then offender by team for illegal block', () => {
+    const players = [
+      { gamePlayerId: 'h1', playerName: 'Alex', teamHome: true },
+      { gamePlayerId: 'a1', playerName: 'Casey', teamHome: false },
+    ];
+    let draft: OtherTabDraft = {
+      offenderGamePlayerId: '',
+      throwerGamePlayerId: '',
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    };
+    draft = applyPlayerHotkeyToErrorDraft(draft, players, 'a')!;
+    expect(draft.throwerGamePlayerId).toBe('h1');
+    expect(draft.offenderGamePlayerId).toBe('');
+    draft = applyPlayerHotkeyToErrorDraft(draft, players, 'j')!;
+    expect(draft.throwerGamePlayerId).toBe('h1');
+    expect(draft.offenderGamePlayerId).toBe('a1');
   });
 });

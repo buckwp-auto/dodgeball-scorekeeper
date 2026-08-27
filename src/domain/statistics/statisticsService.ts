@@ -468,21 +468,31 @@ function processError(
   context: StatisticsContext,
   offenderId: Guid,
   offenseId: number,
+  throwerId?: Guid | null,
 ): void {
   const resolved = context.tryGetPlayerStatisticsByGamePlayer(offenderId);
-  if (!resolved) return;
-  const { builder: offender } = resolved;
   switch (offenseId) {
     case GameEventErrorOffense.LineOut:
-      offender.deaths.errors.increment(EDeathError.LineOut, 1);
-      offender.deathsCredit += 1;
+      if (!resolved) return;
+      resolved.builder.deaths.errors.increment(EDeathError.LineOut, 1);
+      resolved.builder.deathsCredit += 1;
       break;
     case GameEventErrorOffense.WastedBall:
-      offender.offenseErrors.increment(EThrowError.WastedBall, 1);
+      if (!resolved) return;
+      resolved.builder.offenseErrors.increment(EThrowError.WastedBall, 1);
       break;
     case GameEventErrorOffense.BlockIllegal:
-      offender.deaths.errors.increment(EDeathError.BlockIllegal, 1);
-      offender.deathsCredit += 1;
+      if (resolved) {
+        resolved.builder.deaths.errors.increment(EDeathError.BlockIllegal, 1);
+        resolved.builder.deathsCredit += 1;
+      }
+      if (throwerId) {
+        const thrower = context.tryGetPlayerStatisticsByGamePlayer(throwerId);
+        if (thrower) {
+          thrower.builder.killsIndividual.direct.increment(EKillType.Hit, 1);
+          thrower.builder.killsCredit.direct.increment(EKillType.Hit, 1);
+        }
+      }
       break;
     default:
       throw new Error(`Error game event offense (${offenseId}) not recognized.`);
@@ -594,7 +604,12 @@ function runStatistics(
 
         const gameEventError = gameEventErrors.get(gameEvent.Id);
         if (gameEventError) {
-          processError(context, gameEventError.OffenderId, gameEventError.OffenseId);
+          processError(
+            context,
+            gameEventError.OffenderId,
+            gameEventError.OffenseId,
+            gameEventError.ThrowerId,
+          );
           continue;
         }
 

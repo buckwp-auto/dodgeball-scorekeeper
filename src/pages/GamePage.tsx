@@ -288,7 +288,7 @@ export function GamePage() {
           {limitMessage}
         </Alert>
       ) : null}
-      <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2, flexWrap: 'wrap' }}>
+      <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
         <Button
           type="button"
           className="bw-button bw-button--text"

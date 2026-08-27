@@ -29,8 +29,44 @@ export const RESULT_HOTKEYS = ['r', 't', 'y', 'u', 'g', 'h'] as const;
 /** Recovered "None" choice (not a player) */
 export const RECOVERED_NONE_HOTKEY = 'm';
 
-/** Fixed Other-tab offense keys (stable layout; do not overlap player/result keys). */
+/**
+ * Fixed Other-tab offense keys (stable layout; do not overlap player/result keys).
+ * Digits are not used to *switch* tabs — they are bound here (1–4) and as Match/Game
+ * roster overflow (home `Q 1 2 3 4 5`, away `P 0 9 8 7 6`). Tab switch keys are
+ * {@link TRACK_GAME_TAB_HOTKEYS} (`/` `'` `\`).
+ */
 export const OTHER_OFFENSE_HOTKEYS = ['1', '2', '3', '4'] as const;
+
+/** Track Game editor tabs — Throw / Other / Finish. */
+export type TrackGameTab = 'throw' | 'error' | 'finish';
+
+/** Tab switch keys (left→right matches Throw → Other → Finish). */
+export const TRACK_GAME_TAB_HOTKEYS: Readonly<Record<TrackGameTab, string>> = {
+  throw: '/',
+  error: "'",
+  finish: '\\',
+};
+
+export const TRACK_GAME_TAB_HOTKEY_ROWS: ReadonlyArray<{
+  key: string;
+  tab: TrackGameTab;
+  label: string;
+}> = [
+  { key: TRACK_GAME_TAB_HOTKEYS.throw, tab: 'throw', label: 'Throw tab' },
+  { key: TRACK_GAME_TAB_HOTKEYS.error, tab: 'error', label: 'Other tab' },
+  { key: TRACK_GAME_TAB_HOTKEYS.finish, tab: 'finish', label: 'Finish tab' },
+];
+
+export function hotkeyForTrackGameTab(tab: TrackGameTab): string {
+  return TRACK_GAME_TAB_HOTKEYS[tab];
+}
+
+export function getTrackGameTabForKey(key: string): TrackGameTab | null {
+  for (const row of TRACK_GAME_TAB_HOTKEY_ROWS) {
+    if (row.key === key) return row.tab;
+  }
+  return null;
+}
 
 export type OtherOffenseChoice =
   | { kind: 'offense'; offenseId: GameEventErrorOffense }
@@ -69,20 +105,81 @@ export function isOtherOffenseChoiceActive(
   return !draft.noBlockingStarted && draft.offenseId === choice.offenseId;
 }
 
+export type OtherTabDraft = {
+  offenderGamePlayerId: string;
+  throwerGamePlayerId?: string;
+  offenseId: GameEventErrorOffense | null;
+  noBlockingStarted?: boolean;
+};
+
 export function applyOtherOffenseHotkey(
-  draft: { offenderGamePlayerId: string; offenseId: GameEventErrorOffense | null; noBlockingStarted?: boolean },
+  draft: OtherTabDraft,
   choice: OtherOffenseChoice,
-): typeof draft {
+): OtherTabDraft {
   if (choice.kind === 'noBlocking') {
     return draft.noBlockingStarted
       ? { ...draft, noBlockingStarted: false }
-      : { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: true };
+      : {
+          offenderGamePlayerId: '',
+          throwerGamePlayerId: '',
+          offenseId: null,
+          noBlockingStarted: true,
+        };
   }
   const nextOffense = draft.offenseId === choice.offenseId ? null : choice.offenseId;
+  const keepThrower = nextOffense === GameEventErrorOffense.BlockIllegal;
   return {
     ...draft,
     noBlockingStarted: false,
     offenseId: nextOffense,
+    throwerGamePlayerId: keepThrower ? draft.throwerGamePlayerId ?? '' : '',
+  };
+}
+
+export function applyPlayerHotkeyToErrorDraft(
+  draft: OtherTabDraft,
+  players: PlayerHotkeySource[],
+  key: string,
+): OtherTabDraft | null {
+  if (draft.noBlockingStarted) return null;
+  const map = buildPermanentPlayerHotkeys(players);
+  const gamePlayerId = findGamePlayerIdByHotkey(map, key);
+  if (!gamePlayerId) return null;
+  const hit = players.find((row) => row.gamePlayerId === gamePlayerId);
+  if (!hit) return null;
+
+  const needsThrower = draft.offenseId === GameEventErrorOffense.BlockIllegal;
+  if (!needsThrower) {
+    return {
+      ...draft,
+      offenderGamePlayerId:
+        draft.offenderGamePlayerId === gamePlayerId ? '' : gamePlayerId,
+    };
+  }
+
+  const throwerId = draft.throwerGamePlayerId ?? '';
+  let throwingHome: boolean | null = null;
+  if (throwerId) {
+    throwingHome =
+      players.find((row) => row.gamePlayerId === throwerId)?.teamHome ?? null;
+  } else if (draft.offenderGamePlayerId) {
+    const offenderHome = players.find(
+      (row) => row.gamePlayerId === draft.offenderGamePlayerId,
+    )?.teamHome;
+    throwingHome = offenderHome === undefined ? null : !offenderHome;
+  }
+
+  if (throwingHome === null || hit.teamHome === throwingHome) {
+    return {
+      ...draft,
+      throwerGamePlayerId: throwerId === gamePlayerId ? '' : gamePlayerId,
+    };
+  }
+
+  return {
+    ...draft,
+    offenderGamePlayerId:
+      draft.offenderGamePlayerId === gamePlayerId ? '' : gamePlayerId,
   };
 }
 
@@ -113,6 +210,15 @@ export const GAME_ACTION_HOTKEYS: ReadonlyArray<{
   { key: '-', action: 'undo', label: 'Undo last event' },
   { key: '+', action: 'redo', label: 'Redo last event' },
 ];
+
+/** Done is `X` plus `Enter` (Enter is not listed above so hints can show both keys). */
+export const DONE_HOTKEYS = ['x', 'Enter'] as const;
+
+export function hotkeysForTrackGameAction(action: TrackGameAction): string[] {
+  if (action === 'done') return [...DONE_HOTKEYS];
+  const row = GAME_ACTION_HOTKEYS.find((entry) => entry.action === action);
+  return row ? [row.key] : [];
+}
 
 export type PlayerHotkeySource = {
   gamePlayerId: string;
@@ -239,6 +345,7 @@ export function getDeflectionResultForKey(key: string): DeflectionResult | null 
 }
 
 export function getTrackGameActionForKey(key: string): TrackGameAction | null {
+  if (key === 'Enter') return 'done';
   if (key === '+' || key === 'Add') return 'redo';
   if (key === '-' || key === '_' || key === 'Subtract') return 'undo';
   const normalized = key.length === 1 ? key.toLowerCase() : key;

@@ -91,7 +91,12 @@ export function MatchEventsPage() {
     <>
       <PageHeader>Track Match</PageHeader>
       <MatchScoreLine matchId={matchId} />
-      <Stack direction="row" spacing={1} className="button-row" sx={{ mb: 2, flexWrap: 'wrap' }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        className="button-row"
+        sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}
+      >
         {matchEnded ? null : (
           <>
             <Button
@@ -119,7 +124,7 @@ export function MatchEventsPage() {
           <Typography variant="h6" gutterBottom>
             Match Events
           </Typography>
-          <Stack spacing={0.5}>
+          <Stack spacing={1}>
             {games.map(({ gameId, label, scoringComplete }) => (
               <Stack
                 key={gameId}
