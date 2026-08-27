@@ -28,6 +28,7 @@ import {
   inPageOpenSeekSeconds,
   trackGameOpenSeekSeconds,
   loadThrowDraftsFromEvent,
+  loadErrorDraftFromEvent,
   persistErrorGameEvent,
   persistFinishGameEvent,
   persistNoBlockingGameEvent,
@@ -41,6 +42,8 @@ import {
   setGameEventHighlight,
   setGameEventVideoOffset,
   undoLastGameEvent,
+  isErrorDraftComplete,
+  gameEventIncludesGamePlayer,
 } from './gameEvents';
 
 function setupOneGameMatch(extraHome = false) {
@@ -454,6 +457,122 @@ describe('game event recording', () => {
   });
 });
 
+describe('illegal block error events', () => {
+  it('requires a thrower to complete an illegal-block draft', () => {
+    expect(
+      isErrorDraftComplete({
+        offenderGamePlayerId: 'gp-off',
+        throwerGamePlayerId: '',
+        offenseId: GameEventErrorOffense.BlockIllegal,
+      }),
+    ).toBe(false);
+    expect(
+      isErrorDraftComplete({
+        offenderGamePlayerId: 'gp-off',
+        throwerGamePlayerId: 'gp-throw',
+        offenseId: GameEventErrorOffense.BlockIllegal,
+      }),
+    ).toBe(true);
+    expect(
+      isErrorDraftComplete({
+        offenderGamePlayerId: 'gp-off',
+        offenseId: GameEventErrorOffense.LineOut,
+      }),
+    ).toBe(true);
+  });
+
+  it('persists optional ThrowerId and reloads it', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const eventId = persistErrorGameEvent(data, gameId, match.Id, {
+      throwerGamePlayerId: homeGp.Id,
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    });
+    const row = (
+      data.Tables.GameEventError as {
+        GameEventId: string;
+        ThrowerId?: string | null;
+        OffenderId: string;
+      }[]
+    ).find((entry) => entry.GameEventId === eventId);
+    expect(row?.ThrowerId).toBe(homeGp.Id);
+    expect(row?.OffenderId).toBe(awayGp.Id);
+
+    const draft = loadErrorDraftFromEvent(data, eventId);
+    expect(draft.throwerGamePlayerId).toBe(homeGp.Id);
+    expect(draft.offenderGamePlayerId).toBe(awayGp.Id);
+    expect(draft.offenseId).toBe(GameEventErrorOffense.BlockIllegal);
+    expect(gameEventIncludesGamePlayer(data, eventId, homeGp.Id)).toBe(true);
+    expect(gameEventIncludesGamePlayer(data, eventId, awayGp.Id)).toBe(true);
+  });
+
+  it('rejects a same-team thrower and loads old rows without ThrowerId', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
+    expect(() =>
+      persistErrorGameEvent(data, gameId, match.Id, {
+        throwerGamePlayerId: homeGp.Id,
+        offenderGamePlayerId: homeGp2!.Id,
+        offenseId: GameEventErrorOffense.BlockIllegal,
+      }),
+    ).toThrow(/Invalid thrower/);
+
+    const eventId = persistErrorGameEvent(data, gameId, match.Id, {
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.LineOut,
+    });
+    const row = (
+      data.Tables.GameEventError as {
+        GameEventId: string;
+        OffenseId: number;
+        ThrowerId?: string | null;
+      }[]
+    ).find((entry) => entry.GameEventId === eventId)!;
+    row.OffenseId = GameEventErrorOffense.BlockIllegal;
+    delete row.ThrowerId;
+
+    const draft = loadErrorDraftFromEvent(data, eventId);
+    expect(draft.throwerGamePlayerId).toBe('');
+    expect(draft.offenderGamePlayerId).toBe(awayGp.Id);
+    expect(isErrorDraftComplete(draft)).toBe(false);
+  });
+
+  it('clears ThrowerId when an illegal block is edited into a line-out', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const eventId = persistErrorGameEvent(data, gameId, match.Id, {
+      throwerGamePlayerId: homeGp.Id,
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    });
+    persistErrorGameEvent(
+      data,
+      gameId,
+      match.Id,
+      {
+        offenderGamePlayerId: awayGp.Id,
+        offenseId: GameEventErrorOffense.LineOut,
+      },
+      { gameEventId: eventId },
+    );
+    const row = (
+      data.Tables.GameEventError as { GameEventId: string; ThrowerId?: string | null }[]
+    ).find((entry) => entry.GameEventId === eventId);
+    expect(row?.ThrowerId ?? null).toBeNull();
+  });
+
+  it('undo and restore keep ThrowerId on an illegal block', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    persistErrorGameEvent(data, gameId, match.Id, {
+      throwerGamePlayerId: homeGp.Id,
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    });
+    const snapshot = undoLastGameEvent(data, gameId);
+    expect(snapshot?.error?.ThrowerId).toBe(homeGp.Id);
+    const restoredId = restoreGameEventSnapshot(data, snapshot!);
+    expect(loadErrorDraftFromEvent(data, restoredId).throwerGamePlayerId).toBe(homeGp.Id);
+  });
+});
+
 describe('buildTimelineEntries', () => {
   it('formats a throw as a single sentence row', () => {
     const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
@@ -551,6 +670,45 @@ describe('buildTimelineEntries', () => {
     expect(entry.rows).toHaveLength(2);
     expect(timelineRowVideoTimeLabel(entry, 0)).toBe('1:35');
     expect(timelineRowVideoTimeLabel(entry, 1)).toBe('1:35');
+  });
+
+  it('names thrower and offender on an illegal block', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    persistErrorGameEvent(data, gameId, match.Id, {
+      throwerGamePlayerId: homeGp.Id,
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    });
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(flattenText(entry.rows[0].segments)).toBe(
+      'Alex threw at Casey — Illegal Block (No Blocking)',
+    );
+  });
+
+  it('keeps offender-only copy for a legacy illegal block without thrower', () => {
+    const { data, match, gameId, awayGp } = setupOneGameMatch();
+    persistErrorGameEvent(data, gameId, match.Id, {
+      throwerGamePlayerId: '',
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.LineOut,
+    });
+    const eventId = getGameEvents(data, gameId).find(
+      (event) => getGameEventType(data, event.Id) === 'error',
+    )!.Id;
+    const row = (
+      data.Tables.GameEventError as {
+        GameEventId: string;
+        OffenseId: number;
+        ThrowerId?: string | null;
+      }[]
+    ).find((entry) => entry.GameEventId === eventId)!;
+    row.OffenseId = GameEventErrorOffense.BlockIllegal;
+    delete row.ThrowerId;
+
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(flattenText(entry.rows[0].segments)).toBe(
+      'Casey — Illegal Block (No Blocking)',
+    );
   });
 });
 

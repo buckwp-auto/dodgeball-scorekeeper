@@ -9,11 +9,13 @@ import {
 } from '../matchGame';
 import { setLeagueSettings } from '../leagueSettings';
 import {
+  persistErrorGameEvent,
   persistFinishGameEvent,
   persistThrowGameEvent,
 } from '../gameEvents';
 import {
   DeflectionResult,
+  GameEventErrorOffense,
   GameEventFinishResult,
   ThrowResult,
 } from './constants';
@@ -128,6 +130,49 @@ describe('buildDisplayStats', () => {
     expect(casey.gamesLost).toBe(1);
     expect(casey.kd).toBe(0);
     expect(casey.teamHome).toBe(false);
+  });
+
+  it('credits an illegal-block thrower a kill and the offender an error death', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupMatch();
+    persistErrorGameEvent(data, gameId, match.Id, {
+      throwerGamePlayerId: homeGp.Id,
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.BlockIllegal,
+    });
+
+    const rows = buildDisplayStats(data, { kind: 'game', matchId: match.Id, gameId });
+    const alex = byName(rows, 'Alex')!;
+    const casey = byName(rows, 'Casey')!;
+
+    expect(alex.kills).toBe(1);
+    expect(alex.killsCredit).toBe(1);
+    expect(alex.throws).toBe(0);
+    expect(alex.throwHits).toBe(0);
+    expect(casey.deaths).toBe(1);
+    expect(casey.illegalBlocks).toBe(1);
+    expect(casey.kills).toBe(0);
+  });
+
+  it('does not credit a kill for a legacy illegal block without ThrowerId', () => {
+    const { data, match, gameId, awayGp } = setupMatch();
+    const eventId = persistErrorGameEvent(data, gameId, match.Id, {
+      offenderGamePlayerId: awayGp.Id,
+      offenseId: GameEventErrorOffense.LineOut,
+    });
+    const row = (
+      data.Tables.GameEventError as {
+        GameEventId: string;
+        OffenseId: number;
+        ThrowerId?: string | null;
+      }[]
+    ).find((entry) => entry.GameEventId === eventId)!;
+    row.OffenseId = GameEventErrorOffense.BlockIllegal;
+    delete row.ThrowerId;
+
+    const rows = buildDisplayStats(data, { kind: 'game', matchId: match.Id, gameId });
+    expect(byName(rows, 'Alex')?.kills).toBe(0);
+    expect(byName(rows, 'Casey')?.illegalBlocks).toBe(1);
+    expect(byName(rows, 'Casey')?.deaths).toBe(1);
   });
 
   it('skips orphaned throws instead of crashing when a match roster row is missing', () => {

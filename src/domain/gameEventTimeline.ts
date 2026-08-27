@@ -180,6 +180,26 @@ export function buildTimelineEntry(
     const offenseLabel = draft.offenseId
       ? errorOffenseLabels[draft.offenseId]
       : 'Other';
+    const segments: TimelineSegment[] = draft.throwerGamePlayerId
+      ? [
+          {
+            kind: 'player',
+            player: playerRef(players, draft.throwerGamePlayerId),
+          },
+          { kind: 'text', text: ' threw at ' },
+          {
+            kind: 'player',
+            player: playerRef(players, draft.offenderGamePlayerId),
+          },
+          { kind: 'text', text: ` — ${offenseLabel}` },
+        ]
+      : [
+          {
+            kind: 'player',
+            player: playerRef(players, draft.offenderGamePlayerId),
+          },
+          { kind: 'text', text: ` — ${offenseLabel}` },
+        ];
     return {
       ...base,
       rows: [
@@ -187,13 +207,7 @@ export function buildTimelineEntry(
           role: 'error',
           tone: 'error',
           actions: [{ kind: 'error' }],
-          segments: [
-            {
-              kind: 'player',
-              player: playerRef(players, draft.offenderGamePlayerId),
-            },
-            { kind: 'text', text: ` — ${offenseLabel}` },
-          ],
+          segments,
         },
       ],
     };

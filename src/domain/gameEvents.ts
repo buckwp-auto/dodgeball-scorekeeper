@@ -62,6 +62,12 @@ export type ThrowDraft = {
 
 export type ErrorDraft = {
   offenderGamePlayerId: Guid;
+  /**
+   * Thrower who released the ball (illegal block only). Optional so old
+   * `.scrkpr` rows without `ThrowerId` still load; required to complete a new
+   * illegal-block draft.
+   */
+  throwerGamePlayerId?: Guid;
   offenseId: GameEventErrorOffense | null;
   /** Player-less game marker on the Other tab. */
   noBlockingStarted?: boolean;
@@ -132,7 +138,41 @@ export function emptyThrowDraft(): ThrowDraft {
 }
 
 export function emptyErrorDraft(): ErrorDraft {
-  return { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: false };
+  return {
+    offenderGamePlayerId: '',
+    throwerGamePlayerId: '',
+    offenseId: null,
+    noBlockingStarted: false,
+  };
+}
+
+/** Illegal block is an Other-tab error that also names the thrower. */
+export function errorDraftNeedsThrower(draft: ErrorDraft): boolean {
+  return !draft.noBlockingStarted && draft.offenseId === GameEventErrorOffense.BlockIllegal;
+}
+
+/**
+ * Throwing side for an illegal-block draft, or null until thrower/offender
+ * pins a team (same idea as thrower-then-target on the Throw tab).
+ */
+export function resolveErrorThrowingHome(
+  draft: ErrorDraft,
+  players: GamePlayerInfo[],
+): boolean | null {
+  if (!errorDraftNeedsThrower(draft)) return null;
+  if (draft.throwerGamePlayerId) {
+    return (
+      players.find((row) => row.gamePlayerId === draft.throwerGamePlayerId)?.teamHome ??
+      null
+    );
+  }
+  if (draft.offenderGamePlayerId) {
+    const offenderHome = players.find(
+      (row) => row.gamePlayerId === draft.offenderGamePlayerId,
+    )?.teamHome;
+    return offenderHome === undefined ? null : !offenderHome;
+  }
+  return null;
 }
 
 export function emptyFinishDraft(): FinishDraft {
@@ -382,7 +422,9 @@ export function areThrowDraftsComplete(drafts: ThrowDraft[]): boolean {
 
 export function isErrorDraftComplete(draft: ErrorDraft): boolean {
   if (draft.noBlockingStarted) return true;
-  return Boolean(draft.offenderGamePlayerId && draft.offenseId !== null);
+  if (!draft.offenderGamePlayerId || draft.offenseId === null) return false;
+  if (errorDraftNeedsThrower(draft) && !draft.throwerGamePlayerId) return false;
+  return true;
 }
 
 export function isFinishDraftComplete(draft: FinishDraft): boolean {
@@ -582,15 +624,21 @@ export function loadThrowDraftsFromEvent(data: DatabaseDto, gameEventId: Guid): 
   });
 }
 
+type GameEventErrorPersistRow = {
+  GameEventId: Guid;
+  OffenderId: Guid;
+  OffenseId: number;
+  ThrowerId?: Guid | null;
+};
+
 export function loadErrorDraftFromEvent(data: DatabaseDto, gameEventId: Guid): ErrorDraft {
-  const row = table<{
-    GameEventId: Guid;
-    OffenderId: Guid;
-    OffenseId: number;
-  }>(data, 'GameEventError').find((entry) => entry.GameEventId === gameEventId);
+  const row = table<GameEventErrorPersistRow>(data, 'GameEventError').find(
+    (entry) => entry.GameEventId === gameEventId,
+  );
   if (!row) return emptyErrorDraft();
   return {
     offenderGamePlayerId: row.OffenderId,
+    throwerGamePlayerId: row.ThrowerId ?? '',
     offenseId: row.OffenseId as GameEventErrorOffense,
     noBlockingStarted: false,
   };
@@ -598,7 +646,12 @@ export function loadErrorDraftFromEvent(data: DatabaseDto, gameEventId: Guid): E
 
 export function loadOtherDraftFromEvent(data: DatabaseDto, gameEventId: Guid): ErrorDraft {
   if (getGameEventType(data, gameEventId) === 'noBlocking') {
-    return { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: true };
+    return {
+      offenderGamePlayerId: '',
+      throwerGamePlayerId: '',
+      offenseId: null,
+      noBlockingStarted: true,
+    };
   }
   return loadErrorDraftFromEvent(data, gameEventId);
 }
@@ -662,6 +715,30 @@ export function persistThrowGameEvent(
   return gameEventId;
 }
 
+function throwerIdForErrorDraft(draft: ErrorDraft): Guid | null {
+  if (!errorDraftNeedsThrower(draft) || !draft.throwerGamePlayerId) return null;
+  return draft.throwerGamePlayerId;
+}
+
+function applyErrorDraftToRow(row: GameEventErrorPersistRow, draft: ErrorDraft): void {
+  row.OffenderId = draft.offenderGamePlayerId;
+  row.OffenseId = draft.offenseId!;
+  row.ThrowerId = throwerIdForErrorDraft(draft);
+}
+
+function validateErrorDraftPlayers(
+  infos: GamePlayerInfo[],
+  draft: ErrorDraft,
+): void {
+  const offender = infos.find((row) => row.gamePlayerId === draft.offenderGamePlayerId);
+  if (!offender) throw new Error('Invalid offender');
+  if (!errorDraftNeedsThrower(draft)) return;
+  const thrower = infos.find((row) => row.gamePlayerId === draft.throwerGamePlayerId);
+  if (!thrower || thrower.teamHome === offender.teamHome) {
+    throw new Error('Invalid thrower');
+  }
+}
+
 export function persistErrorGameEvent(
   data: DatabaseDto,
   gameId: Guid,
@@ -675,20 +752,12 @@ export function persistErrorGameEvent(
     throw new Error('Cannot add events after the game is finished');
   }
   const infos = getGamePlayerInfos(data, matchId, gameId);
-  if (!infos.some((row) => row.gamePlayerId === draft.offenderGamePlayerId)) {
-    throw new Error('Invalid offender');
-  }
+  validateErrorDraftPlayers(infos, draft);
 
   if (editing) {
-    const rows = table<{ GameEventId: Guid; OffenderId: Guid; OffenseId: number }>(
-      data,
-      'GameEventError',
-    );
+    const rows = table<GameEventErrorPersistRow>(data, 'GameEventError');
     const row = rows.find((entry) => entry.GameEventId === editing);
-    if (row) {
-      row.OffenderId = draft.offenderGamePlayerId;
-      row.OffenseId = draft.offenseId!;
-    }
+    if (row) applyErrorDraftToRow(row, draft);
     applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
     return editing;
   }
@@ -709,6 +778,7 @@ export function persistErrorGameEvent(
     GameEventId: gameEventId,
     OffenderId: draft.offenderGamePlayerId,
     OffenseId: draft.offenseId!,
+    ThrowerId: throwerIdForErrorDraft(draft),
   });
   return gameEventId;
 }
@@ -831,11 +901,10 @@ export function gameEventIncludesGamePlayer(
   gameEventId: Guid,
   gamePlayerId: Guid,
 ): boolean {
-  const error = table<{ GameEventId: Guid; OffenderId: Guid }>(
-    data,
-    'GameEventError',
-  ).find((row) => row.GameEventId === gameEventId);
-  if (error?.OffenderId === gamePlayerId) return true;
+  const error = table<GameEventErrorPersistRow>(data, 'GameEventError').find(
+    (row) => row.GameEventId === gameEventId,
+  );
+  if (error?.OffenderId === gamePlayerId || error?.ThrowerId === gamePlayerId) return true;
 
   const throwRows = table<{
     Id: Guid;
@@ -1106,7 +1175,7 @@ export type ThrowSnapshot = {
 export type GameEventSnapshot = {
   event: GameEventRow;
   type: Exclude<GameEventType, 'start'>;
-  error?: { OffenderId: Guid; OffenseId: number };
+  error?: { OffenderId: Guid; OffenseId: number; ThrowerId?: Guid | null };
   noBlocking?: true;
   finish?: { ResultId: number };
   throws?: ThrowSnapshot[];
@@ -1142,14 +1211,17 @@ export function snapshotGameEvent(
   };
 
   if (type === 'error') {
-    const row = table<{ GameEventId: Guid; OffenderId: Guid; OffenseId: number }>(
-      data,
-      'GameEventError',
-    ).find((entry) => entry.GameEventId === gameEventId);
+    const row = table<GameEventErrorPersistRow>(data, 'GameEventError').find(
+      (entry) => entry.GameEventId === gameEventId,
+    );
     if (!row) return null;
     return {
       ...base,
-      error: { OffenderId: row.OffenderId, OffenseId: row.OffenseId },
+      error: {
+        OffenderId: row.OffenderId,
+        OffenseId: row.OffenseId,
+        ThrowerId: row.ThrowerId ?? null,
+      },
     };
   }
 
@@ -1242,6 +1314,7 @@ export function restoreGameEventSnapshot(
       GameEventId: event.Id,
       OffenderId: snapshot.error.OffenderId,
       OffenseId: snapshot.error.OffenseId,
+      ThrowerId: snapshot.error.ThrowerId ?? null,
     });
     return event.Id;
   }

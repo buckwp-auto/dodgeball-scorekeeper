@@ -7,6 +7,7 @@
 - Last opened cloud league id in **localStorage** (`SCOREKEEPER_ACTIVE_LEAGUE`): auto-opens on sign-in when membership is still active; cleared on **Leave league**; kept across sign-out for the next session
 - Last scoring target in **localStorage** (`SCOREKEEPER_LAST_SCORING`): **Resume game** / **Resume match** in the drawer and on Overview — jumps to the in-progress game, or to Track Match after a finish is recorded; hidden if the match/game is gone
 - Appearance (System / Light / Dark) in **localStorage** (`SCOREKEEPER_COLOR_MODE`); default **System** follows the OS; Track Game timeline and VOD chrome stay dark
+- Matches list score-spoiler toggles in **session storage** (`SCOREKEEPER_MATCH_SCORE_REVEALED`): per-match ids whose series scores are currently shown; default hidden
 - Optional **Firebase** shared leagues (Google sign-in): directory on Overview, join requests, admin approve, per-match cloud docs, 30s idle / game-complete flush — see [FIREBASE_SETUP.md](FIREBASE_SETUP.md)
 - Optional **https image URLs** (`ImageRef`: display URL now, storage path later): team logos and player photos in the `.scrkpr` roster; cloud league **logo / banner** on `LeagueMeta` (admin paste-only; no Cloud Storage yet)
 
@@ -14,7 +15,7 @@
 
 - **Overview** — Google sign-in / league directory (when Firebase configured) with league logos and an optional slim banner when a league is open, **Resume** last game/match, **League stats**, download database, **Load from file** (`.scrkpr`), **Load sample league (demo)** (six teams with a distinct DiceBear avatar style each, Minnesota Dodgeball VODs with stamped Game start / events / finish advancing across the 12 games per match, starred catches/deflections/double-kills, so highlight minimums are met), sync status chip; admin-only confirm to replace an open cloud league from import
 - **Teams / Players** — manage teams and rosters; rename or delete (blocked if used in a match); paste https logo / photo URLs (thumbnails + initials fallback); player name opens **Player** (`/players/:id`) with a large photo, league stats row (including Caught% / Catch% / Elu% / Eff% / Net / VOR / WAR), ranks (kills / catches / hit%), starred highlights they appear in, and links to games played; guest/sub rows can **link** to a known league player (asterisked sub stats, unlink on the canonical page); linked guests redirect to that player
-- **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins
+- **Matches** — create matches, select players, **See stats**, download/copy match statistics CSV; **Delete** (with confirm) for local data or league admins; each row shows **Finished** / **In progress** / **Not started** and hides the series score behind a per-row **eye** toggle (`SCOREKEEPER_MATCH_SCORE_REVEALED` in session storage). Revealed: home–away game wins (same series score as Track Match). In-progress: also the current game’s clock from stamped `VideoOffsetSeconds` (elapsed from Game start when both are stamped; otherwise the latest VOD timestamp; no invented wall-clock minutes when nothing is stamped)
 - **Track Match / Games** — add games; list shows **Scoring complete** vs **In progress**; **See stats** per game; **Add Game** always opens the game roster screen (auto-select fills up to the league’s players-per-side limit, default 6, then you can adjust); opening an existing game with a roster goes straight to Track Game (skip “who’s playing”); empty games still open the roster screen; game roster heading shows **Game N**; **match score** (home–away game wins) on match roster, Track Match, game roster, Track Game, and Game Complete; game roster has **Previous / Next game** (Next creates a game if needed); Track Game / Game Complete have **Edit roster** back to that game’s on-court selection; after **Game Complete**, **Back to match** and **Next game**; **Delete** game (with confirm) for local data, league admins, or the member who created the match
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game; Match / Game / Player dropdowns jump between those views and player pages
 - **League Stat Settings** — players per team per game (default 6), highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on), plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
@@ -39,7 +40,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 | Tab | Purpose |
 |-----|---------|
 | **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional deflections, catch recovery |
-| **Other** | Offender + mistake (line-out, wasted ball, illegal block during no blocking), or **No Blocking Started** (player-less game marker) |
+| **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), or **No Blocking Started** (player-less game marker) |
 | **Finish** | Winner (home / away / tie) |
 
 ### Editor UX
@@ -60,7 +61,8 @@ Derived from persisted events (not a separate toggle):
 - **Disarm** → target (or deflection receiver) out immediately; a later deflection **Catch** still outs the thrower but does **not** save the disarmed player
 - Hit (and legacy failed block/catch stored on old saves, shown as Hit) → target out unless saved by a deflection catch
 - Catch (throw or deflection) → thrower out
-- Line-out / wasted ball / illegal block (no blocking) → offender out (illegal block on **Other** tab only)
+- Line-out / wasted ball → offender out
+- **Illegal block** (Other tab only) → offender out; requires a thrower on the opposite team. Still an error event (not a Throw Hit). Old saves without `ThrowerId` still load and still out the offender.
 - **No Blocking Started** — manual game marker on **Other**; no live elimination effect
 - **Recovered** player on a catch is removed from the eliminated set
 - Outs sort to the bottom and show “(out)”
@@ -98,7 +100,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Match / Game roster 7–12 (home) | `Q 1 2 3 4 5` |
 | Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
 | Throw results | `R T Y U G H` |
-| Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off) |
+| Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off). Player keys pick the offender; for illegal block they pick thrower then offender by team, same as Throw |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
 | Recovered None | `M` |
 | Actions | `Z` deflect, `X` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
@@ -126,7 +128,7 @@ Match / Game roster keys follow on-screen order (starters, then subs; outs last 
 - Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (hit = incoming Hit, Disarm, or legacy failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − hit/error deaths − 2×times caught (Deaths exclude catch-outs; times caught is separate); **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
 - **Legacy CSV export** keeps the original column layout: Disarm and deprecated failed block/catch fold into **Hit**; `BlockFailed` / `CatchFailed` columns emit **0**
 - Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page
-- Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events
+- Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events. Illegal-block errors with a thrower add a direct Hit kill (and kill credit) for that thrower without changing throw counts
 - **Golden fixture** tests vs original WASM/scorekeeper CSV output
 - Playwright coverage for workflow, import/export, and statistics
 
