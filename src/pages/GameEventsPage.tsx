@@ -1,4 +1,5 @@
-import { Alert, Box, Button, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Drawer, Stack, Typography } from '@mui/material';
+import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
@@ -88,6 +89,7 @@ import {
 import { releaseActiveIframeFocus } from '../domain/youtube';
 import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
 import { useDatabase } from '../state/DatabaseContext';
+import { useSetTrackGameImmersive } from '../state/TrackGameImmersiveContext';
 import { useYoutubePopout } from '../state/YoutubePopoutContext';
 
 type TabKey = TrackGameTab;
@@ -170,6 +172,8 @@ export function GameEventsPage() {
     popoutPlayback,
   } = useYoutubeControls(youtubeUrl);
   const { attachedGameId, setAttachedGameId } = useYoutubePopout();
+  const setTrackGameImmersive = useSetTrackGameImmersive();
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const updateThrowDrafts = useCallback(
     (next: ThrowDraft[] | ((prev: ThrowDraft[]) => ThrowDraft[])) => {
@@ -854,15 +858,36 @@ export function GameEventsPage() {
   const youtubeTopBand = hasYoutube && youtubeMode !== 'docked';
   const editorCompact = youtubeTall;
 
+  useEffect(() => {
+    setTrackGameImmersive(youtubeTall);
+    return () => setTrackGameImmersive(false);
+  }, [setTrackGameImmersive, youtubeTall]);
+
+  useEffect(() => {
+    if (!youtubeTall) setTimelineOpen(false);
+  }, [youtubeTall]);
+
+  const timelineProps = {
+    entries: timeline,
+    selectedEventId: effectiveSelectedId,
+    insertBeforeEventId,
+    showEndInsertMarker: showEndInsertMarker,
+    canSetFromPlayer: hasYoutube && youtubeMode !== 'hidden',
+    onSelectEvent: handleSelectEvent,
+    onDeselectEvent: handleDone,
+    onToggleHighlight: handleToggleHighlight,
+    onCommitVideoOffset: handleCommitVideoOffset,
+    onSetVideoOffsetFromPlayer: handleSetVideoOffsetFromPlayer,
+  };
+
   return (
     <Box
       className="sk-track-game"
       sx={{
         display: 'grid',
-        gridTemplateColumns: '1fr 300px',
-        // Tall: player fills leftover height; compact editor band below
+        gridTemplateColumns: youtubeTall ? '1fr' : '1fr 300px',
         gridTemplateRows: youtubeTall
-          ? 'minmax(0, 1fr) auto'
+          ? 'minmax(0, 1fr) minmax(0, 1fr)'
           : hasYoutube
             ? 'auto 1fr'
             : '1fr',
@@ -915,10 +940,12 @@ export function GameEventsPage() {
           gridColumn: 1,
           gridRow: hasYoutube ? 2 : 1,
           p: editorCompact ? 1 : 2,
-          overflow: editorCompact ? 'auto' : 'auto',
+          pl: editorCompact ? 5 : 2,
+          overflow: 'hidden',
           minHeight: 0,
           minWidth: 0,
-          maxHeight: youtubeTall ? '42vh' : undefined,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         {editorCompact ? (
@@ -1020,6 +1047,7 @@ export function GameEventsPage() {
                 alignItems: 'center',
                 mb: editorCompact ? 1 : 2,
                 rowGap: 1,
+                flexShrink: 0,
               }}
             >
               {!lockedTab ? (
@@ -1116,8 +1144,22 @@ export function GameEventsPage() {
                   Insert above
                 </Button>
               ) : null}
+              {youtubeTall ? (
+                <Button
+                  type="button"
+                  size="small"
+                  variant={timelineOpen ? 'contained' : 'outlined'}
+                  className="sk-timeline-drawer-toggle"
+                  startIcon={<ViewTimelineIcon fontSize="small" />}
+                  onClick={() => setTimelineOpen((open) => !open)}
+                  sx={{ ml: 'auto' }}
+                >
+                  Timeline
+                </Button>
+              ) : null}
             </Stack>
 
+            <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
             {visibleTab === 'start' && effectiveSelectedId ? (
               <StartEventEditor
                 videoOffsetSeconds={
@@ -1184,33 +1226,41 @@ export function GameEventsPage() {
             {!editorCompact ? (
               <TrackGameHotkeyHints hasYoutube={hasYoutube} />
             ) : null}
+            </Box>
           </EditorDensityProvider>
         )}
       </Box>
 
-      <Box
-        sx={{
-          gridColumn: 2,
-          gridRow: youtubeDocked ? '1 / -1' : youtubeTopBand || hasYoutube ? 2 : 1,
-          minHeight: 0,
-          minWidth: 0,
-          overflow: 'hidden',
-          maxHeight: youtubeTall ? '42vh' : undefined,
-        }}
-      >
-        <GameEventsTimeline
-          entries={timeline}
-          selectedEventId={effectiveSelectedId}
-          insertBeforeEventId={insertBeforeEventId}
-          showEndInsertMarker={showEndInsertMarker}
-          canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
-          onSelectEvent={handleSelectEvent}
-          onDeselectEvent={handleDone}
-          onToggleHighlight={handleToggleHighlight}
-          onCommitVideoOffset={handleCommitVideoOffset}
-          onSetVideoOffsetFromPlayer={handleSetVideoOffsetFromPlayer}
-        />
-      </Box>
+      {youtubeTall ? (
+        <Drawer
+          anchor="right"
+          open={timelineOpen}
+          onClose={() => setTimelineOpen(false)}
+          className="sk-timeline-drawer"
+          slotProps={{ root: { keepMounted: true } }}
+          sx={{
+            '& .MuiDrawer-paper': {
+              width: { xs: '100%', sm: 360 },
+              maxWidth: '100vw',
+              bgcolor: 'grey.900',
+            },
+          }}
+        >
+          <GameEventsTimeline {...timelineProps} />
+        </Drawer>
+      ) : (
+        <Box
+          sx={{
+            gridColumn: 2,
+            gridRow: youtubeDocked ? '1 / -1' : youtubeTopBand || hasYoutube ? 2 : 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflow: 'hidden',
+          }}
+        >
+          <GameEventsTimeline {...timelineProps} />
+        </Box>
+      )}
     </Box>
   );
 }

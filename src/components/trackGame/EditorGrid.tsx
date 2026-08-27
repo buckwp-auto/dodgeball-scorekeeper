@@ -44,6 +44,7 @@ export function EditorGrid({ children }: { children: ReactNode }) {
         gap: compact ? 0.25 : 0.5,
         // Stretch choice stacks so 6 player buttons can fill the 7-result column height
         alignItems: 'stretch',
+        ...(compact ? { minHeight: '100%' } : null),
       }}
     >
       {children}

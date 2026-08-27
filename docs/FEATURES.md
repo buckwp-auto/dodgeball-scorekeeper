@@ -20,7 +20,7 @@
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game; Match / Game / Player dropdowns jump between those views and player pages
 - **League Stat Settings** — players per team per game (default 6), highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on), plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
-- **MUI shell** — drawer nav (light gray / dark charcoal by theme), primary blue (`#1565c0`), appearance menu next to the Scorekeeper title (System / Light / Dark); sync bar shows **Local only**, a named **Local league** pill after loading a `.scrkpr`/sample (outlined), or **Syncing** plus a filled primary pill for the open cloud league; Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored; wrapped **button rows** keep an 8px vertical gap so stacked buttons do not touch
+- **MUI shell** — drawer nav (light gray / dark charcoal by theme), primary blue (`#1565c0`), appearance menu next to the Scorekeeper title (System / Light / Dark); on Track Game **Tall** video layout the nav drawer hides behind a menu button so scoring uses the full width; sync bar shows **Local only**, a named **Local league** pill after loading a `.scrkpr`/sample (outlined), or **Syncing** plus a filled primary pill for the open cloud league; **Help** page with how-to guides and FAQ; first-visit **guided tour** (popover tooltips on Overview, main nav links, and the sync bar — skippable, restartable from Help); Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored; wrapped **button rows** keep an 8px vertical gap so stacked buttons do not touch
 
 ## Roster & match setup
 
@@ -33,7 +33,7 @@
 
 ## Track Game
 
-Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar**. A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus this game’s **Game start** stamp (or the first stamped Game start in the match); it is not a wall clock. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
+Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar** (or a **Timeline** drawer in Tall layout). A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus this game’s **Game start** stamp (or the first stamped Game start in the match); it is not a wall clock. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
 
 ### Event types
 
@@ -72,7 +72,7 @@ Derived from persisted events (not a separate toggle):
 
 - Match page: optional **YouTube URL** field; **tall VOD player** on Match and Game roster screens (playback hotkeys, no Track Game action tooltip) so you can see who is playing vs subbing
 - Track Game layouts (session preference):
-  - **Tall** (`]`) — large fill-height 16:9 player; compact throw/error editor band below (all controls still visible); keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
+  - **Tall** (`]`) — large fill-height 16:9 player; scoring editor uses the rest of the viewport below (player/result buttons stretch vertically). App nav collapses to a menu button; the event timeline opens from a **Timeline** drawer on the right. Keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
   - **Hide** — scoring only (timestamps pause)
   - **Pop-out** — second window for the VOD; persists across games in the same match (and match/game roster screens). Closes when you leave the match, dock back, or close the window. Opening Track Game with an active pop-out seeks to **Game start** (finished games) or the **latest stamped event** (in progress); if nothing is stamped yet, the player is left where it is until Game start is marked. While the pop-out catches up, both windows show a short **Seeking to m:ss…** spinner
