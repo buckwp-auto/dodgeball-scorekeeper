@@ -55,10 +55,8 @@ export function GamePage() {
   const [homeAddAsSub, setHomeAddAsSub] = useState(false);
   const [awayAddName, setAwayAddName] = useState('');
   const [awayAddAsSub, setAwayAddAsSub] = useState(false);
-  const { previousGameId, goToPreviousGame, goToNextGame } = useMatchGameNavigation(
-    matchId,
-    gameId,
-  );
+  const { previousGameId, canGoToNextGame, goToPreviousGame, goToNextGame } =
+    useMatchGameNavigation(matchId, gameId);
   const match = getMatchById(data, matchId);
 
   useEffect(() => {
@@ -313,6 +311,7 @@ export function GamePage() {
           type="button"
           className="bw-button bw-button--text"
           variant="outlined"
+          disabled={!canGoToNextGame}
           onClick={goToNextGame}
         >
           Next game

@@ -105,10 +105,8 @@ export function GameEventsPage() {
   const [searchParams] = useSearchParams();
   const focusEventFromUrl = searchParams.get('event');
   const { data, mutate } = useDatabase();
-  const { goToNextGame, goToMatch, goToGameRoster } = useMatchGameNavigation(
-    matchId,
-    gameId,
-  );
+  const { goToNextGame, goToMatch, goToGameRoster, canGoToNextGame } =
+    useMatchGameNavigation(matchId, gameId);
 
   // Backfill Game Start for older saves that predate the event type
   useEffect(() => {
@@ -1002,6 +1000,7 @@ export function GameEventsPage() {
                   type="button"
                   className="bw-button bw-button--text"
                   variant="contained"
+                  disabled={!canGoToNextGame}
                   onClick={goToNextGame}
                 >
                   Next game

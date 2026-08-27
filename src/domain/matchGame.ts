@@ -246,7 +246,9 @@ export function getGameName(data: DatabaseDto, matchId: Guid, gameId: Guid): str
 }
 
 export function addGame(data: DatabaseDto, matchId: Guid): Guid {
-  if (!getMatchById(data, matchId)) throw new Error('Match not found');
+  const match = getMatchById(data, matchId);
+  if (!match) throw new Error('Match not found');
+  if (match.Ended) throw new Error('Match has ended');
   const existing = table<{ MatchId: Guid; Ordinal: number }>(data, 'MatchEvent').filter(
     (row) => row.MatchId === matchId,
   );

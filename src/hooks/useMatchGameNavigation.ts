@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { getMatchName } from '../domain/database';
+import { isMatchEnded } from '../domain/matchEnd';
 import { getAdjacentGameId, getMatchById } from '../domain/matchGame';
 import { addGameWithAutoRoster } from '../domain/rosterAutoSelect';
 import { useDatabase } from '../state/DatabaseContext';
@@ -10,6 +11,8 @@ export function useMatchGameNavigation(matchId: string, gameId: string) {
   const { data, mutate } = useDatabase();
   const previousGameId = getAdjacentGameId(data, matchId, gameId, -1);
   const nextExistingGameId = getAdjacentGameId(data, matchId, gameId, 1);
+  const matchEnded = isMatchEnded(getMatchById(data, matchId));
+  const canGoToNextGame = Boolean(nextExistingGameId) || !matchEnded;
 
   const goToGameRoster = useCallback(
     (targetGameId: string) => {
@@ -31,6 +34,7 @@ export function useMatchGameNavigation(matchId: string, gameId: string) {
       goToGameRoster(nextExistingGameId);
       return;
     }
+    if (matchEnded) return;
     const createdId = mutate(
       (draft) => {
         const id = addGameWithAutoRoster(draft, matchId);
@@ -45,10 +49,11 @@ export function useMatchGameNavigation(matchId: string, gameId: string) {
       ({ message }) => message,
     ).id;
     goToGameRoster(createdId);
-  }, [nextExistingGameId, goToGameRoster, mutate, matchId]);
+  }, [nextExistingGameId, goToGameRoster, mutate, matchId, matchEnded]);
 
   return {
     previousGameId,
+    canGoToNextGame,
     goToPreviousGame,
     goToNextGame,
     goToMatch,
