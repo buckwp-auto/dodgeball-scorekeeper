@@ -2,7 +2,7 @@ import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
-import { MatchScoreLine, useMatchSeriesScore } from '../components/MatchScoreLine';
+import { DigitalScoreboard } from '../components/DigitalScoreboard';
 import { PageHeader } from '../components/Ui';
 import {
   addDeflectionToDrafts,
@@ -63,6 +63,10 @@ import {
 } from '../domain/gameEvents';
 import { buildTimelineEntries } from '../domain/gameEventTimeline';
 import { rememberLastGame, rememberLastMatch } from '../domain/lastScoring';
+import {
+  matchClockStartOffsetSeconds,
+  resolveMatchRunningTime,
+} from '../domain/matchClock';
 import { getGameName, getMatchById } from '../domain/matchGame';
 import {
   computeGameLiveState,
@@ -144,6 +148,7 @@ export function GameEventsPage() {
   const [commitError, setCommitError] = useState<string | null>(null);
   /** Player position when the throw drafts were last touched, for out-player warnings. */
   const [editVideoOffsetSeconds, setEditVideoOffsetSeconds] = useState<number | null>(null);
+  const [inPageVideoNow, setInPageVideoNow] = useState<number | null>(null);
 
   const autoCommittingRef = useRef(false);
   const redoStackRef = useRef<GameEventSnapshot[]>([]);
@@ -182,7 +187,31 @@ export function GameEventsPage() {
   );
   const gameFinished = gameHasFinishEvent(data, gameId);
   const gameTitle = getGameName(data, matchId, gameId);
-  const matchScore = useMatchSeriesScore(matchId);
+
+  useEffect(() => {
+    setInPageVideoNow(null);
+  }, [gameId, youtubeMode]);
+
+  const videoNowSeconds = useMemo(() => {
+    if (!hasYoutube) return null;
+    if (youtubeMode === 'hidden') return null;
+    if (youtubeMode === 'popout') {
+      return Number.isFinite(popoutPlayback.displayTime)
+        ? popoutPlayback.displayTime
+        : null;
+    }
+    return inPageVideoNow;
+  }, [hasYoutube, youtubeMode, popoutPlayback.displayTime, inPageVideoNow]);
+
+  const runningTime = useMemo(
+    () =>
+      resolveMatchRunningTime({
+        hasVideo: hasYoutube,
+        startOffsetSeconds: matchClockStartOffsetSeconds(data, matchId, gameId),
+        videoNowSeconds,
+      }),
+    [data, matchId, gameId, hasYoutube, videoNowSeconds],
+  );
 
   useEffect(() => {
     if (!matchId || !gameId) return;
@@ -848,6 +877,7 @@ export function GameEventsPage() {
               startSeconds={cueSeconds ?? openSeekSeconds ?? undefined}
               onPopOut={popOut}
               popoutBlocked={popoutPlayback.blocked}
+              onDisplayTime={setInPageVideoNow}
             />
           )}
         </Box>
@@ -865,23 +895,40 @@ export function GameEventsPage() {
         }}
       >
         {editorCompact ? (
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-            {gameTitle}
-            {matchScore ? ` · ${matchScore}` : ''}
-            {' · '}
-            Home {live.activeHomeCount} / Away {live.activeAwayCount}
-            {isGameOver
-              ? ` · Out (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'})`
-              : ''}
-          </Typography>
+          <>
+            {matchId ? (
+              <DigitalScoreboard
+                matchId={matchId}
+                compact
+                runningTime={runningTime}
+                remaining={{
+                  home: live.activeHomeCount,
+                  away: live.activeAwayCount,
+                }}
+              />
+            ) : null}
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              {gameTitle}
+              {isGameOver
+                ? ` · Out (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'})`
+                : ''}
+            </Typography>
+          </>
         ) : (
           <>
             <PageHeader>Track Game</PageHeader>
-            {matchId ? <MatchScoreLine matchId={matchId} /> : null}
+            {matchId ? (
+              <DigitalScoreboard
+                matchId={matchId}
+                runningTime={runningTime}
+                remaining={{
+                  home: live.activeHomeCount,
+                  away: live.activeAwayCount,
+                }}
+              />
+            ) : null}
             <Typography variant="subtitle1" color="text.secondary" gutterBottom>
               {gameTitle}
-              {' · '}
-              Home {live.activeHomeCount} / Away {live.activeAwayCount} active
               {isGameOver
                 ? ` · Eliminated! (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'} win)`
                 : ''}
@@ -904,7 +951,7 @@ export function GameEventsPage() {
         {gameCompleteIdle ? (
           <Stack spacing={2} sx={{ mt: 4 }}>
             <Typography variant="h5">Game Complete!</Typography>
-            <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap' }}>
+            <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', rowGap: 1 }}>
               <Button
                 type="button"
                 className="bw-button bw-button--text sk-edit-roster"
@@ -941,6 +988,7 @@ export function GameEventsPage() {
                 flexWrap: 'wrap',
                 alignItems: 'center',
                 mb: editorCompact ? 1 : 2,
+                rowGap: 1,
               }}
             >
               {!lockedTab ? (

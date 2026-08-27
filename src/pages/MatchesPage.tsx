@@ -81,7 +81,7 @@ export function MatchesPage() {
                   <Stack
                     direction="row"
                     spacing={1}
-                    sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                    sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
                   >
                     <TextButton onClick={() => navigate(`/matches/${match.Id}`)}>
                       {matchName}

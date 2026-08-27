@@ -46,6 +46,10 @@ test.describe('Game tracking (full roster)', () => {
     await selectGameRoster(page, 'H1', 'A1');
     await page.getByRole('button', { name: 'Track Game' }).click();
     await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+    await expect(page.locator('.sk-scoreboard')).toBeVisible();
+    await expect(page.locator('.sk-scoreboard-score')).toContainText('Home Hawks 0–0 Away Owls');
+    await expect(page.locator('.sk-scoreboard-clock')).toContainText('No video');
+    await expect(page.locator('.sk-scoreboard-remaining')).toContainText('1 – 1');
 
     await page.locator('.sk-menu-link').filter({ hasText: 'Overview' }).first().click();
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
@@ -61,6 +65,7 @@ test.describe('Game tracking (full roster)', () => {
     await expect(page.getByText('Game Complete!')).toBeVisible();
 
     await expect(page.locator('.sk-match-score')).toContainText('Home Hawks 1–0 Away Owls');
+    await expect(page.locator('.sk-scoreboard-remaining')).toContainText('1 – 1');
 
     await page.getByRole('button', { name: 'Next game' }).click();
     await expect(page.getByRole('heading', { name: 'Game 2', exact: true })).toBeVisible();
