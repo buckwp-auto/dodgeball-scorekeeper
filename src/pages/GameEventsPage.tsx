@@ -71,6 +71,7 @@ import {
 } from '../domain/gameElimination';
 import {
   applyOtherOffenseHotkey,
+  applyPlayerHotkeyToErrorDraft,
   buildPermanentPlayerHotkeys,
   findGamePlayerIdByHotkey,
   getOtherOffenseChoiceForKey,
@@ -763,11 +764,8 @@ export function GameEventsPage() {
         const hotkeys = buildPermanentPlayerHotkeys(players);
         const gamePlayerId = findGamePlayerIdByHotkey(hotkeys, key);
         if (!gamePlayerId || live.eliminatedGamePlayerIds.has(gamePlayerId)) return;
-        setErrorDraft((prev) => ({
-          ...prev,
-          offenderGamePlayerId:
-            prev.offenderGamePlayerId === gamePlayerId ? '' : gamePlayerId,
-        }));
+        const next = applyPlayerHotkeyToErrorDraft(errorDraft, players, key);
+        if (next) setErrorDraft(next);
       }
     },
     [
@@ -788,7 +786,7 @@ export function GameEventsPage() {
       updateThrowDrafts,
       visibleTab,
       live.eliminatedGamePlayerIds,
-      errorDraft.noBlockingStarted,
+      errorDraft,
     ],
   );
 

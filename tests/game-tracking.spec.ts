@@ -135,4 +135,54 @@ test.describe('Game tracking (full roster)', () => {
     await expect(page.locator('.sk-game-timeline')).toContainText('H2');
     await expect(page.locator('.sk-game-timeline')).not.toContainText('H1');
   });
+
+  test('records illegal block with thrower and offender as one kill', async ({ page }) => {
+    await clearScorekeeperStorage(page);
+    await gotoScorekeeper(page);
+    await addTeam(page, 'Home Hawks');
+    await openTeam(page, 'Home Hawks');
+    await addPlayer(page, 'H1');
+    await addTeam(page, 'Away Owls');
+    await openTeam(page, 'Away Owls');
+    await addPlayer(page, 'A1');
+    await createMatch(page, 'Home Hawks', 'Away Owls');
+    await selectMatchRoster(page, 'H1', 'A1');
+    await addGame(page);
+    await selectGameRoster(page, 'H1', 'A1');
+    await page.getByRole('button', { name: 'Track Game' }).click();
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Other', exact: true }).click();
+    await page.getByRole('button', { name: 'Illegal Block (No Blocking)' }).click();
+    await page.locator('.sk-editor-grid').getByRole('button', { name: /H1/ }).click();
+    await page.locator('.sk-editor-grid').getByRole('button', { name: /A1/ }).click();
+
+    const timeline = page.locator('.sk-game-timeline');
+    await expect(timeline).toContainText('H1 threw at A1');
+    await expect(timeline).toContainText('Illegal Block (No Blocking)');
+    await expect(
+      page.locator('.sk-editor-grid').getByRole('button', { name: /A1 \(out\)/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/Eliminated! \(Home Hawks win\)/)).toBeVisible();
+
+    await page.locator('.sk-menu-link').filter({ hasText: 'Stats' }).first().click();
+    await expect(page.getByRole('heading', { name: /stats/i })).toBeVisible();
+    await page.getByLabel('Match').click();
+    await page.getByRole('option', { name: / vs\. / }).first().click();
+    await page.getByLabel('Game').click();
+    await page.getByRole('option', { name: 'Game 1', exact: true }).click();
+    await expect(page.getByRole('heading', { name: /Game 1 stats/ })).toBeVisible();
+    await page.getByRole('tab', { name: 'Players' }).click();
+    const stats = page.locator('.sk-stats-table');
+    const killsIndex = await stats.locator('thead th').evaluateAll((ths) =>
+      ths.findIndex((th) => (th.textContent ?? '').trim() === 'Kills'),
+    );
+    expect(killsIndex).toBeGreaterThan(0);
+    await expect(
+      stats.locator('tbody tr').filter({ hasText: 'H1' }).locator('td').nth(killsIndex),
+    ).toHaveText('1');
+    await expect(
+      stats.locator('tbody tr').filter({ hasText: 'A1' }).locator('td').nth(killsIndex),
+    ).toHaveText('0');
+  });
 });
