@@ -105,20 +105,81 @@ export function isOtherOffenseChoiceActive(
   return !draft.noBlockingStarted && draft.offenseId === choice.offenseId;
 }
 
+export type OtherTabDraft = {
+  offenderGamePlayerId: string;
+  throwerGamePlayerId?: string;
+  offenseId: GameEventErrorOffense | null;
+  noBlockingStarted?: boolean;
+};
+
 export function applyOtherOffenseHotkey(
-  draft: { offenderGamePlayerId: string; offenseId: GameEventErrorOffense | null; noBlockingStarted?: boolean },
+  draft: OtherTabDraft,
   choice: OtherOffenseChoice,
-): typeof draft {
+): OtherTabDraft {
   if (choice.kind === 'noBlocking') {
     return draft.noBlockingStarted
       ? { ...draft, noBlockingStarted: false }
-      : { offenderGamePlayerId: '', offenseId: null, noBlockingStarted: true };
+      : {
+          offenderGamePlayerId: '',
+          throwerGamePlayerId: '',
+          offenseId: null,
+          noBlockingStarted: true,
+        };
   }
   const nextOffense = draft.offenseId === choice.offenseId ? null : choice.offenseId;
+  const keepThrower = nextOffense === GameEventErrorOffense.BlockIllegal;
   return {
     ...draft,
     noBlockingStarted: false,
     offenseId: nextOffense,
+    throwerGamePlayerId: keepThrower ? draft.throwerGamePlayerId ?? '' : '',
+  };
+}
+
+export function applyPlayerHotkeyToErrorDraft(
+  draft: OtherTabDraft,
+  players: PlayerHotkeySource[],
+  key: string,
+): OtherTabDraft | null {
+  if (draft.noBlockingStarted) return null;
+  const map = buildPermanentPlayerHotkeys(players);
+  const gamePlayerId = findGamePlayerIdByHotkey(map, key);
+  if (!gamePlayerId) return null;
+  const hit = players.find((row) => row.gamePlayerId === gamePlayerId);
+  if (!hit) return null;
+
+  const needsThrower = draft.offenseId === GameEventErrorOffense.BlockIllegal;
+  if (!needsThrower) {
+    return {
+      ...draft,
+      offenderGamePlayerId:
+        draft.offenderGamePlayerId === gamePlayerId ? '' : gamePlayerId,
+    };
+  }
+
+  const throwerId = draft.throwerGamePlayerId ?? '';
+  let throwingHome: boolean | null = null;
+  if (throwerId) {
+    throwingHome =
+      players.find((row) => row.gamePlayerId === throwerId)?.teamHome ?? null;
+  } else if (draft.offenderGamePlayerId) {
+    const offenderHome = players.find(
+      (row) => row.gamePlayerId === draft.offenderGamePlayerId,
+    )?.teamHome;
+    throwingHome = offenderHome === undefined ? null : !offenderHome;
+  }
+
+  if (throwingHome === null || hit.teamHome === throwingHome) {
+    return {
+      ...draft,
+      throwerGamePlayerId: throwerId === gamePlayerId ? '' : gamePlayerId,
+    };
+  }
+
+  return {
+    ...draft,
+    offenderGamePlayerId:
+      draft.offenderGamePlayerId === gamePlayerId ? '' : gamePlayerId,
   };
 }
 

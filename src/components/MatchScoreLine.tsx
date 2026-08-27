@@ -1,5 +1,5 @@
-import { Typography } from '@mui/material';
 import { useMemo } from 'react';
+import { DigitalScoreboard } from './DigitalScoreboard';
 import {
   buildMatchSeries,
   formatMatchSeriesScore,
@@ -12,23 +12,6 @@ export function useMatchSeriesScore(matchId: string): string | null {
   return series ? formatMatchSeriesScore(series) : null;
 }
 
-export function MatchScoreLine({
-  matchId,
-  variant = 'subtitle1',
-}: {
-  matchId: string;
-  variant?: 'subtitle1' | 'subtitle2' | 'body2';
-}) {
-  const score = useMatchSeriesScore(matchId);
-  if (!score) return null;
-  return (
-    <Typography
-      variant={variant}
-      className="sk-match-score"
-      color="text.secondary"
-      sx={{ mb: 1 }}
-    >
-      {score}
-    </Typography>
-  );
+export function MatchScoreLine({ matchId }: { matchId: string }) {
+  return <DigitalScoreboard matchId={matchId} />;
 }

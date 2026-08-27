@@ -163,7 +163,7 @@ export function StatsPage() {
       <PageHeader>{title}</PageHeader>
       {scope ? <StatsScopeNav data={data} scope={scope} /> : null}
       {canDownloadCsv ? (
-        <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2 }}>
+        <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2, rowGap: 1 }}>
           <Button
             type="button"
             variant="outlined"

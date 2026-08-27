@@ -69,6 +69,11 @@ body {
   text-align: left;
 }
 
+/* Wrapped button rows: Stack spacing is row-axis only, so wrapping columns need a gap. */
+.button-row {
+  row-gap: 8px;
+}
+
 .form-one-line .col {
   flex: 1 1 12rem;
 }

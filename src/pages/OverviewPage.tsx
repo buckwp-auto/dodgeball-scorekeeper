@@ -235,7 +235,11 @@ export function OverviewPage() {
           ) : authLoading ? (
             <CircularProgress size={24} />
           ) : user ? (
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+            >
               <Typography variant="body2">
                 Signed in as {user.displayName || user.email}
               </Typography>
@@ -288,7 +292,7 @@ export function OverviewPage() {
             <Stack
               direction="row"
               spacing={1}
-              sx={{ alignItems: 'center', mb: 1, flexWrap: 'wrap' }}
+              sx={{ alignItems: 'center', mb: 1, flexWrap: 'wrap', rowGap: 1 }}
             >
               <Typography variant="h6">Leagues</Typography>
               <Button
@@ -303,7 +307,7 @@ export function OverviewPage() {
             <Stack
               direction="row"
               spacing={1}
-              sx={{ alignItems: 'flex-end', mb: 2, flexWrap: 'wrap' }}
+              sx={{ alignItems: 'flex-end', mb: 2, flexWrap: 'wrap', rowGap: 1 }}
             >
               <TextField
                 size="small"
@@ -373,7 +377,7 @@ export function OverviewPage() {
                           <Stack
                             direction="row"
                             spacing={1}
-                            sx={{ justifyContent: 'flex-end' }}
+                            sx={{ justifyContent: 'flex-end', flexWrap: 'wrap', rowGap: 1 }}
                           >
                             {canOpen ? (
                               <Button
@@ -533,7 +537,7 @@ export function OverviewPage() {
             direction="row"
             spacing={1}
             className="button-row"
-            sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+            sx={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 1 }}
           >
             <Button
               type="button"
