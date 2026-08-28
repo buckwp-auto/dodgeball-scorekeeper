@@ -38,4 +38,23 @@ test.describe('Help and onboarding', () => {
     await page.getByRole('button', { name: 'Start guided tour' }).click();
     await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible({ timeout: 10_000 });
   });
+
+  test('nav steps open the matching page and select the drawer link', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await gotoScorekeeper(page);
+
+    await navigateMenu(page, 'Help');
+    await page.getByRole('button', { name: 'Start guided tour' }).click();
+    await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page).toHaveURL(/\/teams$/);
+    await expect(page.locator('main').getByRole('heading', { name: 'Teams' })).toBeVisible();
+    await expect(page.locator('.sk-menu-link--root').filter({ hasText: 'Teams' })).toHaveClass(
+      /Mui-selected/,
+    );
+    await expect(page.getByText('Teams & players')).toBeVisible();
+  });
 });

@@ -101,3 +101,25 @@ body {
   user-select: none;
 }
 
+.sk-onboarding-tour-card--below {
+  position: relative;
+  padding-top: 10px;
+}
+
+.sk-onboarding-tour-card--below::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 28px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid #fff;
+  filter: drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.12));
+}
+
+:root[data-color-mode='dark'] .sk-onboarding-tour-card--below::before {
+  border-bottom-color: #424242;
+}
+

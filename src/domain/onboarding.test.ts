@@ -56,4 +56,9 @@ describe('onboarding steps', () => {
   it('builds stable anchor selectors', () => {
     expect(onboardingAnchorSelector('nav-matches')).toBe('[data-onboarding="nav-matches"]');
   });
+
+  it('navigates to each section so the drawer tab is selected', () => {
+    const navSteps = ONBOARDING_STEPS.filter((step) => step.anchor.startsWith('nav-'));
+    expect(navSteps.every((step) => step.route?.startsWith('/'))).toBe(true);
+  });
 });

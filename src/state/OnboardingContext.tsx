@@ -47,8 +47,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     (index: number) => {
       const nextStep = ONBOARDING_STEPS[index];
       if (!nextStep) return;
-      setStepIndex(index);
       if (nextStep.route) navigate(nextStep.route);
+      setStepIndex(index);
     },
     [navigate],
   );
