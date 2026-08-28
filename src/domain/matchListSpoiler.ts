@@ -1,8 +1,9 @@
+import { isStatsImportedMatchId } from './importedMatch';
 import {
   getGameStartEvent,
   lastStampedVideoOffsetInGame,
 } from './gameEvents';
-import { getMatchGames } from './matchGame';
+import { getMatchById, getMatchGames } from './matchGame';
 import {
   buildMatchSeries,
   formatMatchSeriesScore,
@@ -13,7 +14,7 @@ import { formatVideoTime } from './youtube';
 /** Session set of match ids whose list scores are currently revealed. */
 export const MATCH_SCORE_REVEALED_KEY = 'SCOREKEEPER_MATCH_SCORE_REVEALED';
 
-export type MatchListProgress = 'notStarted' | 'inProgress' | 'finished';
+export type MatchListProgress = 'notStarted' | 'inProgress' | 'finished' | 'statsImported';
 
 export type MatchListSpoiler = {
   matchId: Guid;
@@ -34,6 +35,7 @@ const PROGRESS_LABEL: Record<MatchListProgress, string> = {
   notStarted: 'Not started',
   inProgress: 'In progress',
   finished: 'Finished',
+  statsImported: 'Stats imported',
 };
 
 export function buildMatchListSpoiler(
@@ -44,9 +46,17 @@ export function buildMatchListSpoiler(
   if (!series) return null;
 
   const games = getMatchGames(data, matchId);
+  const match = getMatchById(data, matchId);
   const active = games.find((game) => !game.scoringComplete) ?? null;
-  const progress: MatchListProgress =
-    games.length === 0 ? 'notStarted' : active ? 'inProgress' : 'finished';
+  const progress: MatchListProgress = isStatsImportedMatchId(data, matchId)
+    ? match?.Ended
+      ? 'finished'
+      : 'statsImported'
+    : games.length === 0
+      ? 'notStarted'
+      : active
+        ? 'inProgress'
+        : 'finished';
 
   return {
     matchId,

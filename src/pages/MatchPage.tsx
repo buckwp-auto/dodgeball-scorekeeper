@@ -1,6 +1,7 @@
-import { Button, Stack, TextField } from '@mui/material';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Stack, TextField } from '@mui/material';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { MatchStatsImportDialog } from '../components/MatchStatsImportDialog';
 import { PlayerRoster } from '../components/MatchRoster';
 import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
@@ -8,6 +9,7 @@ import { MatchScoreLine } from '../components/MatchScoreLine';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { buildStatisticsCsvBytes } from '../domain/statisticsCsv';
+import { isStatsImportedMatch } from '../domain/importedMatch';
 import { getMatchName, getTeam } from '../domain/database';
 import {
   previewRemovePlayerFromMatch,
@@ -33,6 +35,10 @@ import {
   suggestLinkedPlayers,
   type PlayerMatchCandidate,
 } from '../domain/playerMatch';
+import {
+  importMatchStatistics,
+  type ImportMatchSeriesInput,
+} from '../domain/statistics/importedMatchStats';
 import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
 
@@ -47,6 +53,10 @@ export function MatchPage() {
   const [homeAddAsSub, setHomeAddAsSub] = useState(false);
   const [awayAddName, setAwayAddName] = useState('');
   const [awayAddAsSub, setAwayAddAsSub] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importCsvText, setImportCsvText] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
 
   useEffect(() => {
     if (!matchId) return;
@@ -180,7 +190,8 @@ export function MatchPage() {
 
   const homeTeam = getTeam(data, match.TeamIdHome);
   const awayTeam = getTeam(data, match.TeamIdAway);
-  const canTrack = canNavigateToMatchPage(data, matchId);
+  const statsImported = isStatsImportedMatch(match);
+  const canTrack = canNavigateToMatchPage(data, matchId) && !statsImported;
   const youtubeValid =
     !youtubeDraft.trim() || Boolean(parseYoutubeVideoId(youtubeDraft));
 
@@ -232,22 +243,80 @@ export function MatchPage() {
     await navigator.clipboard.writeText(tsv);
   };
 
+  const onImportFile = async (file: File) => {
+    setImportError(null);
+    try {
+      const text = await file.text();
+      setImportCsvText(text);
+    } catch {
+      setImportError('Could not read the CSV file');
+    }
+  };
+
+  const onConfirmImport = (series: ImportMatchSeriesInput) => {
+    if (!importCsvText) return;
+    setImportBusy(true);
+    setImportError(null);
+    try {
+      mutate(
+        (draft) => {
+          importMatchStatistics(draft, matchId, importCsvText, series);
+          return null;
+        },
+        'Imported match statistics from CSV.',
+      );
+      setImportCsvText(null);
+      navigate(`/matches/${matchId}/stats`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Import failed';
+      setImportError(detail);
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   return (
     <>
       <PageHeader>Match</PageHeader>
       <MatchScoreLine matchId={matchId} />
+      {statsImported ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Statistics were imported from CSV. Event tracking is not available for this match.
+        </Alert>
+      ) : null}
       <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2, rowGap: 1 }}>
+        {!statsImported ? (
+          <Button
+            type="button"
+            className="bw-button bw-button--text"
+            variant="contained"
+            disabled={!canTrack}
+            data-tour="track-match"
+            onClick={() => navigate(`/matches/${matchId}/events`)}
+          >
+            Track Match
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            className="bw-button bw-button--text"
+            variant="contained"
+            onClick={() => navigate(`/matches/${matchId}/stats`)}
+          >
+            See stats
+          </Button>
+        )}
+        {!statsImported ? (
+          <SeeStatsButton to={`/matches/${matchId}/stats`} size="medium" />
+        ) : null}
         <Button
           type="button"
-          className="bw-button bw-button--text"
-          variant="contained"
-          disabled={!canTrack}
-          data-tour="track-match"
-          onClick={() => navigate(`/matches/${matchId}/events`)}
+          className="bw-button bw-button--text sk-import-match-stats"
+          variant="outlined"
+          onClick={() => importInputRef.current?.click()}
         >
-          Track Match
+          Import Match Statistics
         </Button>
-        <SeeStatsButton to={`/matches/${matchId}/stats`} size="medium" />
         <Button
           type="button"
           className="bw-button bw-button--text"
@@ -351,6 +420,31 @@ export function MatchPage() {
           }}
         />
       </div>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".csv"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) void onImportFile(file);
+        }}
+      />
+      <MatchStatsImportDialog
+        open={importCsvText != null}
+        homeTeamName={homeTeam?.Name ?? 'Home'}
+        awayTeamName={awayTeam?.Name ?? 'Away'}
+        csvText={importCsvText ?? ''}
+        busy={importBusy}
+        error={importError}
+        onClose={() => {
+          if (importBusy) return;
+          setImportCsvText(null);
+          setImportError(null);
+        }}
+        onConfirm={onConfirmImport}
+      />
     </>
   );
 }

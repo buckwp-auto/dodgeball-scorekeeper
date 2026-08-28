@@ -1,6 +1,6 @@
 import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams } from 'react-router';
 import { rememberLastGame } from '../domain/lastScoring';
 import { PlayerRoster } from '../components/MatchRoster';
 import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
@@ -44,6 +44,7 @@ import {
   type PlayerMatchCandidate,
 } from '../domain/playerMatch';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
+import { isStatsImportedMatch } from '../domain/importedMatch';
 import { useDatabase } from '../state/DatabaseContext';
 
 export function GamePage() {
@@ -258,6 +259,10 @@ export function GamePage() {
   };
 
   useDocumentHotkeys((key) => onPlayerHotkey(key), Boolean(match));
+
+  if (isStatsImportedMatch(match)) {
+    return <Navigate to={`/matches/${matchId}/stats`} replace />;
+  }
 
   if (!match || !live) {
     return <PageHeader>Game</PageHeader>;

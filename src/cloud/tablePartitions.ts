@@ -16,6 +16,7 @@ export const MATCH_TABLES = [
   'MatchEventGame',
   'Game',
   'GamePlayer',
+  'ImportedPlayerStats',
   'GameEvent',
   'GameEventError',
   'GameEventFinish',

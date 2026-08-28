@@ -45,6 +45,7 @@ import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { GameTrackingTour } from './components/onboarding/GameTrackingTour';
 import { CloudSyncBar } from './components/CloudSyncBar';
 import { ColorModeToggle } from './components/ColorModeToggle';
+import { ImportedMatchStatsGuard } from './components/ImportedMatchStatsGuard';
 import { MadeByFooter } from './components/MadeByFooter';
 import { ResumeScoringNavItem } from './components/ResumeScoringButton';
 
@@ -183,15 +184,33 @@ function AppShell() {
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/:matchId" element={<MatchPage />} />
           <Route path="/matches/:matchId/stats" element={<StatsPage />} />
-          <Route path="/matches/:matchId/events" element={<MatchEventsPage />} />
-          <Route path="/matches/:matchId/games/:gameId" element={<GamePage />} />
+          <Route
+            path="/matches/:matchId/events"
+            element={
+              <ImportedMatchStatsGuard>
+                <MatchEventsPage />
+              </ImportedMatchStatsGuard>
+            }
+          />
+          <Route
+            path="/matches/:matchId/games/:gameId"
+            element={
+              <ImportedMatchStatsGuard>
+                <GamePage />
+              </ImportedMatchStatsGuard>
+            }
+          />
           <Route
             path="/matches/:matchId/games/:gameId/stats"
             element={<StatsPage />}
           />
           <Route
             path="/matches/:matchId/games/:gameId/events"
-            element={<GameEventsPage />}
+            element={
+              <ImportedMatchStatsGuard>
+                <GameEventsPage />
+              </ImportedMatchStatsGuard>
+            }
           />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/highlights" element={<HighlightsPage />} />
@@ -219,11 +238,11 @@ export function App() {
         <DatabaseProvider>
           <OnboardingProvider>
             <GameTrackingTourProvider>
-            <YoutubePopoutProvider>
-              <TrackGameImmersiveProvider>
-                <AppShell />
-              </TrackGameImmersiveProvider>
-            </YoutubePopoutProvider>
+              <YoutubePopoutProvider>
+                <TrackGameImmersiveProvider>
+                  <AppShell />
+                </TrackGameImmersiveProvider>
+              </YoutubePopoutProvider>
             </GameTrackingTourProvider>
           </OnboardingProvider>
         </DatabaseProvider>

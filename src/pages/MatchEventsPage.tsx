@@ -1,9 +1,10 @@
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams } from 'react-router';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { MatchScoreLine } from '../components/MatchScoreLine';
 import { PageHeader, TextButton } from '../components/Ui';
 import { getMatchName } from '../domain/database';
+import { isStatsImportedMatch } from '../domain/importedMatch';
 import { addGameWithAutoRoster } from '../domain/rosterAutoSelect';
 import { endMatch, isMatchEnded, undoEndMatch } from '../domain/matchEnd';
 import {
@@ -29,6 +30,9 @@ export function MatchEventsPage() {
   const { data, mutate, deleteGame } = useDatabase();
   const { canDeleteGame } = useLeague();
   const match = getMatchById(data, matchId);
+  if (isStatsImportedMatch(match)) {
+    return <Navigate to={`/matches/${matchId}/stats`} replace />;
+  }
   const games = getMatchGames(data, matchId);
   const showDeleteGame = canDeleteGame(match?.CreatedByUid);
   const matchEnded = isMatchEnded(match);

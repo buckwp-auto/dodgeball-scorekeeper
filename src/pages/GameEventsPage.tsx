@@ -1,6 +1,6 @@
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Navigate, useParams, useSearchParams } from 'react-router';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
 import { DigitalScoreboard } from '../components/DigitalScoreboard';
 import { HotkeyBadge } from '../components/HotkeyBadge';
@@ -27,6 +27,7 @@ import {
   useYoutubeControls,
 } from '../hooks/useYoutubeControls';
 import { getTeam } from '../domain/database';
+import { isStatsImportedMatch } from '../domain/importedMatch';
 import {
   areThrowDraftsComplete,
   deleteGameEvent,
@@ -903,6 +904,10 @@ export function GameEventsPage() {
     onCommitVideoOffset: handleCommitVideoOffset,
     onSetVideoOffsetFromPlayer: handleSetVideoOffsetFromPlayer,
   };
+
+  if (isStatsImportedMatch(match)) {
+    return <Navigate to={`/matches/${matchId}/stats`} replace />;
+  }
 
   return (
     <Box
