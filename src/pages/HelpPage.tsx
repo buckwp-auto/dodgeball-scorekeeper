@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { PageHeader } from '../components/Ui';
+import { useGameTrackingTour } from '../state/GameTrackingTourContext';
 import { useOnboarding } from '../state/OnboardingContext';
 
 const HOW_TO_SECTIONS = [
@@ -80,22 +81,34 @@ const FAQ_ITEMS = [
 
 export function HelpPage() {
   const { startTour } = useOnboarding();
+  const { startTour: startGameTrackingTour } = useGameTrackingTour();
 
   return (
     <Box className="sk-help-page">
       <PageHeader>Help</PageHeader>
       <Typography color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
         How-to guides and answers for getting around Scorekeeper. New here? Take the guided tour of the
-        menu and sync bar.
+        menu and sync bar, or walk through scoring a demo game.
       </Typography>
-      <Button
-        variant="outlined"
-        onClick={startTour}
-        className="sk-help-start-tour"
-        sx={{ mb: 3, textTransform: 'none' }}
-      >
-        Start guided tour
-      </Button>
+      <Stack direction="row" spacing={1} sx={{ mb: 3, flexWrap: 'wrap', rowGap: 1 }}>
+        <Button
+          variant="outlined"
+          onClick={startTour}
+          className="sk-help-start-tour"
+          sx={{ textTransform: 'none' }}
+        >
+          Start navigation tour
+        </Button>
+        <Button
+          variant="contained"
+          onClick={startGameTrackingTour}
+          className="sk-help-game-tracking-tour"
+          data-tour="intro"
+          sx={{ textTransform: 'none' }}
+        >
+          Start game tracking tour
+        </Button>
+      </Stack>
 
       <Typography component="h2" variant="h5" gutterBottom>
         How-to

@@ -96,9 +96,15 @@ body {
   z-index: 1301;
 }
 
-.sk-layout.sk-onboarding-active main {
+.sk-layout.sk-onboarding-active main,
+.sk-layout.sk-game-tracking-active main {
   pointer-events: none;
   user-select: none;
+}
+
+.sk-layout.sk-game-tracking-active.sk-game-tracking-interactive main {
+  pointer-events: auto;
+  user-select: auto;
 }
 
 .sk-onboarding-tour-card--below {
@@ -119,7 +125,29 @@ body {
   filter: drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.12));
 }
 
+.sk-onboarding-tour-card--above {
+  position: relative;
+  padding-bottom: 10px;
+}
+
+.sk-onboarding-tour-card--above::before {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 28px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #fff;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12));
+}
+
 :root[data-color-mode='dark'] .sk-onboarding-tour-card--below::before {
   border-bottom-color: #424242;
+}
+
+:root[data-color-mode='dark'] .sk-onboarding-tour-card--above::before {
+  border-top-color: #424242;
 }
 

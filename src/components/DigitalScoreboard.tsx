@@ -85,6 +85,7 @@ export function DigitalScoreboard({
   return (
     <Box
       className="sk-scoreboard"
+      data-tour="scoreboard"
       sx={{
         ...boardSx,
         px: minimal ? 0.75 : compact ? 1 : 2,

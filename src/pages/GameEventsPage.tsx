@@ -88,6 +88,7 @@ import {
 import { releaseActiveIframeFocus } from '../domain/youtube';
 import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
 import { useDatabase } from '../state/DatabaseContext';
+import { useGameTrackingTour } from '../state/GameTrackingTourContext';
 import { useSetTrackGameImmersive } from '../state/TrackGameImmersiveContext';
 import { useYoutubePopout } from '../state/YoutubePopoutContext';
 
@@ -156,6 +157,34 @@ export function GameEventsPage() {
   const autoCommittingRef = useRef(false);
   const redoStackRef = useRef<GameEventSnapshot[]>([]);
   const appliedFocusRef = useRef<string | null>(null);
+  const { active: tourActive, step: tourStep } = useGameTrackingTour();
+
+  useEffect(() => {
+    if (!tourActive || !gameId) return;
+    if (tourStep.id === 'game-start') {
+      const start = getGameStartEvent(data, gameId);
+      if (start) setSelectedEventId(start.Id);
+      return;
+    }
+    if (
+      tourStep.id === 'throw-single' ||
+      tourStep.id === 'throw-team' ||
+      tourStep.id === 'throw-deflection'
+    ) {
+      setSelectedEventId(null);
+      setActiveTab('throw');
+      return;
+    }
+    if (tourStep.id === 'other-tab') {
+      setSelectedEventId(null);
+      setActiveTab('error');
+      return;
+    }
+    if (tourStep.id === 'finish-game') {
+      setSelectedEventId(null);
+      setActiveTab('finish');
+    }
+  }, [tourActive, tourStep.id, gameId, data]);
 
   const youtubeUrl = match?.YoutubeUrl?.trim() || '';
   const {
@@ -1079,6 +1108,7 @@ export function GameEventsPage() {
               direction="row"
               spacing={1}
               className="button-row"
+              data-tour="editor-tabs"
               sx={{
                 flexWrap: 'wrap',
                 alignItems: 'center',
@@ -1101,6 +1131,8 @@ export function GameEventsPage() {
                   {(['throw', 'error', 'finish'] as const).map((tab) => {
                     const label =
                       tab === 'throw' ? 'Throw' : tab === 'error' ? 'Other' : 'Finish';
+                    const tourAnchor =
+                      tab === 'error' ? 'other-tab' : tab === 'finish' ? 'finish-tab' : undefined;
                     return (
                       <Box key={tab} className="tab tab--attached">
                         <Button
@@ -1111,6 +1143,7 @@ export function GameEventsPage() {
                           onClick={() => selectEditorTab(tab)}
                           disabled={gameFinished && tab !== 'finish'}
                           aria-label={label}
+                          data-tour={tourAnchor}
                         >
                           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                             <HotkeyBadge hotkey={hotkeyForTrackGameTab(tab)} />
@@ -1193,18 +1226,20 @@ export function GameEventsPage() {
               }}
             >
             {visibleTab === 'start' && effectiveSelectedId ? (
-              <StartEventEditor
-                videoOffsetSeconds={
-                  timeline.find((row) => row.id === effectiveSelectedId)?.videoOffsetSeconds
-                }
-                onCommitOffset={(seconds) =>
-                  handleCommitVideoOffset(effectiveSelectedId, seconds)
-                }
-                onSetFromPlayer={() =>
-                  handleSetVideoOffsetFromPlayer(effectiveSelectedId)
-                }
-                canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
-              />
+              <Box data-tour="game-start">
+                <StartEventEditor
+                  videoOffsetSeconds={
+                    timeline.find((row) => row.id === effectiveSelectedId)?.videoOffsetSeconds
+                  }
+                  onCommitOffset={(seconds) =>
+                    handleCommitVideoOffset(effectiveSelectedId, seconds)
+                  }
+                  onSetFromPlayer={() =>
+                    handleSetVideoOffsetFromPlayer(effectiveSelectedId)
+                  }
+                  canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
+                />
+              </Box>
             ) : null}
             {commitError ? (
               <Alert severity="error" sx={{ mb: 1 }}>

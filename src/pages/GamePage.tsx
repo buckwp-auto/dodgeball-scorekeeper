@@ -294,6 +294,7 @@ export function GamePage() {
           className="bw-button bw-button--text"
           variant="contained"
           disabled={!canTrack}
+          data-tour="track-game"
           onClick={() => navigate(`/matches/${matchId}/games/${gameId}/events`)}
         >
           Track Game
@@ -318,7 +319,7 @@ export function GamePage() {
         </Button>
       </Stack>
       <RosterYoutubePlayer youtubeUrl={match.YoutubeUrl?.trim() || ''} />
-      <div className="sk-game">
+      <div className="sk-game" data-tour="game-roster">
         <PlayerRoster
           side="Home Team"
           teamName={homeTeam?.Name ?? 'Home'}

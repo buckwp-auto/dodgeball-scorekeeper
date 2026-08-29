@@ -334,6 +334,7 @@ export function GameEventsTimeline({
   return (
     <Box
       className="sk-game-timeline"
+      data-tour="timeline"
       sx={{
         bgcolor: 'grey.900',
         color: 'grey.100',

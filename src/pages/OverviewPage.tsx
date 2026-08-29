@@ -33,14 +33,13 @@ import {
   SAMPLE_LEAGUE_LABEL,
   localLeagueLabelFromFilename,
 } from '../domain/localLeagueLabel';
+import { fetchSampleLeagueDatabase } from '../domain/sampleLeague';
 import { useAuth } from '../state/AuthContext';
 import { useDatabase } from '../state/DatabaseContext';
 import {
   getStoredActiveLeagueId,
   useLeague,
 } from '../state/LeagueContext';
-
-const SAMPLE_LEAGUE_URL = `${import.meta.env.BASE_URL}samples/league-six-teams.scrkpr`;
 
 type PendingImport = {
   raw: unknown;
@@ -167,11 +166,7 @@ export function OverviewPage() {
   const onLoadSampleLeague = async () => {
     setLoading('sample');
     try {
-      const response = await fetch(SAMPLE_LEAGUE_URL);
-      if (!response.ok) {
-        throw new Error(`Could not fetch sample (${response.status})`);
-      }
-      const raw: unknown = await response.json();
+      const raw = await fetchSampleLeagueDatabase();
       await beginImport(
         raw,
         'Loaded sample league (demo) — six teams with matches and games.',
@@ -572,6 +567,7 @@ export function OverviewPage() {
               className="bw-button bw-button--text"
               variant="outlined"
               disabled={busy || importBlockedForMember}
+              data-tour="load-sample"
               onClick={() => void onLoadSampleLeague()}
               startIcon={
                 loading === 'sample' ? (

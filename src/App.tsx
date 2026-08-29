@@ -35,12 +35,14 @@ import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
 import { OnboardingProvider } from './state/OnboardingContext';
+import { GameTrackingTourProvider } from './state/GameTrackingTourContext';
 import { YoutubePopoutProvider } from './state/YoutubePopoutContext';
 import {
   TrackGameImmersiveProvider,
   useTrackGameImmersive,
 } from './state/TrackGameImmersiveContext';
 import { OnboardingTour } from './components/onboarding/OnboardingTour';
+import { GameTrackingTour } from './components/onboarding/GameTrackingTour';
 import { CloudSyncBar } from './components/CloudSyncBar';
 import { ColorModeToggle } from './components/ColorModeToggle';
 import { MadeByFooter } from './components/MadeByFooter';
@@ -199,6 +201,7 @@ function AppShell() {
         </Routes>
       </Box>
       <OnboardingTour />
+      <GameTrackingTour />
     </Box>
   );
 }
@@ -215,11 +218,13 @@ export function App() {
       <LeagueProvider>
         <DatabaseProvider>
           <OnboardingProvider>
+            <GameTrackingTourProvider>
             <YoutubePopoutProvider>
               <TrackGameImmersiveProvider>
                 <AppShell />
               </TrackGameImmersiveProvider>
             </YoutubePopoutProvider>
+            </GameTrackingTourProvider>
           </OnboardingProvider>
         </DatabaseProvider>
       </LeagueProvider>

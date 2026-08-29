@@ -698,6 +698,7 @@ export const YoutubePlayer = forwardRef<
   return (
     <Box
       className="sk-youtube-player"
+      data-tour="youtube"
       sx={{
         borderBottom: isTall ? 1 : 0,
         borderColor: 'divider',
@@ -769,6 +770,7 @@ export function YoutubePopoutBar({
   return (
     <Box
       className="sk-youtube-player"
+      data-tour="youtube"
       sx={{ bgcolor: 'grey.900', color: 'grey.100', borderBottom: 1, borderColor: 'divider' }}
     >
       {blocked ? (

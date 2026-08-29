@@ -24,7 +24,7 @@ test.describe('Help and onboarding', () => {
       .toBe('1');
   });
 
-  test('help page lists FAQ and can restart the tour', async ({ page }) => {
+  test('help page lists FAQ and can restart the navigation tour', async ({ page }) => {
     await page.addInitScript((key) => {
       localStorage.setItem(key, '1');
     }, ONBOARDING_COMPLETE_KEY);
@@ -32,10 +32,10 @@ test.describe('Help and onboarding', () => {
 
     await navigateMenu(page, 'Help');
     await expect(page.getByRole('heading', { name: 'Help' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Start guided tour' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start navigation tour' })).toBeVisible();
     await expect(page.getByText('Do I need an account?')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Start guided tour' }).click();
+    await page.getByRole('button', { name: 'Start navigation tour' }).click();
     await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible({ timeout: 10_000 });
   });
 
@@ -46,7 +46,7 @@ test.describe('Help and onboarding', () => {
     await gotoScorekeeper(page);
 
     await navigateMenu(page, 'Help');
-    await page.getByRole('button', { name: 'Start guided tour' }).click();
+    await page.getByRole('button', { name: 'Start navigation tour' }).click();
     await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole('button', { name: 'Next' }).click();
@@ -56,5 +56,25 @@ test.describe('Help and onboarding', () => {
       /Mui-selected/,
     );
     await expect(page.getByText('Teams & players')).toBeVisible();
+  });
+
+  test('game tracking tour loads the sample league', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await gotoScorekeeper(page);
+
+    await navigateMenu(page, 'Help');
+    await page.getByRole('button', { name: 'Start game tracking tour' }).click();
+    await expect(page.getByText('Track a game walkthrough')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('Load the demo league')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    await expect(page.getByRole('button', { name: 'League stats' })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText('Local only is fine')).toBeVisible({ timeout: 10_000 });
   });
 });
