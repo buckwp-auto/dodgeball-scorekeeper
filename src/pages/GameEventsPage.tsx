@@ -88,6 +88,7 @@ import {
 import { releaseActiveIframeFocus } from '../domain/youtube';
 import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
 import { useDatabase } from '../state/DatabaseContext';
+import { useSetTrackGameImmersive } from '../state/TrackGameImmersiveContext';
 import { useYoutubePopout } from '../state/YoutubePopoutContext';
 
 type TabKey = TrackGameTab;
@@ -170,6 +171,7 @@ export function GameEventsPage() {
     popoutPlayback,
   } = useYoutubeControls(youtubeUrl);
   const { attachedGameId, setAttachedGameId } = useYoutubePopout();
+  const setTrackGameImmersive = useSetTrackGameImmersive();
 
   const updateThrowDrafts = useCallback(
     (next: ThrowDraft[] | ((prev: ThrowDraft[]) => ThrowDraft[])) => {
@@ -852,35 +854,79 @@ export function GameEventsPage() {
   const youtubeDocked = hasYoutube && youtubeMode === 'docked';
   const youtubeTall = hasYoutube && youtubeMode === 'tall';
   const youtubeTopBand = hasYoutube && youtubeMode !== 'docked';
-  const editorCompact = youtubeTall;
+  const stackedView = youtubeTall || youtubePopout;
+  const editorCompact = stackedView;
+
+  useEffect(() => {
+    setTrackGameImmersive(stackedView);
+    return () => setTrackGameImmersive(false);
+  }, [setTrackGameImmersive, stackedView]);
+
+  const timelineProps = {
+    entries: timeline,
+    selectedEventId: effectiveSelectedId,
+    insertBeforeEventId,
+    showEndInsertMarker: showEndInsertMarker,
+    canSetFromPlayer: hasYoutube && youtubeMode !== 'hidden',
+    onSelectEvent: handleSelectEvent,
+    onDeselectEvent: handleDone,
+    onToggleHighlight: handleToggleHighlight,
+    onCommitVideoOffset: handleCommitVideoOffset,
+    onSetVideoOffsetFromPlayer: handleSetVideoOffsetFromPlayer,
+  };
 
   return (
     <Box
       className="sk-track-game"
       sx={{
         display: 'grid',
-        gridTemplateColumns: '1fr 300px',
-        // Tall: player fills leftover height; compact editor band below
-        gridTemplateRows: youtubeTall
-          ? 'minmax(0, 1fr) auto'
+        gridTemplateColumns: stackedView
+          ? youtubeTall
+            ? 'minmax(260px, 1fr) minmax(0, 4fr)'
+            : '1fr'
+          : '1fr 300px',
+        gridTemplateRows: stackedView
+          ? 'minmax(0, 7fr) minmax(0, 3fr)'
           : hasYoutube
             ? 'auto 1fr'
             : '1fr',
-        mx: -3,
-        mt: -3,
-        mb: -3,
-        height: '100vh',
-        overflow: 'hidden',
+        ...(stackedView
+          ? { height: '100vh', overflow: 'hidden' }
+          : { mx: -3, mt: -3, mb: -3, height: '100vh', overflow: 'hidden' }),
       }}
     >
-      {hasYoutube ? (
+      {hasYoutube && youtubeTall ? (
+        <Box
+          sx={{
+            gridColumn: 2,
+            gridRow: '1 / -1',
+            minWidth: 0,
+            minHeight: 0,
+            height: '100%',
+            overflow: 'hidden',
+          }}
+        >
+          <YoutubePlayer
+            ref={youtubePlayerRef}
+            youtubeUrl={youtubeUrl}
+            mode={youtubeMode}
+            onModeChange={setYoutubeModeAndPersist}
+            startSeconds={cueSeconds ?? openSeekSeconds ?? undefined}
+            onPopOut={popOut}
+            popoutBlocked={popoutPlayback.blocked}
+            onDisplayTime={setInPageVideoNow}
+          />
+        </Box>
+      ) : null}
+
+      {!stackedView && hasYoutube ? (
         <Box
           sx={{
             gridColumn: youtubeDocked ? 1 : '1 / -1',
             gridRow: 1,
             minWidth: 0,
             minHeight: 0,
-            height: youtubeTall ? '100%' : 'auto',
+            height: 'auto',
             overflow: 'hidden',
           }}
         >
@@ -913,20 +959,38 @@ export function GameEventsPage() {
       <Box
         sx={{
           gridColumn: 1,
-          gridRow: hasYoutube ? 2 : 1,
+          gridRow: stackedView ? 1 : hasYoutube ? 2 : 1,
           p: editorCompact ? 1 : 2,
-          overflow: editorCompact ? 'auto' : 'auto',
+          pl: editorCompact ? 3.5 : 2,
+          overflow: 'hidden',
           minHeight: 0,
           minWidth: 0,
-          maxHeight: youtubeTall ? '42vh' : undefined,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
+        {youtubePopout && stackedView ? (
+          <Box sx={{ flexShrink: 0, mb: 0.5 }}>
+            <YoutubePopoutBar
+              ready={popoutPlayback.ready}
+              playing={popoutPlayback.playing}
+              displayTime={popoutPlayback.displayTime}
+              seekingTo={popoutPlayback.seekingTo}
+              blocked={popoutPlayback.blocked}
+              handle={popoutPlayback.handle}
+              onDockBack={() => dockBack()}
+              onModeChange={(next) => setYoutubeModeAndPersist(next)}
+            />
+          </Box>
+        ) : null}
+
         {editorCompact ? (
-          <>
+          <Stack spacing={0.25} sx={{ flexShrink: 0, mb: 0.5 }}>
             {matchId ? (
               <DigitalScoreboard
                 matchId={matchId}
                 compact
+                minimal
                 runningTime={runningTime}
                 remaining={{
                   home: live.activeHomeCount,
@@ -934,13 +998,13 @@ export function GameEventsPage() {
                 }}
               />
             ) : null}
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               {gameTitle}
               {isGameOver
                 ? ` · Out (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'})`
                 : ''}
             </Typography>
-          </>
+          </Stack>
         ) : (
           <>
             <PageHeader>Track Game</PageHeader>
@@ -1020,6 +1084,7 @@ export function GameEventsPage() {
                 alignItems: 'center',
                 mb: editorCompact ? 1 : 2,
                 rowGap: 1,
+                flexShrink: 0,
               }}
             >
               {!lockedTab ? (
@@ -1118,6 +1183,15 @@ export function GameEventsPage() {
               ) : null}
             </Stack>
 
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                overflow: editorCompact && visibleTab === 'throw' ? 'hidden' : 'auto',
+                display: editorCompact && visibleTab === 'throw' ? 'flex' : 'block',
+                flexDirection: 'column',
+              }}
+            >
             {visibleTab === 'start' && effectiveSelectedId ? (
               <StartEventEditor
                 videoOffsetSeconds={
@@ -1184,32 +1258,29 @@ export function GameEventsPage() {
             {!editorCompact ? (
               <TrackGameHotkeyHints hasYoutube={hasYoutube} />
             ) : null}
+            </Box>
           </EditorDensityProvider>
         )}
       </Box>
 
       <Box
         sx={{
-          gridColumn: 2,
-          gridRow: youtubeDocked ? '1 / -1' : youtubeTopBand || hasYoutube ? 2 : 1,
+          gridColumn: stackedView && youtubeTall ? 1 : stackedView ? '1 / -1' : 2,
+          gridRow: stackedView
+            ? 2
+            : youtubeDocked
+              ? '1 / -1'
+              : youtubeTopBand || hasYoutube
+                ? 2
+                : 1,
           minHeight: 0,
           minWidth: 0,
           overflow: 'hidden',
-          maxHeight: youtubeTall ? '42vh' : undefined,
+          borderTop: stackedView ? 1 : 0,
+          borderColor: 'divider',
         }}
       >
-        <GameEventsTimeline
-          entries={timeline}
-          selectedEventId={effectiveSelectedId}
-          insertBeforeEventId={insertBeforeEventId}
-          showEndInsertMarker={showEndInsertMarker}
-          canSetFromPlayer={hasYoutube && youtubeMode !== 'hidden'}
-          onSelectEvent={handleSelectEvent}
-          onDeselectEvent={handleDone}
-          onToggleHighlight={handleToggleHighlight}
-          onCommitVideoOffset={handleCommitVideoOffset}
-          onSetVideoOffsetFromPlayer={handleSetVideoOffsetFromPlayer}
-        />
+        <GameEventsTimeline {...timelineProps} />
       </Box>
     </Box>
   );

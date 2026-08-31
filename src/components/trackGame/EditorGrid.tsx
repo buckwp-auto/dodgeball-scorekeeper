@@ -32,9 +32,35 @@ function useEditorColorSurface(): ColorSurface {
   return useTheme().palette.mode === 'dark' ? 'dark' : 'light';
 }
 
-export function EditorGrid({ children }: { children: ReactNode }) {
+const compactFontSize = '0.68rem';
+
+const compactHotkeyBadgeSx = {
+  '& .sk-hotkey-badge': {
+    minWidth: 24,
+    height: 20,
+    fontSize: '0.65rem',
+    '& .MuiChip-label': { px: 0.5 },
+  },
+} as const;
+
+export function EditorGrid({ children, stacked }: { children: ReactNode; stacked?: boolean }) {
   const density = useEditorDensity();
   const compact = density === 'compact';
+  if (compact && stacked) {
+    return (
+      <Box
+        className="sk-editor-grid sk-editor-grid--stacked"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 0.25,
+          flexShrink: 0,
+        }}
+      >
+        {children}
+      </Box>
+    );
+  }
   return (
     <Box
       className="sk-editor-grid"
@@ -44,6 +70,24 @@ export function EditorGrid({ children }: { children: ReactNode }) {
         gap: compact ? 0.25 : 0.5,
         // Stretch choice stacks so 6 player buttons can fill the 7-result column height
         alignItems: 'stretch',
+        ...(compact ? { minHeight: '100%' } : null),
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+/** Full-width action block below player rows in stacked compact layout. */
+export function EditorStackedActions({ children }: { children: ReactNode }) {
+  return (
+    <Box
+      className="sk-editor-stacked-actions"
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.25,
+        mt: 0.5,
       }}
     >
       {children}
@@ -69,22 +113,38 @@ export function EditorGridFinish({ children }: { children: ReactNode }) {
 export function EditorLabel({
   children,
   gridColumn,
+  centered,
 }: {
   children: ReactNode;
   gridColumn?: string | number;
+  centered?: boolean;
 }) {
   const density = useEditorDensity();
   return (
     <Typography
       variant={density === 'compact' ? 'caption' : 'subtitle2'}
-      sx={{ fontWeight: 700, gridColumn, lineHeight: density === 'compact' ? 1.2 : undefined }}
+      sx={{
+        fontWeight: 700,
+        gridColumn,
+        lineHeight: density === 'compact' ? 1.2 : undefined,
+        fontSize: density === 'compact' ? compactFontSize : undefined,
+        ...(centered ? { textAlign: 'center' } : null),
+      }}
     >
       {children}
     </Typography>
   );
 }
 
-export function TeamBanner({ name, teamHome }: { name: string; teamHome: boolean }) {
+export function TeamBanner({
+  name,
+  teamHome,
+  centered,
+}: {
+  name: string;
+  teamHome: boolean;
+  centered?: boolean;
+}) {
   const surface = useEditorColorSurface();
   const styles = teamHeaderStyles(teamHome, surface);
   const density = useEditorDensity();
@@ -95,11 +155,17 @@ export function TeamBanner({ name, teamHome }: { name: string; teamHome: boolean
       sx={{
         fontWeight: 700,
         px: compact ? 0.5 : 1,
-        py: compact ? 0.4 : 0.75,
-        minHeight: compact ? 28 : 36,
+        py: compact ? 0.35 : 0.75,
+        minHeight: compact ? 27 : 36,
         display: 'flex',
         alignItems: 'center',
+        justifyContent: centered ? 'center' : undefined,
         mb: compact ? 0.5 : 0.75,
+        fontSize: compact ? compactFontSize : undefined,
+        overflow: compact ? 'hidden' : undefined,
+        textOverflow: compact ? 'ellipsis' : undefined,
+        whiteSpace: compact ? 'nowrap' : undefined,
+        minWidth: 0,
         borderRadius: 1,
         border: '1px solid',
         backgroundColor: styles.backgroundColor,
@@ -121,7 +187,7 @@ export function TeamBannerSpacer() {
     <Box
       aria-hidden
       sx={{
-        minHeight: compact ? 28 : 36,
+        minHeight: compact ? 27 : 36,
         mb: compact ? 0.5 : 0.75,
       }}
     />
@@ -152,12 +218,12 @@ export function EditorChoiceStack({
         borderLeft: pending ? '4px solid' : '4px solid transparent',
         borderColor: pending ? 'error.main' : 'transparent',
         pl: pending ? (compact ? 0.5 : 1) : 0,
-        minHeight: compact ? 28 : 40,
+        minHeight: compact ? 27 : 40,
         ...(distribute
           ? {
               '& > *': {
                 flex: '1 1 auto',
-                minHeight: compact ? 32 : 44,
+                minHeight: compact ? 31 : 44,
               },
             }
           : null),
@@ -208,10 +274,11 @@ export function EditorChoiceButton({
         textTransform: 'none',
         whiteSpace: 'nowrap',
         lineHeight: 1.4,
-        py: compact ? 0.35 : 1,
-        minHeight: compact ? 32 : 44,
-        fontSize: compact ? '0.75rem' : undefined,
+        py: compact ? 0.32 : 1,
+        minHeight: compact ? 31 : 44,
+        fontSize: compact ? compactFontSize : undefined,
         opacity: eliminated ? 0.45 : 1,
+        ...(compact ? compactHotkeyBadgeSx : null),
         ...(pill
           ? {
               bgcolor: selected ? pill.borderColor : pill.backgroundColor,
@@ -234,12 +301,21 @@ export function EditorChoiceButton({
     >
       <Stack
         direction="row"
-        spacing={compact ? 0.5 : 1}
-        sx={{ alignItems: 'center', width: '100%' }}
+        spacing={compact ? 0.35 : 1}
+        sx={{ alignItems: 'center', width: '100%', minWidth: 0 }}
       >
         {hotkey ? <HotkeyBadge hotkey={hotkey} /> : null}
         {startIcon}
-        <span>{children}</span>
+        <Box
+          component="span"
+          sx={
+            compact
+              ? { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }
+              : undefined
+          }
+        >
+          {children}
+        </Box>
       </Stack>
     </Button>
   );
@@ -279,9 +355,10 @@ export function EditorChipButton({
         textTransform: 'none',
         whiteSpace: 'nowrap',
         lineHeight: 1.4,
-        py: compact ? 0.35 : 1,
-        minHeight: compact ? 32 : 44,
-        fontSize: compact ? '0.75rem' : undefined,
+        py: compact ? 0.32 : 1,
+        minHeight: compact ? 31 : 44,
+        fontSize: compact ? compactFontSize : undefined,
+        ...(compact ? compactHotkeyBadgeSx : null),
         ...(pill
           ? {
               bgcolor: pill.borderColor,
@@ -299,9 +376,22 @@ export function EditorChipButton({
           : null),
       }}
     >
-      <Stack direction="row" spacing={compact ? 0.5 : 1} sx={{ alignItems: 'center' }}>
+      <Stack
+        direction="row"
+        spacing={compact ? 0.35 : 1}
+        sx={{ alignItems: 'center', minWidth: 0, width: '100%' }}
+      >
         {hotkey ? <HotkeyBadge hotkey={hotkey} /> : null}
-        <span>{children}</span>
+        <Box
+          component="span"
+          sx={
+            compact
+              ? { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }
+              : undefined
+          }
+        >
+          {children}
+        </Box>
       </Stack>
     </Button>
   );

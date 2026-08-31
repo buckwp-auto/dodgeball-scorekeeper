@@ -1,13 +1,17 @@
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {
   Box,
   Divider,
   Drawer,
+  IconButton,
   List,
   ListItemButton,
   ListItemText,
   Toolbar,
   Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router';
 import { HistoryPage } from './pages/HistoryPage';
 import { HighlightsPage } from './pages/HighlightsPage';
@@ -29,6 +33,10 @@ import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
 import { LeagueProvider } from './state/LeagueContext';
 import { YoutubePopoutProvider } from './state/YoutubePopoutContext';
+import {
+  TrackGameImmersiveProvider,
+  useTrackGameImmersive,
+} from './state/TrackGameImmersiveContext';
 import { CloudSyncBar } from './components/CloudSyncBar';
 import { ColorModeToggle } from './components/ColorModeToggle';
 import { MadeByFooter } from './components/MadeByFooter';
@@ -46,7 +54,7 @@ const navItems = [
   { to: '/history', label: 'History' },
 ];
 
-function AppNav() {
+function AppNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
 
   return (
@@ -62,6 +70,7 @@ function AppNav() {
             component={Link}
             to={item.to}
             selected={selected}
+            onClick={onNavigate}
             className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}`}
             sx={{ py: 0.75 }}
           >
@@ -78,6 +87,114 @@ function AppNav() {
   );
 }
 
+function AppShell() {
+  const immersive = useTrackGameImmersive();
+  const [navOpen, setNavOpen] = useState(false);
+  const closeNav = () => setNavOpen(false);
+  const toggleNav = () => setNavOpen((open) => !open);
+
+  return (
+    <Box className="sk-layout" sx={{ display: 'flex', minHeight: '100vh' }}>
+      {immersive ? (
+        <IconButton
+          aria-label={navOpen ? 'Close menu' : 'Open menu'}
+          className="sk-nav-drawer-toggle"
+          onClick={toggleNav}
+          size="small"
+          sx={{
+            position: 'fixed',
+            left: navOpen ? drawerWidth : 0,
+            top: '50%',
+            transform: navOpen ? 'translate(-50%, -50%)' : 'translateY(-50%)',
+            zIndex: (theme) => theme.zIndex.drawer + 2,
+            bgcolor: 'background.paper',
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: navOpen ? '50%' : '0 4px 4px 0',
+            borderLeft: navOpen ? 1 : 0,
+            boxShadow: 2,
+            width: 28,
+            height: 48,
+            '&:hover': { bgcolor: 'background.paper' },
+          }}
+        >
+          {navOpen ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+        </IconButton>
+      ) : null}
+      <Drawer
+        variant={immersive ? 'temporary' : 'permanent'}
+        open={immersive ? navOpen : true}
+        onClose={closeNav}
+        slotProps={immersive ? { root: { keepMounted: true } } : undefined}
+        sx={{
+          width: immersive ? undefined : drawerWidth,
+          flexShrink: immersive ? undefined : 0,
+          '& .MuiDrawer-paper': {
+            width: drawerWidth,
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: (theme) =>
+              theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
+            borderRightColor: 'divider',
+          },
+        }}
+      >
+        <Toolbar sx={{ gap: 0.5, justifyContent: 'space-between', px: 1.5 }}>
+          <Typography variant="h6" color="primary" noWrap>
+            Scorekeeper
+          </Typography>
+          <ColorModeToggle />
+        </Toolbar>
+        <Box
+          className="sk-menu-content"
+          sx={{
+            px: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            flexGrow: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
+        >
+          <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+            <AppNav onNavigate={immersive ? closeNav : undefined} />
+            <ResumeScoringNavItem />
+          </Box>
+          <CloudSyncBar />
+          <Divider />
+          <MadeByFooter />
+        </Box>
+      </Drawer>
+      <Box component="main" sx={{ flexGrow: 1, p: immersive ? 0 : 3, minWidth: 0 }}>
+        <Routes>
+          <Route path="/" element={<OverviewPage />} />
+          <Route path="/teams" element={<TeamsPage />} />
+          <Route path="/teams/:teamId" element={<TeamPage />} />
+          <Route path="/players/:playerId" element={<PlayerPage />} />
+          <Route path="/matches" element={<MatchesPage />} />
+          <Route path="/matches/:matchId" element={<MatchPage />} />
+          <Route path="/matches/:matchId/stats" element={<StatsPage />} />
+          <Route path="/matches/:matchId/events" element={<MatchEventsPage />} />
+          <Route path="/matches/:matchId/games/:gameId" element={<GamePage />} />
+          <Route
+            path="/matches/:matchId/games/:gameId/stats"
+            element={<StatsPage />}
+          />
+          <Route
+            path="/matches/:matchId/games/:gameId/events"
+            element={<GameEventsPage />}
+          />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/highlights" element={<HighlightsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+        </Routes>
+      </Box>
+    </Box>
+  );
+}
+
 export function App() {
   useAnalyticsPageViews();
   const location = useLocation();
@@ -90,75 +207,9 @@ export function App() {
       <LeagueProvider>
         <DatabaseProvider>
           <YoutubePopoutProvider>
-            <Box className="sk-layout" sx={{ display: 'flex', minHeight: '100vh' }}>
-            <Drawer
-              variant="permanent"
-              sx={{
-                width: drawerWidth,
-                flexShrink: 0,
-                '& .MuiDrawer-paper': {
-                  width: drawerWidth,
-                  boxSizing: 'border-box',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  bgcolor: (theme) =>
-                    theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
-                  borderRightColor: 'divider',
-                },
-              }}
-            >
-              <Toolbar sx={{ gap: 0.5, justifyContent: 'space-between', px: 1.5 }}>
-                <Typography variant="h6" color="primary" noWrap>
-                  Scorekeeper
-                </Typography>
-                <ColorModeToggle />
-              </Toolbar>
-              <Box
-                className="sk-menu-content"
-                sx={{
-                  px: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  flexGrow: 1,
-                  minHeight: 0,
-                  overflow: 'hidden',
-                }}
-              >
-                <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-                  <AppNav />
-                  <ResumeScoringNavItem />
-                </Box>
-                <CloudSyncBar />
-                <Divider />
-                <MadeByFooter />
-              </Box>
-            </Drawer>
-            <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-              <Routes>
-                <Route path="/" element={<OverviewPage />} />
-                <Route path="/teams" element={<TeamsPage />} />
-                <Route path="/teams/:teamId" element={<TeamPage />} />
-                <Route path="/players/:playerId" element={<PlayerPage />} />
-                <Route path="/matches" element={<MatchesPage />} />
-                <Route path="/matches/:matchId" element={<MatchPage />} />
-                <Route path="/matches/:matchId/stats" element={<StatsPage />} />
-                <Route path="/matches/:matchId/events" element={<MatchEventsPage />} />
-                <Route path="/matches/:matchId/games/:gameId" element={<GamePage />} />
-                <Route
-                  path="/matches/:matchId/games/:gameId/stats"
-                  element={<StatsPage />}
-                />
-                <Route
-                  path="/matches/:matchId/games/:gameId/events"
-                  element={<GameEventsPage />}
-                />
-                <Route path="/stats" element={<StatsPage />} />
-                <Route path="/highlights" element={<HighlightsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/history" element={<HistoryPage />} />
-              </Routes>
-            </Box>
-            </Box>
+            <TrackGameImmersiveProvider>
+              <AppShell />
+            </TrackGameImmersiveProvider>
           </YoutubePopoutProvider>
         </DatabaseProvider>
       </LeagueProvider>
