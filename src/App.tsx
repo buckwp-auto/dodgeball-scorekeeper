@@ -1,4 +1,5 @@
-import MenuIcon from '@mui/icons-material/Menu';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {
   Box,
   Divider,
@@ -90,27 +91,34 @@ function AppShell() {
   const immersive = useTrackGameImmersive();
   const [navOpen, setNavOpen] = useState(false);
   const closeNav = () => setNavOpen(false);
+  const toggleNav = () => setNavOpen((open) => !open);
 
   return (
     <Box className="sk-layout" sx={{ display: 'flex', minHeight: '100vh' }}>
       {immersive ? (
         <IconButton
-          aria-label="Open menu"
-          className="sk-nav-menu-toggle"
-          onClick={() => setNavOpen(true)}
+          aria-label={navOpen ? 'Close menu' : 'Open menu'}
+          className="sk-nav-drawer-toggle"
+          onClick={toggleNav}
+          size="small"
           sx={{
             position: 'fixed',
-            top: 8,
-            left: 8,
+            left: navOpen ? drawerWidth : 0,
+            top: '50%',
+            transform: navOpen ? 'translate(-50%, -50%)' : 'translateY(-50%)',
             zIndex: (theme) => theme.zIndex.drawer + 2,
             bgcolor: 'background.paper',
             border: 1,
             borderColor: 'divider',
-            boxShadow: 1,
+            borderRadius: navOpen ? '50%' : '0 4px 4px 0',
+            borderLeft: navOpen ? 1 : 0,
+            boxShadow: 2,
+            width: 28,
+            height: 48,
             '&:hover': { bgcolor: 'background.paper' },
           }}
         >
-          <MenuIcon />
+          {navOpen ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
         </IconButton>
       ) : null}
       <Drawer
@@ -158,7 +166,7 @@ function AppShell() {
           <MadeByFooter />
         </Box>
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, p: 3, minWidth: 0 }}>
+      <Box component="main" sx={{ flexGrow: 1, p: immersive ? 0 : 3, minWidth: 0 }}>
         <Routes>
           <Route path="/" element={<OverviewPage />} />
           <Route path="/teams" element={<TeamsPage />} />

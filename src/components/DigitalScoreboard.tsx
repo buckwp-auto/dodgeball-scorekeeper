@@ -30,11 +30,13 @@ function ScoreboardCell({
   label,
   className,
   compact,
+  minimal,
   children,
 }: {
   label: string;
   className: string;
   compact?: boolean;
+  minimal?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -46,8 +48,8 @@ function ScoreboardCell({
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
           color: 'rgba(245, 247, 250, 0.55)',
-          fontSize: compact ? 9 : 11,
-          mb: 0.25,
+          fontSize: minimal ? 8 : compact ? 9 : 11,
+          mb: minimal ? 0 : 0.25,
         }}
       >
         {label}
@@ -62,11 +64,14 @@ export function DigitalScoreboard({
   runningTime,
   remaining,
   compact = false,
+  minimal = false,
 }: {
   matchId: string;
   runningTime?: MatchRunningTime;
   remaining?: { home: number; away: number };
   compact?: boolean;
+  /** Smallest footprint for Track Game stacked (tall / pop-out) layout. */
+  minimal?: boolean;
 }) {
   const { data } = useDatabase();
   const series = useMemo(() => buildMatchSeries(data, matchId), [data, matchId]);
@@ -75,24 +80,24 @@ export function DigitalScoreboard({
   const score = formatMatchSeriesScore(series);
   const showRemaining = remaining != null;
   const clockEmpty = runningTime != null && isMatchRunningTimeEmpty(runningTime);
-  const digitSize = compact ? '1.35rem' : { xs: '1.5rem', sm: '2rem' };
+  const digitSize = minimal ? '0.95rem' : compact ? '1.35rem' : { xs: '1.5rem', sm: '2rem' };
 
   return (
     <Box
       className="sk-scoreboard"
       sx={{
         ...boardSx,
-        px: compact ? 1 : 2,
-        py: compact ? 0.75 : 1.25,
-        mb: compact ? 0.75 : 1.5,
+        px: minimal ? 0.75 : compact ? 1 : 2,
+        py: minimal ? 0.35 : compact ? 0.75 : 1.25,
+        mb: minimal ? 0 : compact ? 0.75 : 1.5,
       }}
     >
       <Stack
         direction="row"
-        spacing={compact ? 1 : 2}
-        sx={{ alignItems: 'stretch', justifyContent: 'space-around', flexWrap: 'wrap', rowGap: 1 }}
+        spacing={minimal ? 0.5 : compact ? 1 : 2}
+        sx={{ alignItems: 'stretch', justifyContent: 'space-around', flexWrap: 'wrap', rowGap: minimal ? 0 : 1 }}
       >
-        <ScoreboardCell label="Match score" className="sk-scoreboard-score" compact={compact}>
+        <ScoreboardCell label="Match score" className="sk-scoreboard-score" compact={compact} minimal={minimal}>
           <Typography
             className="sk-match-score"
             sx={{
@@ -105,11 +110,17 @@ export function DigitalScoreboard({
           </Typography>
         </ScoreboardCell>
         {runningTime ? (
-          <ScoreboardCell label="Match time" className="sk-scoreboard-clock" compact={compact}>
+          <ScoreboardCell label="Match time" className="sk-scoreboard-clock" compact={compact} minimal={minimal}>
             <Typography
               sx={{
                 ...digitSx,
-                fontSize: clockEmpty ? (compact ? '0.85rem' : '1rem') : digitSize,
+                fontSize: clockEmpty
+                  ? minimal
+                    ? '0.75rem'
+                    : compact
+                      ? '0.85rem'
+                      : '1rem'
+                  : digitSize,
                 fontWeight: clockEmpty ? 600 : 700,
                 color: clockEmpty ? 'rgba(245, 247, 250, 0.45)' : '#ffca28',
               }}
@@ -123,6 +134,7 @@ export function DigitalScoreboard({
             label="Players remaining"
             className="sk-scoreboard-remaining"
             compact={compact}
+            minimal={minimal}
           >
             <Typography
               sx={{

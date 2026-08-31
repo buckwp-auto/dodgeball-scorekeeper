@@ -1,5 +1,4 @@
-import { Alert, Box, Button, Drawer, Stack, Typography } from '@mui/material';
-import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
+import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { useMatchGameNavigation } from '../hooks/useMatchGameNavigation';
@@ -173,7 +172,6 @@ export function GameEventsPage() {
   } = useYoutubeControls(youtubeUrl);
   const { attachedGameId, setAttachedGameId } = useYoutubePopout();
   const setTrackGameImmersive = useSetTrackGameImmersive();
-  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const updateThrowDrafts = useCallback(
     (next: ThrowDraft[] | ((prev: ThrowDraft[]) => ThrowDraft[])) => {
@@ -856,16 +854,13 @@ export function GameEventsPage() {
   const youtubeDocked = hasYoutube && youtubeMode === 'docked';
   const youtubeTall = hasYoutube && youtubeMode === 'tall';
   const youtubeTopBand = hasYoutube && youtubeMode !== 'docked';
-  const editorCompact = youtubeTall;
+  const stackedView = youtubeTall || youtubePopout;
+  const editorCompact = stackedView;
 
   useEffect(() => {
-    setTrackGameImmersive(youtubeTall);
+    setTrackGameImmersive(stackedView);
     return () => setTrackGameImmersive(false);
-  }, [setTrackGameImmersive, youtubeTall]);
-
-  useEffect(() => {
-    if (!youtubeTall) setTimelineOpen(false);
-  }, [youtubeTall]);
+  }, [setTrackGameImmersive, stackedView]);
 
   const timelineProps = {
     entries: timeline,
@@ -885,27 +880,53 @@ export function GameEventsPage() {
       className="sk-track-game"
       sx={{
         display: 'grid',
-        gridTemplateColumns: youtubeTall ? '1fr' : '1fr 300px',
-        gridTemplateRows: youtubeTall
-          ? 'minmax(0, 1fr) minmax(0, 1fr)'
+        gridTemplateColumns: stackedView
+          ? youtubeTall
+            ? 'minmax(260px, 1fr) minmax(0, 4fr)'
+            : '1fr'
+          : '1fr 300px',
+        gridTemplateRows: stackedView
+          ? 'minmax(0, 7fr) minmax(0, 3fr)'
           : hasYoutube
             ? 'auto 1fr'
             : '1fr',
-        mx: -3,
-        mt: -3,
-        mb: -3,
-        height: '100vh',
-        overflow: 'hidden',
+        ...(stackedView
+          ? { height: '100vh', overflow: 'hidden' }
+          : { mx: -3, mt: -3, mb: -3, height: '100vh', overflow: 'hidden' }),
       }}
     >
-      {hasYoutube ? (
+      {hasYoutube && youtubeTall ? (
+        <Box
+          sx={{
+            gridColumn: 2,
+            gridRow: '1 / -1',
+            minWidth: 0,
+            minHeight: 0,
+            height: '100%',
+            overflow: 'hidden',
+          }}
+        >
+          <YoutubePlayer
+            ref={youtubePlayerRef}
+            youtubeUrl={youtubeUrl}
+            mode={youtubeMode}
+            onModeChange={setYoutubeModeAndPersist}
+            startSeconds={cueSeconds ?? openSeekSeconds ?? undefined}
+            onPopOut={popOut}
+            popoutBlocked={popoutPlayback.blocked}
+            onDisplayTime={setInPageVideoNow}
+          />
+        </Box>
+      ) : null}
+
+      {!stackedView && hasYoutube ? (
         <Box
           sx={{
             gridColumn: youtubeDocked ? 1 : '1 / -1',
             gridRow: 1,
             minWidth: 0,
             minHeight: 0,
-            height: youtubeTall ? '100%' : 'auto',
+            height: 'auto',
             overflow: 'hidden',
           }}
         >
@@ -938,9 +959,9 @@ export function GameEventsPage() {
       <Box
         sx={{
           gridColumn: 1,
-          gridRow: hasYoutube ? 2 : 1,
+          gridRow: stackedView ? 1 : hasYoutube ? 2 : 1,
           p: editorCompact ? 1 : 2,
-          pl: editorCompact ? 5 : 2,
+          pl: editorCompact ? 3.5 : 2,
           overflow: 'hidden',
           minHeight: 0,
           minWidth: 0,
@@ -948,12 +969,28 @@ export function GameEventsPage() {
           flexDirection: 'column',
         }}
       >
+        {youtubePopout && stackedView ? (
+          <Box sx={{ flexShrink: 0, mb: 0.5 }}>
+            <YoutubePopoutBar
+              ready={popoutPlayback.ready}
+              playing={popoutPlayback.playing}
+              displayTime={popoutPlayback.displayTime}
+              seekingTo={popoutPlayback.seekingTo}
+              blocked={popoutPlayback.blocked}
+              handle={popoutPlayback.handle}
+              onDockBack={() => dockBack()}
+              onModeChange={(next) => setYoutubeModeAndPersist(next)}
+            />
+          </Box>
+        ) : null}
+
         {editorCompact ? (
-          <>
+          <Stack spacing={0.25} sx={{ flexShrink: 0, mb: 0.5 }}>
             {matchId ? (
               <DigitalScoreboard
                 matchId={matchId}
                 compact
+                minimal
                 runningTime={runningTime}
                 remaining={{
                   home: live.activeHomeCount,
@@ -961,13 +998,13 @@ export function GameEventsPage() {
                 }}
               />
             ) : null}
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               {gameTitle}
               {isGameOver
                 ? ` · Out (${live.winningTeamHome ? homeTeam?.Name ?? 'Home' : awayTeam?.Name ?? 'Away'})`
                 : ''}
             </Typography>
-          </>
+          </Stack>
         ) : (
           <>
             <PageHeader>Track Game</PageHeader>
@@ -1144,22 +1181,17 @@ export function GameEventsPage() {
                   Insert above
                 </Button>
               ) : null}
-              {youtubeTall ? (
-                <Button
-                  type="button"
-                  size="small"
-                  variant={timelineOpen ? 'contained' : 'outlined'}
-                  className="sk-timeline-drawer-toggle"
-                  startIcon={<ViewTimelineIcon fontSize="small" />}
-                  onClick={() => setTimelineOpen((open) => !open)}
-                  sx={{ ml: 'auto' }}
-                >
-                  Timeline
-                </Button>
-              ) : null}
             </Stack>
 
-            <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                overflow: editorCompact && visibleTab === 'throw' ? 'hidden' : 'auto',
+                display: editorCompact && visibleTab === 'throw' ? 'flex' : 'block',
+                flexDirection: 'column',
+              }}
+            >
             {visibleTab === 'start' && effectiveSelectedId ? (
               <StartEventEditor
                 videoOffsetSeconds={
@@ -1231,36 +1263,25 @@ export function GameEventsPage() {
         )}
       </Box>
 
-      {youtubeTall ? (
-        <Drawer
-          anchor="right"
-          open={timelineOpen}
-          onClose={() => setTimelineOpen(false)}
-          className="sk-timeline-drawer"
-          slotProps={{ root: { keepMounted: true } }}
-          sx={{
-            '& .MuiDrawer-paper': {
-              width: { xs: '100%', sm: 360 },
-              maxWidth: '100vw',
-              bgcolor: 'grey.900',
-            },
-          }}
-        >
-          <GameEventsTimeline {...timelineProps} />
-        </Drawer>
-      ) : (
-        <Box
-          sx={{
-            gridColumn: 2,
-            gridRow: youtubeDocked ? '1 / -1' : youtubeTopBand || hasYoutube ? 2 : 1,
-            minHeight: 0,
-            minWidth: 0,
-            overflow: 'hidden',
-          }}
-        >
-          <GameEventsTimeline {...timelineProps} />
-        </Box>
-      )}
+      <Box
+        sx={{
+          gridColumn: stackedView && youtubeTall ? 1 : stackedView ? '1 / -1' : 2,
+          gridRow: stackedView
+            ? 2
+            : youtubeDocked
+              ? '1 / -1'
+              : youtubeTopBand || hasYoutube
+                ? 2
+                : 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflow: 'hidden',
+          borderTop: stackedView ? 1 : 0,
+          borderColor: 'divider',
+        }}
+      >
+        <GameEventsTimeline {...timelineProps} />
+      </Box>
     </Box>
   );
 }
