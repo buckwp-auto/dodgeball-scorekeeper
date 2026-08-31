@@ -1,5 +1,8 @@
 import { ECompetitionOutcome } from './constants';
-import type { ImportedAggregatesPayload } from './importedMatchStats';
+import {
+  finalizeImportedAggregates,
+  type ImportedAggregatesPayload,
+} from './importedMatchStats';
 import {
   getLegacyStatisticsColumnSpecs,
   getLegacyStatisticsHeaderNames,
@@ -177,6 +180,7 @@ function rowFromCells(cells: string[], specs: LegacyCsvColumnSpec[]): ParsedLega
   if (!teamName || !playerName) {
     throw new Error('Statistics CSV row is missing Team or Player');
   }
+  finalizeImportedAggregates(aggregates);
   return { teamName, playerName, aggregates };
 }
 

@@ -12,6 +12,7 @@ import { CountsBuilder } from './statisticAggregates';
 import type { StatisticAggregates } from './statisticAggregates';
 import type { PlayerStatistics } from './statisticsService';
 import { buildPlayerOverviews } from './databaseViews';
+import { DeflectionResult, EDeathType, ThrowResult } from './constants';
 import { parseLegacyStatisticsCsv, type ParsedLegacyCsv } from './legacyCsvImport';
 
 export type AggregateMap = Record<string, number>;
@@ -95,11 +96,31 @@ function aggregatesFromMap(map: AggregateMap): StatisticAggregates<number, numbe
   return builder.build();
 }
 
+function sumAggregateMap(map: AggregateMap): number {
+  return Object.values(map).reduce((sum, value) => sum + value, 0);
+}
+
+/** Legacy CSV stores targeted/throw breakdowns but not scalar catch/death-credit fields. */
+export function finalizeImportedAggregates(payload: ImportedAggregatesPayload): void {
+  payload.catchesDirect = payload.defenseTargets[String(ThrowResult.Catch)] ?? 0;
+  payload.catchesDeflection = payload.defenseDeflections[String(DeflectionResult.Catch)] ?? 0;
+
+  const catchThrownCredit =
+    (payload.deathsDirect[String(EDeathType.CatchThrown)] ?? 0) +
+    (payload.deathsDeflections[String(EDeathType.CatchThrown)] ?? 0);
+  payload.deathsCatchThrownCredit = catchThrownCredit;
+  payload.deathsCredit =
+    sumAggregateMap(payload.deathsDirect) +
+    sumAggregateMap(payload.deathsDeflections) +
+    sumAggregateMap(payload.deathsErrors);
+}
+
 export function playerStatisticsFromImportedPayload(
   data: DatabaseDto,
   playerId: Guid,
   payload: ImportedAggregatesPayload,
 ): PlayerStatistics | null {
+  finalizeImportedAggregates(payload);
   const overview = buildPlayerOverviews(data).get(playerId);
   if (!overview) return null;
   return {
@@ -298,7 +319,9 @@ export function loadImportedPayload(row: ImportedPlayerStatsRow): ImportedAggreg
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Invalid imported statistics payload');
   }
-  return parsed as ImportedAggregatesPayload;
+  const payload = parsed as ImportedAggregatesPayload;
+  finalizeImportedAggregates(payload);
+  return payload;
 }
 
 function mergeAggregateMaps(left: AggregateMap, right: AggregateMap): AggregateMap {
