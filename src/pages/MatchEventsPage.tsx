@@ -104,6 +104,7 @@ export function MatchEventsPage() {
               className="bw-button bw-button--text"
               variant="contained"
               onClick={onAddGame}
+              data-tour="add-game"
             >
               Add Game
             </Button>
@@ -124,7 +125,7 @@ export function MatchEventsPage() {
           <Typography variant="h6" gutterBottom>
             Match Events
           </Typography>
-          <Stack spacing={1}>
+          <Stack spacing={1} data-tour="match-games">
             {games.map(({ gameId, label, scoringComplete }) => (
               <Stack
                 key={gameId}

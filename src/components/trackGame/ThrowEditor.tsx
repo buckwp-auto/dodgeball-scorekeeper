@@ -289,7 +289,6 @@ function SingleThrowEditor({
   const density = useEditorDensity();
   const compact = density === 'compact';
   const stacked = compact && section !== 'all';
-  const showPlayers = section === 'all' || section === 'players';
   const showActions = section === 'all' || section === 'actions';
 
   const resultStack = (
@@ -787,6 +786,7 @@ export function ThrowEditor({
         startIcon={<AddIcon />}
         size={compact ? 'small' : 'medium'}
         className="bw-button bw-button--text"
+        data-tour="team-throw"
         onClick={() => onChange([...drafts, emptyThrowDraft()])}
       >
         Add Team Throw
@@ -851,7 +851,7 @@ export function ThrowEditor({
   }
 
   return (
-    <Box>
+    <Box data-tour="throw-editor">
       {drafts.map((draft, index) => (
         <SingleThrowEditor
           key={index}

@@ -361,9 +361,9 @@ export function ErrorEditor({
 
       {noBlockingMode ? <Box sx={{ gridColumn: '1 / -1' }} /> : null}
 
+      <Box data-tour="other-offenses" sx={{ gridColumn: noBlockingMode ? '1 / -1' : 3 }}>
       <EditorChoiceStack
         pending={pendingMistake && !noBlockingMode}
-        gridColumn={noBlockingMode ? '1 / -1' : 3}
       >
         {otherOffenseUiOrder.map((choice, index) => (
           <EditorChoiceButton
@@ -376,6 +376,7 @@ export function ErrorEditor({
           </EditorChoiceButton>
         ))}
       </EditorChoiceStack>
+      </Box>
     </EditorGrid>
   );
 }

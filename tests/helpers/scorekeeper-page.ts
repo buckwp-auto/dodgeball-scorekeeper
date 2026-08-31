@@ -6,18 +6,21 @@ export const STORAGE_KEY = 'SCOREKEEPER_DATA';
 export const LAST_SCORING_KEY = 'SCOREKEEPER_LAST_SCORING';
 /** Appearance preference (localStorage): system / light / dark. */
 export const COLOR_MODE_KEY = 'SCOREKEEPER_COLOR_MODE';
+/** Onboarding tour completion (localStorage). */
+export const ONBOARDING_COMPLETE_KEY = 'SCOREKEEPER_ONBOARDING_COMPLETE';
 /** Matches-list score spoiler (session): revealed match ids. */
 export const MATCH_SCORE_REVEALED_KEY = 'SCOREKEEPER_MATCH_SCORE_REVEALED';
 
 export async function clearScorekeeperStorage(page: Page) {
   await page.addInitScript(
-    ([dataKey, lastScoringKey, colorModeKey, matchScoreKey]) => {
+    ([dataKey, lastScoringKey, colorModeKey, matchScoreKey, onboardingKey]) => {
       sessionStorage.removeItem(dataKey);
       sessionStorage.removeItem(matchScoreKey);
       localStorage.removeItem(lastScoringKey);
       localStorage.removeItem(colorModeKey);
+      localStorage.removeItem(onboardingKey);
     },
-    [STORAGE_KEY, LAST_SCORING_KEY, COLOR_MODE_KEY, MATCH_SCORE_REVEALED_KEY],
+    [STORAGE_KEY, LAST_SCORING_KEY, COLOR_MODE_KEY, MATCH_SCORE_REVEALED_KEY, ONBOARDING_COMPLETE_KEY],
   );
 }
 

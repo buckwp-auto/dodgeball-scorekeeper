@@ -1,0 +1,138 @@
+import { test, expect } from '@playwright/test';
+import { ONBOARDING_COMPLETE_KEY } from '../src/domain/onboarding';
+import {
+  clearScorekeeperStorage,
+  gotoScorekeeper,
+  navigateMenu,
+} from './helpers/scorekeeper-page';
+
+test.describe('Help and onboarding', () => {
+  test.beforeEach(async ({ page }) => {
+    await clearScorekeeperStorage(page);
+  });
+
+  test('shows first-visit tour and can finish it', async ({ page }) => {
+    await gotoScorekeeper(page);
+
+    await expect(page.locator('.sk-onboarding-tour')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Skip tour' }).click();
+    await expect(page.locator('.sk-onboarding-tour')).toHaveCount(0);
+    await expect
+      .poll(async () => page.evaluate((key) => localStorage.getItem(key), ONBOARDING_COMPLETE_KEY))
+      .toBe('1');
+  });
+
+  test('help page lists FAQ and can restart the navigation tour', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await gotoScorekeeper(page);
+
+    await navigateMenu(page, 'Help');
+    await expect(page.getByRole('heading', { name: 'Help' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start navigation tour' })).toBeVisible();
+    await expect(page.getByText('Do I need an account?')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Start navigation tour' }).click();
+    await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('nav steps open the matching page and select the drawer link', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await gotoScorekeeper(page);
+
+    await navigateMenu(page, 'Help');
+    await page.getByRole('button', { name: 'Start navigation tour' }).click();
+    await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page).toHaveURL(/\/teams$/);
+    await expect(page.locator('main').getByRole('heading', { name: 'Teams' })).toBeVisible();
+    await expect(page.locator('.sk-menu-link--root').filter({ hasText: 'Teams' })).toHaveClass(
+      /Mui-selected/,
+    );
+    await expect(page.getByText('Teams & players')).toBeVisible();
+  });
+
+  test('enter advances the navigation tour when next is enabled', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await gotoScorekeeper(page);
+
+    await navigateMenu(page, 'Help');
+    await page.getByRole('button', { name: 'Start navigation tour' }).click();
+    await expect(page.getByText('Welcome to Scorekeeper')).toBeVisible({ timeout: 10_000 });
+
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/teams$/);
+    await expect(page.getByText('Teams & players')).toBeVisible();
+  });
+
+  test('game tracking tour loads the sample league', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await gotoScorekeeper(page);
+
+    await navigateMenu(page, 'Help');
+    await page.getByRole('button', { name: 'Start game tracking tour' }).click();
+    await expect(page.getByText('Track a game walkthrough')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('Load the demo league')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    await expect(page.getByRole('button', { name: 'League stats' })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText('Local only is fine')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('game tracking tour shows hotkey badges on team throw step', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await gotoScorekeeper(page);
+
+    await navigateMenu(page, 'Help');
+    await page.getByRole('button', { name: 'Start game tracking tour' }).click();
+    await expect(page.getByText('Track a game walkthrough')).toBeVisible({ timeout: 10_000 });
+
+    const next = page.getByRole('button', { name: 'Next' });
+    await next.click();
+    await expect(page.getByText('Load the demo league')).toBeVisible();
+    await next.click();
+    await expect(page.getByText('Local only is fine')).toBeVisible({ timeout: 30_000 });
+
+    for (let i = 0; i < 6; i += 1) {
+      await next.click();
+    }
+    await expect(page.getByText('Game roster')).toBeVisible({ timeout: 10_000 });
+    await next.click();
+    await expect(page.getByText('Open Track Game')).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-tour="track-game"]').click();
+    await expect(page.getByText('Start the game')).toBeVisible({ timeout: 10_000 });
+
+    const startField = page.getByPlaceholder('m:ss');
+    await startField.fill('0:00');
+    await startField.blur();
+    await next.click();
+    await next.click();
+    await expect(page.getByText('Record a throw')).toBeVisible({ timeout: 10_000 });
+
+    await page.keyboard.press('Slash');
+    await page.keyboard.press('a');
+    await page.keyboard.press('j');
+    await page.keyboard.press('r');
+    await expect(next).toBeEnabled({ timeout: 10_000 });
+    await next.click();
+
+    await expect(page.getByText('Team throw')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.sk-game-tracking-tour .sk-hotkey-badge').filter({ hasText: 'C' })).toBeVisible();
+  });
+});

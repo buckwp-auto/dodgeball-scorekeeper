@@ -71,7 +71,7 @@ export function MatchesPage() {
           </Button>
         </div>
       </div>
-      <table className="sk-grid">
+      <table className="sk-grid" data-tour="matches-list">
         <tbody>
           {matches.map(({ match, matchName }) => {
             const spoiler = buildMatchListSpoiler(data, match.Id);

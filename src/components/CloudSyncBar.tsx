@@ -18,6 +18,7 @@ export function CloudSyncBar() {
 
   return (
     <Box
+      data-onboarding="sync-bar"
       sx={{
         px: 0.5,
         pt: 1.5,
