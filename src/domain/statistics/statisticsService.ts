@@ -1,4 +1,6 @@
 import { resolveLeagueStatPolicy } from '../leagueSettings';
+import { isStatsImportedMatchId } from '../importedMatch';
+import { getMatchPlayers } from '../matchGame';
 import type { DatabaseDto, Guid } from '../types';
 import {
   DeflectionResult,
@@ -42,6 +44,12 @@ import {
   type EventCreditAwards,
 } from './statCreditEngine';
 import type { StatCreditPolicy } from './statCreditPolicy';
+import {
+  getImportedPlayerStatsForMatch,
+  loadImportedPayload,
+  mergePlayerStatistics,
+  playerStatisticsFromImportedPayload,
+} from './importedMatchStats';
 
 class PlayerStatisticsBuilder {
   readonly playerId: Guid;
@@ -550,7 +558,95 @@ function sortPlayerStatistics(rows: PlayerStatistics[]): PlayerStatistics[] {
   );
 }
 
-function runStatistics(
+function buildImportedStatisticsResult(
+  data: DatabaseDto,
+  matchIds: Guid[],
+): {
+  combined: PlayerStatistics[];
+  split: Map<Guid, SplitPlayerStatistics>;
+} {
+  const combinedByPlayer = new Map<Guid, PlayerStatistics>();
+  const splitByPlayer = new Map<Guid, SplitPlayerStatistics>();
+
+  for (const matchId of matchIds) {
+    if (!isStatsImportedMatchId(data, matchId)) continue;
+    const matchPlayers = getMatchPlayers(data, matchId);
+    const subIds = new Set(
+      matchPlayers.filter((row) => row.IsSubstitute).map((row) => row.PlayerId),
+    );
+    for (const row of getImportedPlayerStatsForMatch(data, matchId)) {
+      const stats = playerStatisticsFromImportedPayload(
+        data,
+        row.PlayerId,
+        loadImportedPayload(row),
+      );
+      if (!stats) continue;
+      const existing = combinedByPlayer.get(row.PlayerId);
+      combinedByPlayer.set(
+        row.PlayerId,
+        existing ? mergePlayerStatistics(existing, stats) : stats,
+      );
+      const bucket = subIds.has(row.PlayerId) ? 'sub' : 'starter';
+      const split = splitByPlayer.get(row.PlayerId) ?? {
+        playerId: row.PlayerId,
+        starter: null,
+        sub: null,
+      };
+      if (bucket === 'sub') {
+        split.sub = split.sub ? mergePlayerStatistics(split.sub, stats) : stats;
+      } else {
+        split.starter = split.starter
+          ? mergePlayerStatistics(split.starter, stats)
+          : stats;
+      }
+      splitByPlayer.set(row.PlayerId, split);
+    }
+  }
+
+  return {
+    combined: sortPlayerStatistics([...combinedByPlayer.values()]),
+    split: splitByPlayer,
+  };
+}
+
+function mergeStatisticsResults(
+  left: { combined: PlayerStatistics[]; split: Map<Guid, SplitPlayerStatistics> },
+  right: { combined: PlayerStatistics[]; split: Map<Guid, SplitPlayerStatistics> },
+): { combined: PlayerStatistics[]; split: Map<Guid, SplitPlayerStatistics> } {
+  const combinedByPlayer = new Map<Guid, PlayerStatistics>();
+  for (const row of [...left.combined, ...right.combined]) {
+    const existing = combinedByPlayer.get(row.playerId);
+    combinedByPlayer.set(
+      row.playerId,
+      existing ? mergePlayerStatistics(existing, row) : row,
+    );
+  }
+  const split = new Map<Guid, SplitPlayerStatistics>(left.split);
+  for (const [playerId, rightSplit] of right.split) {
+    const leftSplit = split.get(playerId);
+    if (!leftSplit) {
+      split.set(playerId, rightSplit);
+      continue;
+    }
+    split.set(playerId, {
+      playerId,
+      starter:
+        leftSplit.starter && rightSplit.starter
+          ? mergePlayerStatistics(leftSplit.starter, rightSplit.starter)
+          : leftSplit.starter ?? rightSplit.starter,
+      sub:
+        leftSplit.sub && rightSplit.sub
+          ? mergePlayerStatistics(leftSplit.sub, rightSplit.sub)
+          : leftSplit.sub ?? rightSplit.sub,
+    });
+  }
+  return {
+    combined: sortPlayerStatistics([...combinedByPlayer.values()]),
+    split,
+  };
+}
+
+function runTrackedStatistics(
   data: DatabaseDto,
   matchIds: Guid[],
   gameIds: Set<Guid> | undefined,
@@ -632,6 +728,31 @@ function runStatistics(
     combined: sortPlayerStatistics(context.buildCombinedPlayerStatistics()),
     split: context.buildSplitPlayerStatistics(),
   };
+}
+
+function runStatistics(
+  data: DatabaseDto,
+  matchIds: Guid[],
+  gameIds: Set<Guid> | undefined,
+  policy: StatCreditPolicy,
+): {
+  combined: PlayerStatistics[];
+  split: Map<Guid, SplitPlayerStatistics>;
+} {
+  const importedIds = matchIds.filter((id) => isStatsImportedMatchId(data, id));
+  const trackedIds = matchIds.filter((id) => !isStatsImportedMatchId(data, id));
+
+  const tracked =
+    trackedIds.length > 0
+      ? runTrackedStatistics(data, trackedIds, gameIds, policy)
+      : { combined: [], split: new Map<Guid, SplitPlayerStatistics>() };
+
+  const imported =
+    !gameIds && importedIds.length > 0
+      ? buildImportedStatisticsResult(data, importedIds)
+      : { combined: [], split: new Map<Guid, SplitPlayerStatistics>() };
+
+  return mergeStatisticsResults(tracked, imported);
 }
 
 export function createStatisticsSummary(

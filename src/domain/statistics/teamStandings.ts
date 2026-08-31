@@ -1,5 +1,6 @@
 import { getMatches } from '../database';
-import { getMatchGames } from '../matchGame';
+import { isStatsImportedMatch } from '../importedMatch';
+import { getMatchById, getMatchGames } from '../matchGame';
 import type { DatabaseDto, Guid } from '../types';
 import { GameEventFinishResult } from './constants';
 import {
@@ -51,6 +52,30 @@ export function buildMatchSeries(
 ): MatchSeries | null {
   const overview = buildMatchOverviews(data).get(matchId);
   if (!overview) return null;
+
+  const match = getMatchById(data, matchId);
+  if (isStatsImportedMatch(match)) {
+    const homeGameWins = match?.ImportedHomeGameWins ?? 0;
+    const awayGameWins = match?.ImportedAwayGameWins ?? 0;
+    const ties = match?.ImportedGameTies ?? 0;
+    let matchOutcome: MatchSeries['matchOutcome'] = null;
+    if (homeGameWins + awayGameWins + ties > 0) {
+      if (homeGameWins > awayGameWins) matchOutcome = 'home';
+      else if (awayGameWins > homeGameWins) matchOutcome = 'away';
+      else matchOutcome = 'tie';
+    }
+    return {
+      matchId,
+      homeTeam: overview.teamHome,
+      awayTeam: overview.teamAway,
+      homeGameWins,
+      awayGameWins,
+      ties,
+      unfinished: 0,
+      matchOutcome,
+      games: [],
+    };
+  }
 
   const finishes = indexGameEventFinishes(data);
   const eventsByGame = buildGameEventsByGame(data);

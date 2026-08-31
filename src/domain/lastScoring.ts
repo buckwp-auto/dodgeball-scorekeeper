@@ -1,4 +1,5 @@
 import { getMatchName } from './database';
+import { isStatsImportedMatchId } from './importedMatch';
 import {
   canNavigateToGameEvents,
   getMatchById,
@@ -69,6 +70,7 @@ export function resolveLastScoring(
   if (!stored) return null;
   const match = getMatchById(data, stored.matchId);
   if (!match) return null;
+  if (isStatsImportedMatchId(data, stored.matchId)) return null;
   const matchName = getMatchName(data, match);
 
   if (stored.target === 'match') {

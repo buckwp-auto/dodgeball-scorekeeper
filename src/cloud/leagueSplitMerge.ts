@@ -92,6 +92,10 @@ export function extractMatchTables(
   const deflections = tableRows<{ ThrowId: Guid }>(data, 'Deflection').filter(
     (row) => throwIds.has(row.ThrowId),
   );
+  const importedPlayerStats = tableRows<{ MatchId: Guid }>(
+    data,
+    'ImportedPlayerStats',
+  ).filter((row) => row.MatchId === matchId);
 
   return {
     Match: structuredClone(match),
@@ -108,6 +112,7 @@ export function extractMatchTables(
     GameEventStart: structuredClone(gameEventStarts),
     Throw: structuredClone(throws),
     Deflection: structuredClone(deflections),
+    ImportedPlayerStats: structuredClone(importedPlayerStats),
   };
 }
 

@@ -39,6 +39,20 @@ export type MatchRow = {
   Ended?: boolean;
   /** Video offset (seconds) of the match-end log row, aligned with last game finish. */
   EndedVideoOffsetSeconds?: number | null;
+  /** Match stats were imported from legacy CSV (no event log). */
+  StatsImported?: boolean;
+  /** User-entered game-series score when StatsImported. */
+  ImportedHomeGameWins?: number;
+  ImportedAwayGameWins?: number;
+  ImportedGameTies?: number;
+};
+
+export type ImportedPlayerStatsRow = {
+  Id: Guid;
+  MatchId: Guid;
+  PlayerId: Guid;
+  /** JSON blob of aggregate stat maps (see importedMatchStats.ts). */
+  AggregatesJson: string;
 };
 
 export type MatchPlayerRow = {

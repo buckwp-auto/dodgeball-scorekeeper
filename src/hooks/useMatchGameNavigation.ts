@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { getMatchName } from '../domain/database';
+import { isStatsImportedMatchId } from '../domain/importedMatch';
 import { isMatchEnded } from '../domain/matchEnd';
 import { getAdjacentGameId, getMatchById } from '../domain/matchGame';
 import { addGameWithAutoRoster } from '../domain/rosterAutoSelect';
@@ -22,8 +23,12 @@ export function useMatchGameNavigation(matchId: string, gameId: string) {
   );
 
   const goToMatch = useCallback(() => {
+    if (isStatsImportedMatchId(data, matchId)) {
+      navigate(`/matches/${matchId}/stats`);
+      return;
+    }
     navigate(`/matches/${matchId}/events`);
-  }, [matchId, navigate]);
+  }, [data, matchId, navigate]);
 
   const goToPreviousGame = useCallback(() => {
     if (previousGameId) goToGameRoster(previousGameId);
