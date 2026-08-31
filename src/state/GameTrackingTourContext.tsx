@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -18,7 +19,10 @@ import {
 } from '../domain/gameTrackingTour';
 import { addGameWithAutoRoster } from '../domain/rosterAutoSelect';
 import { SAMPLE_LEAGUE_LABEL, fetchSampleLeagueDatabase } from '../domain/sampleLeague';
+import type { Guid } from '../domain/types';
 import { useDatabase } from './DatabaseContext';
+
+const AUTO_ADVANCE_DELAY_MS = 350;
 
 type GameTrackingTourContextValue = {
   active: boolean;
@@ -42,16 +46,19 @@ export function GameTrackingTourProvider({ children }: { children: ReactNode }) 
   const dataRef = useRef(data);
   dataRef.current = data;
 
-  const tourGameIdRef = useRef<string | null>(null);
+  const [tourGameId, setTourGameId] = useState<Guid | null>(null);
+  const tourGameIdRef = useRef<Guid | null>(null);
+  tourGameIdRef.current = tourGameId;
 
   const [active, setActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const prevCanAdvanceRef = useRef(false);
 
   const step = GAME_TRACKING_STEPS[stepIndex] ?? GAME_TRACKING_STEPS[0]!;
   const stepCount = GAME_TRACKING_STEPS.length;
 
-  const targets = resolveGameTrackingTargets(data, tourGameIdRef.current);
+  const targets = resolveGameTrackingTargets(data, tourGameId);
   const canAdvance = gameTrackingAdvanceMet(
     data,
     targets?.gameId,
@@ -72,7 +79,9 @@ export function GameTrackingTourProvider({ children }: { children: ReactNode }) 
     setActive(false);
     setBusy(false);
     setStepIndex(0);
+    setTourGameId(null);
     tourGameIdRef.current = null;
+    prevCanAdvanceRef.current = false;
   }, []);
 
   const goToStep = useCallback(
@@ -94,12 +103,14 @@ export function GameTrackingTourProvider({ children }: { children: ReactNode }) 
             'Added tour practice game.',
           );
           tourGameIdRef.current = gameId;
+          setTourGameId(gameId);
           stepTargets = { matchId: stepTargets.matchId, gameId };
         }
 
         const route = gameTrackingStepRoute(nextStep.id, stepTargets);
         if (route) navigate(route);
         setStepIndex(index);
+        prevCanAdvanceRef.current = false;
       } finally {
         setBusy(false);
       }
@@ -108,6 +119,7 @@ export function GameTrackingTourProvider({ children }: { children: ReactNode }) 
   );
 
   const startTour = useCallback(() => {
+    setTourGameId(null);
     tourGameIdRef.current = null;
     setStepIndex(0);
     setActive(true);
@@ -115,12 +127,14 @@ export function GameTrackingTourProvider({ children }: { children: ReactNode }) 
   }, [goToStep]);
 
   const next = useCallback(() => {
-    if (!gameTrackingAdvanceMet(
-      dataRef.current,
-      resolveGameTrackingTargets(dataRef.current, tourGameIdRef.current)?.gameId,
-      step.advanceWhen,
-      location.pathname,
-    )) {
+    if (
+      !gameTrackingAdvanceMet(
+        dataRef.current,
+        resolveGameTrackingTargets(dataRef.current, tourGameIdRef.current)?.gameId,
+        step.advanceWhen,
+        location.pathname,
+      )
+    ) {
       return;
     }
     if (stepIndex >= stepCount - 1) {
@@ -138,6 +152,22 @@ export function GameTrackingTourProvider({ children }: { children: ReactNode }) 
   const skip = useCallback(() => {
     finish();
   }, [finish]);
+
+  useEffect(() => {
+    if (!active || busy || !step.advanceWhen) {
+      prevCanAdvanceRef.current = canAdvance;
+      return undefined;
+    }
+
+    const justMet = canAdvance && !prevCanAdvanceRef.current;
+    prevCanAdvanceRef.current = canAdvance;
+    if (!justMet) return undefined;
+
+    const timer = window.setTimeout(() => {
+      next();
+    }, AUTO_ADVANCE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [active, busy, canAdvance, next, step.advanceWhen]);
 
   const value = useMemo(
     () => ({

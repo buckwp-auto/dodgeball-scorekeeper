@@ -7,6 +7,7 @@ import {
   gameTrackingAdvanceMet,
   gameTrackingAnchorSelector,
   gameTrackingStepRoute,
+  isOnTrackGameEventsPage,
   resolveGameTrackingMatchId,
   resolveGameTrackingTargets,
 } from './gameTrackingTour';
@@ -46,16 +47,34 @@ describe('gameTrackingTour', () => {
     const matchId = resolveGameTrackingMatchId(data)!;
     const gameId = addGameWithAutoRoster(data, matchId);
     const eventsPath = `/matches/${matchId}/games/${gameId}/events`;
+    const rosterPath = `/matches/${matchId}/games/${gameId}`;
 
+    expect(isOnTrackGameEventsPage(rosterPath, gameId)).toBe(false);
+    expect(isOnTrackGameEventsPage(eventsPath, gameId)).toBe(true);
+    expect(
+      gameTrackingAdvanceMet(data, gameId, 'on-track-game-page', rosterPath),
+    ).toBe(false);
     expect(
       gameTrackingAdvanceMet(data, gameId, 'on-track-game-page', '/matches/1/games/2'),
     ).toBe(false);
     expect(gameTrackingAdvanceMet(data, gameId, 'on-track-game-page', eventsPath)).toBe(true);
   });
 
+  it('anchors other-tab on offense choices', () => {
+    const other = GAME_TRACKING_STEPS.find((step) => step.id === 'other-tab');
+    expect(other?.anchor).toBe('other-offenses');
+    expect(other?.placement).toBe('right');
+    expect(gameTrackingAnchorSelector('other-offenses')).toBe('[data-tour="other-offenses"]');
+  });
+
   it('builds anchor selectors', () => {
     expect(gameTrackingAnchorSelector('throw-editor')).toBe('[data-tour="throw-editor"]');
     expect(gameTrackingAnchorSelector('nav-matches')).toBe('[data-onboarding="nav-matches"]');
+  });
+
+  it('uses top placement for throw editor steps', () => {
+    expect(GAME_TRACKING_STEPS.find((step) => step.id === 'throw-single')?.placement).toBe('top');
+    expect(GAME_TRACKING_STEPS.find((step) => step.id === 'throw-deflection')?.placement).toBe('top');
   });
 
   it('uses top-start placement for roster steps', () => {

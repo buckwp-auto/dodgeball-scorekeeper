@@ -7,8 +7,21 @@ import {
   loadThrowDraftsFromEvent,
 } from './gameEvents';
 import { canNavigateToMatchPage } from './matchGame';
+import {
+  COLUMN_1_HOTKEYS,
+  COLUMN_2_HOTKEYS,
+  RESULT_HOTKEYS,
+} from './hotkeys';
 import type { OnboardingPlacement } from './onboarding';
+import type { TourStepBody } from './tourContent';
 import type { DatabaseDto, Guid } from './types';
+import {
+  YOUTUBE_FRAME_BACK_HOTKEY,
+  YOUTUBE_FRAME_FORWARD_HOTKEY,
+  YOUTUBE_PLAY_PAUSE_HOTKEY,
+  YOUTUBE_SEEK_BACK_HOTKEY,
+  YOUTUBE_SEEK_FORWARD_HOTKEY,
+} from './youtube';
 
 export type GameTrackingAnchor =
   | 'intro'
@@ -27,6 +40,7 @@ export type GameTrackingAnchor =
   | 'throw-editor'
   | 'team-throw'
   | 'other-tab'
+  | 'other-offenses'
   | 'finish-tab'
   | 'timeline';
 
@@ -35,7 +49,7 @@ export type GameTrackingTargets = {
   gameId?: Guid;
 };
 
-export type TourPlacement = OnboardingPlacement | 'left' | 'top-start';
+export type TourPlacement = OnboardingPlacement | 'left' | 'top-start' | 'top' | 'bottom';
 
 export type GameTrackingAdvanceWhen =
   | 'manual'
@@ -50,7 +64,7 @@ export type GameTrackingAdvanceWhen =
 export type GameTrackingStep = {
   id: string;
   title: string;
-  body: string;
+  body: TourStepBody;
   anchor: GameTrackingAnchor;
   placement?: TourPlacement;
   /** Load the sample league when this step becomes active. */
@@ -172,26 +186,47 @@ export const GAME_TRACKING_STEPS: GameTrackingStep[] = [
       'Match score, match clock, and players remaining update as you record events. ' +
       'With a YouTube VOD, the clock follows video time from Game start.',
     anchor: 'scoreboard',
-    placement: 'bottom-start',
+    placement: 'bottom',
     interactive: true,
   },
   {
     id: 'throw-single',
     title: 'Record a throw',
-    body:
-      'On the Throw tab, pick thrower, target, and result (hit, dodge, block, catch, …). ' +
-      'A complete draft auto-commits. Record one single throw to continue.',
+    body: [
+      'The basic loop: pick thrower, target, and result, then ',
+      { action: 'done' },
+      ' to save the event. Try ',
+      { key: COLUMN_1_HOTKEYS[0]! },
+      ' ',
+      { key: COLUMN_2_HOTKEYS[0]! },
+      ' ',
+      { key: RESULT_HOTKEYS[0]! },
+      ' (home thrower, away target, hit). ',
+      'With video: ',
+      { key: YOUTUBE_PLAY_PAUSE_HOTKEY, label: 'Space' },
+      ' pauses; ',
+      { key: YOUTUBE_SEEK_BACK_HOTKEY, label: '←' },
+      ' / ',
+      { key: YOUTUBE_SEEK_FORWARD_HOTKEY, label: '→' },
+      ' rewind or skip 5s; ',
+      { key: YOUTUBE_FRAME_BACK_HOTKEY },
+      ' / ',
+      { key: YOUTUBE_FRAME_FORWARD_HOTKEY },
+      ' step frame-by-frame while paused. Record one single throw to continue.',
+    ],
     anchor: 'throw-editor',
-    placement: 'bottom-start',
+    placement: 'top',
     interactive: true,
     advanceWhen: 'single-throw-committed',
   },
   {
     id: 'throw-team',
     title: 'Team throw',
-    body:
-      'Use Add Team Throw when several players on the same team release at once. ' +
-      'Fill out each row, then let the draft commit — record one team throw to continue.',
+    body: [
+      'Use Add Team Throw ',
+      { action: 'addThrow' },
+      ' when several players on the same team release at once. Fill out each row, then let the draft commit — record one team throw to continue.',
+    ],
     anchor: 'team-throw',
     placement: 'bottom-start',
     interactive: true,
@@ -200,31 +235,39 @@ export const GAME_TRACKING_STEPS: GameTrackingStep[] = [
   {
     id: 'throw-deflection',
     title: 'Deflections',
-    body:
-      'After a hit (or similar), press Z to add a deflection row, then pick who touched the ball and the result. ' +
-      'Record one throw with a deflection to continue.',
+    body: [
+      'After a hit (or similar), press ',
+      { action: 'addDeflection' },
+      ' to add a deflection row, then pick who touched the ball and the result. Record one throw with a deflection to continue.',
+    ],
     anchor: 'throw-editor',
-    placement: 'bottom-start',
+    placement: 'top',
     interactive: true,
     advanceWhen: 'deflection-committed',
   },
   {
     id: 'other-tab',
     title: 'Other events',
-    body:
-      'Switch to the Other tab for mistakes, illegal blocks, stepping, and similar offenses. ' +
-      'Record any Other event to continue.',
-    anchor: 'other-tab',
-    placement: 'bottom-start',
+    body: [
+      'Open the Other tab with ',
+      { tab: 'error' },
+      '. Pick an offense — try Line out ',
+      { key: '1' },
+      ' — then select the player. Record any Other event to continue.',
+    ],
+    anchor: 'other-offenses',
+    placement: 'right',
     interactive: true,
     advanceWhen: 'other-committed',
   },
   {
     id: 'finish-game',
     title: 'Finish the game',
-    body:
-      'Keep recording outs until one whole side is eliminated — the app prompts you to finish. ' +
-      'Use the Finish tab (or Done when prompted) to save the game result.',
+    body: [
+      'Keep recording outs until one whole side is eliminated — the app prompts you to finish. Use the Finish tab ',
+      { tab: 'finish' },
+      ' (or Done when prompted) to save the game result.',
+    ],
     anchor: 'finish-tab',
     placement: 'bottom-start',
     interactive: true,
@@ -233,9 +276,13 @@ export const GAME_TRACKING_STEPS: GameTrackingStep[] = [
   {
     id: 'timeline',
     title: 'Fix past events',
-    body:
-      'The timeline lists every event newest-first. Select a row to edit players, results, or timestamps. ' +
-      'Undo/redo (`-` / `+`) fixes the last committed event.',
+    body: [
+      'The timeline lists every event newest-first. Select a row to edit players, results, or timestamps. Undo/redo ',
+      { action: 'undo' },
+      ' / ',
+      { action: 'redo' },
+      ' fixes the last committed event.',
+    ],
     anchor: 'timeline',
     placement: 'left',
     interactive: true,
@@ -298,6 +345,11 @@ export function gameStartCommitted(data: DatabaseDto, gameId: Guid): boolean {
   });
 }
 
+export function isOnTrackGameEventsPage(pathname: string, gameId: Guid): boolean {
+  const escaped = gameId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`/games/${escaped}/events(?:/|$)`).test(pathname);
+}
+
 export function gameTrackingAdvanceMet(
   data: DatabaseDto,
   gameId: Guid | undefined,
@@ -309,7 +361,7 @@ export function gameTrackingAdvanceMet(
 
   switch (advanceWhen) {
     case 'on-track-game-page':
-      return pathname.includes(`/games/${gameId}/events`);
+      return isOnTrackGameEventsPage(pathname, gameId);
     case 'game-start-committed':
       return gameStartCommitted(data, gameId);
     case 'single-throw-committed':
@@ -363,6 +415,7 @@ export function gameTrackingStepRoute(
     case 'throw-team':
     case 'throw-deflection':
     case 'other-tab':
+    case 'other-offenses':
     case 'finish-game':
     case 'timeline':
       return gameId ? `/matches/${matchId}/games/${gameId}/events` : undefined;

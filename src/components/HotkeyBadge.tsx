@@ -3,13 +3,19 @@ import { formatHotkeyLabel } from '../domain/hotkeys';
 
 const SERIF_I_FACE = "Georgia, 'Times New Roman', serif";
 
-export function HotkeyBadge({ hotkey }: { hotkey: string | null }) {
+export function HotkeyBadge({
+  hotkey,
+  label,
+}: {
+  hotkey: string | null;
+  label?: string;
+}) {
   if (!hotkey) return null;
   const serifI = hotkey.toLowerCase() === 'i';
   return (
     <Chip
       size="small"
-      label={formatHotkeyLabel(hotkey)}
+      label={label ?? formatHotkeyLabel(hotkey)}
       sx={{
         minWidth: 28,
         height: 22,

@@ -6,8 +6,22 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import type { TourPlacement } from '../../domain/gameTrackingTour';
+import { hotkeyForTrackGameTab, hotkeysForTrackGameAction } from '../../domain/hotkeys';
+import {
+  computeTourArrowOffset,
+  pickTourSide,
+  tourSideArrowClass,
+  tourSideToPopperPlacement,
+  type TourCardSide,
+} from '../../domain/tourPlacement';
+import {
+  isTourBodyArray,
+  type TourBodySegment,
+  type TourStepBody,
+} from '../../domain/tourContent';
+import { HotkeyBadge } from '../HotkeyBadge';
 
 const SPOTLIGHT_CLASS = 'sk-onboarding-spotlight';
 
@@ -34,7 +48,7 @@ const POPPER_MODIFIERS = [
 
 type GuidedTourStep = {
   title: string;
-  body: string;
+  body: TourStepBody;
   placement?: TourPlacement;
 };
 
@@ -54,14 +68,65 @@ type GuidedTourProps = {
   onSkip: () => void;
 };
 
-function placementArrowClass(placement: TourPlacement): string | null {
-  if (placement === 'bottom-start') return 'sk-onboarding-tour-card--below';
-  if (placement === 'top-start') return 'sk-onboarding-tour-card--above';
-  return null;
+function hotkeysForSegment(segment: TourBodySegment): string[] {
+  if (typeof segment === 'string') return [];
+  if ('key' in segment) return [segment.key];
+  if ('tab' in segment) return [hotkeyForTrackGameTab(segment.tab)];
+  return hotkeysForTrackGameAction(segment.action);
+}
+
+function TourStepBody({ body }: { body: TourStepBody }) {
+  if (!isTourBodyArray(body)) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {body}
+      </Typography>
+    );
+  }
+
+  return (
+    <Typography
+      variant="body2"
+      color="text.secondary"
+      component="div"
+      sx={{ '& .sk-tour-hotkey': { display: 'inline-flex', verticalAlign: 'middle', mx: 0.5 } }}
+    >
+      {body.map((segment, index) => {
+        if (typeof segment === 'string') {
+          return <span key={index}>{segment}</span>;
+        }
+        if ('key' in segment) {
+          return (
+            <Box key={index} component="span" className="sk-tour-hotkey">
+              <HotkeyBadge hotkey={segment.key} label={segment.label} />
+            </Box>
+          );
+        }
+        const keys = hotkeysForSegment(segment);
+        return (
+          <Box key={index} component="span" className="sk-tour-hotkey">
+            {keys.map((key, keyIndex) => (
+              <Box key={key} component="span" sx={{ display: 'inline-flex', alignItems: 'center' }}>
+                {keyIndex > 0 ? (
+                  <Box component="span" sx={{ mx: 0.25, color: 'text.secondary' }}>
+                    /
+                  </Box>
+                ) : null}
+                <HotkeyBadge hotkey={key} />
+              </Box>
+            ))}
+          </Box>
+        );
+      })}
+    </Typography>
+  );
 }
 
 function TourCard({
-  placement,
+  cardRef,
+  side,
+  arrowOffset,
+  interactive,
   title,
   body,
   stepIndex,
@@ -74,9 +139,12 @@ function TourCard({
   onBack,
   onNext,
 }: {
-  placement: TourPlacement;
+  cardRef?: Ref<HTMLDivElement>;
+  side: TourCardSide | null;
+  arrowOffset: string;
+  interactive?: boolean;
   title: string;
-  body: string;
+  body: TourStepBody;
   stepIndex: number;
   stepCount: number;
   isFirst: boolean;
@@ -87,13 +155,20 @@ function TourCard({
   onBack: () => void;
   onNext: () => void;
 }) {
-  const arrowClass = placementArrowClass(placement);
+  const arrowClass = side ? tourSideArrowClass(side) : null;
+  const classNames = [
+    'sk-onboarding-tour-card',
+    arrowClass,
+    interactive ? 'sk-onboarding-tour-card--interactive' : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <Box
-      className={
-        arrowClass ? `sk-onboarding-tour-card ${arrowClass}` : 'sk-onboarding-tour-card'
-      }
+      ref={cardRef}
+      className={classNames}
+      style={{ '--tour-arrow-offset': arrowOffset } as React.CSSProperties & Record<string, string>}
     >
       <Paper elevation={8} sx={{ p: 2, maxWidth: 320 }}>
         <Stack spacing={1.5}>
@@ -101,9 +176,7 @@ function TourCard({
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>
               {title}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {body}
-            </Typography>
+            <TourStepBody body={body} />
           </Box>
           <Typography variant="caption" color="text.secondary">
             Step {stepIndex + 1} of {stepCount}
@@ -153,9 +226,35 @@ export function GuidedTour({
   onBack,
   onSkip,
 }: GuidedTourProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [missingAnchor, setMissingAnchor] = useState(false);
-  const placement = step.placement ?? 'right';
+  const [resolvedSide, setResolvedSide] = useState<TourCardSide>('right');
+  const [arrowOffset, setArrowOffset] = useState('28px');
+
+  const popperPlacement = tourSideToPopperPlacement(resolvedSide);
+  const interactive = Boolean(layoutInteractiveClass);
+  const onNextRef = useRef(onNext);
+  onNextRef.current = onNext;
+
+  useEffect(() => {
+    if (!active || busy || !canAdvance) return undefined;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') {
+        return;
+      }
+      if (target?.isContentEditable) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onNextRef.current();
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [active, busy, canAdvance]);
 
   useEffect(() => {
     const layout = document.querySelector('.sk-layout');
@@ -194,6 +293,7 @@ export function GuidedTour({
         element.classList.add(SPOTLIGHT_CLASS);
         setAnchorEl(element);
         setMissingAnchor(false);
+        setResolvedSide(pickTourSide(element.getBoundingClientRect(), step.placement));
       } else {
         setAnchorEl(null);
         setMissingAnchor(true);
@@ -211,7 +311,28 @@ export function GuidedTour({
         node.classList.remove(SPOTLIGHT_CLASS);
       });
     };
-  }, [active, anchorSelector, stepIndex]);
+  }, [active, anchorSelector, step.placement, stepIndex]);
+
+  useLayoutEffect(() => {
+    if (!anchorEl || missingAnchor) return undefined;
+
+    const refresh = () => {
+      const anchorRect = anchorEl.getBoundingClientRect();
+      const side = pickTourSide(anchorRect, step.placement);
+      setResolvedSide(side);
+      if (cardRef.current) {
+        setArrowOffset(computeTourArrowOffset(side, anchorRect, cardRef.current.getBoundingClientRect()));
+      }
+    };
+
+    refresh();
+    window.addEventListener('resize', refresh);
+    window.addEventListener('scroll', refresh, true);
+    return () => {
+      window.removeEventListener('resize', refresh);
+      window.removeEventListener('scroll', refresh, true);
+    };
+  }, [anchorEl, missingAnchor, step.placement, stepIndex]);
 
   if (!active) return null;
 
@@ -220,7 +341,10 @@ export function GuidedTour({
 
   const card = (
     <TourCard
-      placement={placement}
+      cardRef={cardRef}
+      side={missingAnchor ? null : resolvedSide}
+      arrowOffset={arrowOffset}
+      interactive={interactive}
       title={step.title}
       body={step.body}
       stepIndex={stepIndex}
@@ -258,7 +382,7 @@ export function GuidedTour({
       open={!busy}
       anchorEl={anchorEl}
       className={tourClassName}
-      placement={placement}
+      placement={popperPlacement}
       sx={{ zIndex: 1500 }}
       modifiers={POPPER_MODIFIERS}
     >

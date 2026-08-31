@@ -289,7 +289,6 @@ function SingleThrowEditor({
   const density = useEditorDensity();
   const compact = density === 'compact';
   const stacked = compact && section !== 'all';
-  const showPlayers = section === 'all' || section === 'players';
   const showActions = section === 'all' || section === 'actions';
 
   const resultStack = (
