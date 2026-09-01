@@ -7,6 +7,7 @@ import {
   MATCH_CLOCK_NO_TIME,
   MATCH_CLOCK_NO_VIDEO,
   formatMatchRunningTime,
+  gameClockStartOffsetSeconds,
   matchClockStartOffsetSeconds,
   resolveMatchRunningTime,
 } from './matchClock';
@@ -31,21 +32,36 @@ function setupMatchWithTwoGames() {
 
 describe('matchClockStartOffsetSeconds', () => {
   it('returns null when no Game start is stamped', () => {
-    const { data, match, game1 } = setupMatchWithTwoGames();
-    expect(matchClockStartOffsetSeconds(data, match.Id, game1)).toBeNull();
+    const { data, match } = setupMatchWithTwoGames();
+    expect(matchClockStartOffsetSeconds(data, match.Id)).toBeNull();
   });
 
-  it('prefers the current game start stamp', () => {
+  it('uses the first stamped Game start in the match', () => {
     const { data, match, game1, game2 } = setupMatchWithTwoGames();
     setGameEventVideoOffset(data, getGameStartEvent(data, game1)!.Id, 60);
     setGameEventVideoOffset(data, getGameStartEvent(data, game2)!.Id, 180);
-    expect(matchClockStartOffsetSeconds(data, match.Id, game2)).toBe(180);
+    expect(matchClockStartOffsetSeconds(data, match.Id)).toBe(60);
   });
 
-  it('falls back to the first stamped Game start in the match', () => {
-    const { data, match, game1, game2 } = setupMatchWithTwoGames();
-    setGameEventVideoOffset(data, getGameStartEvent(data, game1)!.Id, 45);
-    expect(matchClockStartOffsetSeconds(data, match.Id, game2)).toBe(45);
+  it('ignores later games when only a later game is stamped', () => {
+    const { data, match, game2 } = setupMatchWithTwoGames();
+    setGameEventVideoOffset(data, getGameStartEvent(data, game2)!.Id, 180);
+    expect(matchClockStartOffsetSeconds(data, match.Id)).toBe(180);
+  });
+});
+
+describe('gameClockStartOffsetSeconds', () => {
+  it('returns null when the current game start is not stamped', () => {
+    const { data, game1 } = setupMatchWithTwoGames();
+    expect(gameClockStartOffsetSeconds(data, game1)).toBeNull();
+  });
+
+  it('uses only the current game start stamp', () => {
+    const { data, game1, game2 } = setupMatchWithTwoGames();
+    setGameEventVideoOffset(data, getGameStartEvent(data, game1)!.Id, 60);
+    setGameEventVideoOffset(data, getGameStartEvent(data, game2)!.Id, 180);
+    expect(gameClockStartOffsetSeconds(data, game2)).toBe(180);
+    expect(gameClockStartOffsetSeconds(data, game1)).toBe(60);
   });
 });
 

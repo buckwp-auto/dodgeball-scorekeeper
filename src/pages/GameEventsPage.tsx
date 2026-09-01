@@ -66,6 +66,7 @@ import {
 import { buildTimelineEntries } from '../domain/gameEventTimeline';
 import { rememberLastGame, rememberLastMatch } from '../domain/lastScoring';
 import {
+  gameClockStartOffsetSeconds,
   matchClockStartOffsetSeconds,
   resolveMatchRunningTime,
 } from '../domain/matchClock';
@@ -237,14 +238,24 @@ export function GameEventsPage() {
     return inPageVideoNow;
   }, [hasYoutube, youtubeMode, popoutPlayback.displayTime, inPageVideoNow]);
 
-  const runningTime = useMemo(
+  const matchRunningTime = useMemo(
     () =>
       resolveMatchRunningTime({
         hasVideo: hasYoutube,
-        startOffsetSeconds: matchClockStartOffsetSeconds(data, matchId, gameId),
+        startOffsetSeconds: matchClockStartOffsetSeconds(data, matchId),
         videoNowSeconds,
       }),
-    [data, matchId, gameId, hasYoutube, videoNowSeconds],
+    [data, matchId, hasYoutube, videoNowSeconds],
+  );
+
+  const gameRunningTime = useMemo(
+    () =>
+      resolveMatchRunningTime({
+        hasVideo: hasYoutube,
+        startOffsetSeconds: gameClockStartOffsetSeconds(data, gameId),
+        videoNowSeconds,
+      }),
+    [data, gameId, hasYoutube, videoNowSeconds],
   );
 
   useEffect(() => {
@@ -1025,7 +1036,8 @@ export function GameEventsPage() {
                 matchId={matchId}
                 compact
                 minimal
-                runningTime={runningTime}
+                runningTime={matchRunningTime}
+                gameRunningTime={gameRunningTime}
                 remaining={{
                   home: live.activeHomeCount,
                   away: live.activeAwayCount,
@@ -1045,7 +1057,8 @@ export function GameEventsPage() {
             {matchId ? (
               <DigitalScoreboard
                 matchId={matchId}
-                runningTime={runningTime}
+                runningTime={matchRunningTime}
+                gameRunningTime={gameRunningTime}
                 remaining={{
                   home: live.activeHomeCount,
                   away: live.activeAwayCount,

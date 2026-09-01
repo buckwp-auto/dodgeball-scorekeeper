@@ -183,8 +183,8 @@ export const GAME_TRACKING_STEPS: GameTrackingStep[] = [
     id: 'scoreboard',
     title: 'Live scoreboard',
     body:
-      'Match score, match clock, and players remaining update as you record events. ' +
-      'With a YouTube VOD, the clock follows video time from Game start.',
+      'Match score, match and game clocks, and players remaining update as you record events. ' +
+      'With a YouTube VOD, match time follows video time from the first Game start; game time follows this game’s Game start.',
     anchor: 'scoreboard',
     placement: 'bottom',
     interactive: true,

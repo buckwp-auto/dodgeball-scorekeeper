@@ -33,7 +33,7 @@
 
 ## Track Game
 
-Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar** (or a scrollable **bottom timeline strip** in Tall / Pop-out stacked layout). A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus this game’s **Game start** stamp (or the first stamped Game start in the match); it is not a wall clock. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
+Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar** (or a scrollable **bottom timeline strip** in Tall / Pop-out stacked layout). A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, **game running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus the first game’s **Game start** stamp; game time is the VOD clock minus this game’s **Game start** stamp. Neither is a wall clock. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
 
 ### Event types
 
