@@ -1,22 +1,74 @@
 import { Box } from '@mui/material';
+import { useEffect, useMemo } from 'react';
+import { inPageOpenSeekSeconds } from '../domain/gameEvents';
+import { shouldAutoSeekPopoutForGame } from '../domain/youtubePopout';
+import { useYoutubeControls } from '../hooks/useYoutubeControls';
+import { useDatabase } from '../state/DatabaseContext';
+import { useYoutubePopout } from '../state/YoutubePopoutContext';
 import {
   YoutubePlayer,
   YoutubePopoutBar,
 } from './trackGame/YoutubePlayer';
-import { useYoutubeControls } from '../hooks/useYoutubeControls';
 
 /** Tall match VOD on roster screens so you can see who is playing vs subbing. */
-export function RosterYoutubePlayer({ youtubeUrl }: { youtubeUrl: string }) {
+export function RosterYoutubePlayer({
+  youtubeUrl,
+  gameId,
+}: {
+  youtubeUrl: string;
+  /** When set, cue from this game's stamps or the prior game's end. */
+  gameId?: string;
+}) {
+  const { data } = useDatabase();
+  const { attachedGameId, setAttachedGameId } = useYoutubePopout();
   const {
     hasYoutube,
     mode,
     playerRef,
     setModeAndPersist,
     cueSeconds,
+    seekToVideoOffset,
     popOut,
     dockBack,
     popoutPlayback,
   } = useYoutubeControls(youtubeUrl, { enableLayoutHotkeys: false });
+
+  const openSeekSeconds = useMemo(() => {
+    return gameId ? inPageOpenSeekSeconds(data, gameId) : null;
+    // Snapshot once per game open — later edits should not recreate the player
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId]);
+
+  useEffect(() => {
+    if (!gameId) return;
+
+    if (mode !== 'popout') {
+      if (attachedGameId !== gameId) setAttachedGameId(gameId);
+      return;
+    }
+
+    if (attachedGameId !== gameId) {
+      const previousAttachedGameId = attachedGameId;
+      setAttachedGameId(gameId);
+      if (
+        openSeekSeconds != null &&
+        shouldAutoSeekPopoutForGame({
+          attachedGameId: previousAttachedGameId,
+          gameId,
+          seekTargetSeconds: openSeekSeconds,
+        })
+      ) {
+        seekToVideoOffset(openSeekSeconds);
+      }
+    }
+  }, [
+    attachedGameId,
+    gameId,
+    mode,
+    openSeekSeconds,
+    seekToVideoOffset,
+    setAttachedGameId,
+  ]);
 
   if (!hasYoutube) return null;
 
@@ -54,7 +106,7 @@ export function RosterYoutubePlayer({ youtubeUrl }: { youtubeUrl: string }) {
           youtubeUrl={youtubeUrl}
           mode={displayMode}
           onModeChange={(next) => setModeAndPersist(next === 'docked' ? 'tall' : next)}
-          startSeconds={cueSeconds}
+          startSeconds={cueSeconds ?? openSeekSeconds ?? undefined}
           onPopOut={popOut}
           popoutBlocked={popoutPlayback.blocked}
           showTrackGameHints={false}

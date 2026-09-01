@@ -323,7 +323,7 @@ export function GamePage() {
           Next game
         </Button>
       </Stack>
-      <RosterYoutubePlayer youtubeUrl={match.YoutubeUrl?.trim() || ''} />
+      <RosterYoutubePlayer youtubeUrl={match.YoutubeUrl?.trim() || ''} gameId={gameId} />
       <div className="sk-game" data-tour="game-roster">
         <PlayerRoster
           side="Home Team"
