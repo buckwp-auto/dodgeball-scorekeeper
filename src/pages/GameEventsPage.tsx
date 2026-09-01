@@ -94,6 +94,7 @@ import { useDatabase } from '../state/DatabaseContext';
 import { useGameTrackingTour } from '../state/GameTrackingTourContext';
 import { useSetTrackGameImmersive } from '../state/TrackGameImmersiveContext';
 import { useYoutubePopout } from '../state/YoutubePopoutContext';
+import { TrackGameHotkeyHints } from '../components/trackGame/TrackGameHotkeyHints';
 
 type TabKey = TrackGameTab;
 
