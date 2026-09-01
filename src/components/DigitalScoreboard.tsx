@@ -93,6 +93,7 @@ function ScoreboardTeamRow({
   compact,
   minimal,
   scoreDigitSize,
+  truncateName = true,
 }: {
   name: string;
   score: number;
@@ -101,6 +102,7 @@ function ScoreboardTeamRow({
   compact?: boolean;
   minimal?: boolean;
   scoreDigitSize: string | { xs: string; sm: string };
+  truncateName?: boolean;
 }) {
   const nameColor = teamHeaderStyles(teamHome, 'dark').color;
 
@@ -120,11 +122,17 @@ function ScoreboardTeamRow({
           fontWeight: 700,
           fontSize: minimal ? '0.8rem' : compact ? '0.95rem' : { xs: '1rem', sm: '1.15rem' },
           color: nameColor,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
           minWidth: 0,
           lineHeight: 1.15,
+          ...(truncateName
+            ? {
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }
+            : {
+                whiteSpace: 'nowrap',
+              }),
         }}
       >
         {name}
@@ -187,6 +195,8 @@ export function DigitalScoreboard({
     color: empty ? 'rgba(245, 247, 250, 0.45)' : '#ffca28',
   });
 
+  const stackMetricsBelow = minimal && showMetrics;
+
   return (
     <Box
       className="sk-scoreboard"
@@ -199,17 +209,19 @@ export function DigitalScoreboard({
       }}
     >
       <Stack
-        direction="row"
-        spacing={minimal ? 1 : compact ? 1.25 : 2}
-        sx={{ alignItems: 'center', minWidth: 0 }}
+        direction={stackMetricsBelow ? 'column' : 'row'}
+        spacing={stackMetricsBelow ? 0.35 : minimal ? 1 : compact ? 1.25 : 2}
+        sx={{ alignItems: 'stretch', minWidth: 0 }}
       >
         <Box
           className="sk-scoreboard-score"
           sx={{
-            flex: 1,
+            flex: stackMetricsBelow ? undefined : 1,
             minWidth: 0,
-            pr: showMetrics ? 0.5 : 0,
-            ...(showMetrics ? null : { maxWidth: '20rem', mx: 'auto', width: '100%' }),
+            pr: showMetrics && !stackMetricsBelow ? 0.5 : 0,
+            ...(showMetrics || stackMetricsBelow
+              ? null
+              : { maxWidth: '20rem', mx: 'auto', width: '100%' }),
           }}
         >
           {!showMetrics ? (
@@ -241,6 +253,7 @@ export function DigitalScoreboard({
               compact={compact}
               minimal={minimal}
               scoreDigitSize={scoreDigitSize}
+              truncateName={!minimal}
             />
             <ScoreboardTeamRow
               name={series.awayTeam.Name}
@@ -250,6 +263,7 @@ export function DigitalScoreboard({
               compact={compact}
               minimal={minimal}
               scoreDigitSize={scoreDigitSize}
+              truncateName={!minimal}
             />
             {series.ties > 0 ? (
               <Typography
@@ -270,7 +284,11 @@ export function DigitalScoreboard({
           <Stack
             className="sk-scoreboard-metrics"
             spacing={minimal ? 0.15 : compact ? 0.25 : 0.35}
-            sx={{ flexShrink: 0, minWidth: minimal ? '7.5rem' : compact ? '8.5rem' : '10rem' }}
+            sx={{
+              flexShrink: stackMetricsBelow ? undefined : 0,
+              minWidth: stackMetricsBelow ? 0 : minimal ? '7.5rem' : compact ? '8.5rem' : '10rem',
+              width: stackMetricsBelow ? '100%' : undefined,
+            }}
           >
             {runningTime ? (
               <ScoreboardCell
