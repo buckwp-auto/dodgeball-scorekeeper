@@ -14,23 +14,22 @@ export type MatchRunningTime =
   | { status: 'no-current-time' }
   | { status: 'before-start' };
 
-/**
- * VOD offset the match clock counts from: this game's Game start stamp when
- * present, otherwise the first stamped Game start in the match.
- */
+/** VOD offset the match clock counts from: first stamped Game start in the match. */
 export function matchClockStartOffsetSeconds(
   data: DatabaseDto,
   matchId: Guid,
-  gameId?: Guid,
 ): number | null {
-  if (gameId) {
-    const current = getGameStartEvent(data, gameId)?.VideoOffsetSeconds;
-    if (current != null && Number.isFinite(current)) return current;
-  }
   for (const game of getMatchGames(data, matchId)) {
     const offset = getGameStartEvent(data, game.gameId)?.VideoOffsetSeconds;
     if (offset != null && Number.isFinite(offset)) return offset;
   }
+  return null;
+}
+
+/** VOD offset the game clock counts from: this game's Game start stamp. */
+export function gameClockStartOffsetSeconds(data: DatabaseDto, gameId: Guid): number | null {
+  const offset = getGameStartEvent(data, gameId)?.VideoOffsetSeconds;
+  if (offset != null && Number.isFinite(offset)) return offset;
   return null;
 }
 

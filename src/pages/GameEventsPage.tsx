@@ -15,13 +15,14 @@ import { FinishEditor } from '../components/trackGame/FinishEditor';
 import { StartEventEditor } from '../components/trackGame/StartEventEditor';
 import { GameEventsTimeline } from '../components/trackGame/GameEventsTimeline';
 import { EditorDensityProvider } from '../components/trackGame/EditorGrid';
-import { TrackGameHotkeyHints } from '../components/trackGame/TrackGameHotkeyHints';
+import { TrackGameTallResizeHandle } from '../components/trackGame/TrackGameTallResizeHandle';
 import {
   YoutubePlayer,
   YoutubePopoutBar,
 } from '../components/trackGame/YoutubePlayer';
 import { logDeleteItem, logVideoTimelineSeek } from '../cloud/logAnalytics';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
+import { useTrackGameTallPanelWidth } from '../hooks/useTrackGameTallPanelWidth';
 import {
   isYoutubeControlHotkey,
   useYoutubeControls,
@@ -66,6 +67,7 @@ import {
 import { buildTimelineEntries } from '../domain/gameEventTimeline';
 import { rememberLastGame, rememberLastMatch } from '../domain/lastScoring';
 import {
+  gameClockStartOffsetSeconds,
   matchClockStartOffsetSeconds,
   resolveMatchRunningTime,
 } from '../domain/matchClock';
@@ -237,14 +239,24 @@ export function GameEventsPage() {
     return inPageVideoNow;
   }, [hasYoutube, youtubeMode, popoutPlayback.displayTime, inPageVideoNow]);
 
-  const runningTime = useMemo(
+  const matchRunningTime = useMemo(
     () =>
       resolveMatchRunningTime({
         hasVideo: hasYoutube,
-        startOffsetSeconds: matchClockStartOffsetSeconds(data, matchId, gameId),
+        startOffsetSeconds: matchClockStartOffsetSeconds(data, matchId),
         videoNowSeconds,
       }),
-    [data, matchId, gameId, hasYoutube, videoNowSeconds],
+    [data, matchId, hasYoutube, videoNowSeconds],
+  );
+
+  const gameRunningTime = useMemo(
+    () =>
+      resolveMatchRunningTime({
+        hasVideo: hasYoutube,
+        startOffsetSeconds: gameClockStartOffsetSeconds(data, gameId),
+        videoNowSeconds,
+      }),
+    [data, gameId, hasYoutube, videoNowSeconds],
   );
 
   useEffect(() => {
@@ -880,9 +892,11 @@ export function GameEventsPage() {
 
   useDocumentHotkeys(handleTrackGameHotkey, true, { capture: true });
 
+  const youtubeTall = hasYoutube && youtubeMode === 'tall';
+  const { panelWidth: tallPanelWidth, onResizePointerDown } =
+    useTrackGameTallPanelWidth(youtubeTall);
   const youtubePopout = hasYoutube && youtubeMode === 'popout';
   const youtubeDocked = hasYoutube && youtubeMode === 'docked';
-  const youtubeTall = hasYoutube && youtubeMode === 'tall';
   const youtubeTopBand = hasYoutube && youtubeMode !== 'docked';
   const stackedView = youtubeTall || youtubePopout;
   const editorCompact = stackedView;
@@ -916,7 +930,7 @@ export function GameEventsPage() {
         display: 'grid',
         gridTemplateColumns: stackedView
           ? youtubeTall
-            ? 'minmax(260px, 1fr) minmax(0, 4fr)'
+            ? `${tallPanelWidth}px 6px minmax(0, 1fr)`
             : '1fr'
           : '1fr 300px',
         gridTemplateRows: stackedView
@@ -932,7 +946,7 @@ export function GameEventsPage() {
       {hasYoutube && youtubeTall ? (
         <Box
           sx={{
-            gridColumn: 2,
+            gridColumn: 3,
             gridRow: '1 / -1',
             minWidth: 0,
             minHeight: 0,
@@ -951,6 +965,10 @@ export function GameEventsPage() {
             onDisplayTime={setInPageVideoNow}
           />
         </Box>
+      ) : null}
+
+      {youtubeTall ? (
+        <TrackGameTallResizeHandle onPointerDown={onResizePointerDown} />
       ) : null}
 
       {!stackedView && hasYoutube ? (
@@ -1025,7 +1043,8 @@ export function GameEventsPage() {
                 matchId={matchId}
                 compact
                 minimal
-                runningTime={runningTime}
+                runningTime={matchRunningTime}
+                gameRunningTime={gameRunningTime}
                 remaining={{
                   home: live.activeHomeCount,
                   away: live.activeAwayCount,
@@ -1045,7 +1064,8 @@ export function GameEventsPage() {
             {matchId ? (
               <DigitalScoreboard
                 matchId={matchId}
-                runningTime={runningTime}
+                runningTime={matchRunningTime}
+                gameRunningTime={gameRunningTime}
                 remaining={{
                   home: live.activeHomeCount,
                   away: live.activeAwayCount,

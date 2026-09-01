@@ -33,7 +33,7 @@
 
 ## Track Game
 
-Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar** (or a scrollable **bottom timeline strip** in Tall / Pop-out stacked layout). A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus this game’s **Game start** stamp (or the first stamped Game start in the match); it is not a wall clock. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
+Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar** (or a scrollable **bottom timeline strip** in Tall / Pop-out stacked layout). A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, **game running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus the first game’s **Game start** stamp; game time is the VOD clock minus this game’s **Game start** stamp. Neither is a wall clock. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
 
 ### Event types
 
@@ -72,7 +72,7 @@ Derived from persisted events (not a separate toggle):
 
 - Match page: optional **YouTube URL** field; **tall VOD player** on Match and Game roster screens (playback hotkeys, no Track Game action tooltip) so you can see who is playing vs subbing
 - Track Game layouts (session preference):
-  - **Tall** (`]`) — tall 16:9 player on the right (~80% width, full viewport height); scoring editor on the left with a compact stacked header (minimal scoreboard, game title, tabs), player buttons on top, and results/deflections/team throws in a scrollable pane below. App nav collapses to a mid-screen edge toggle; the event timeline sits under the editor only. Keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
+  - **Tall** (`]`) — tall 16:9 player on the right (full viewport height); scoring editor on the left with a **draggable divider** (width remembered in session storage) and a compact stacked header (scoreboard with team rows plus clocks below, game title, tabs), player buttons on top, and results/deflections/team throws in a scrollable pane below. App nav collapses to a mid-screen edge toggle; the event timeline sits under the editor only. Keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
   - **Hide** — scoring only (timestamps pause)
   - **Pop-out** — second window for the VOD; main Track Game page uses the same stacked layout as Tall (nav drawer, compact editor, bottom timeline) with a control bar instead of the in-page player. Persists across games in the same match (and match/game roster screens). Closes when you leave the match, dock back, or close the window. Opening Track Game with an active pop-out seeks to **Game start** (finished games) or the **latest stamped event** (in progress); if nothing is stamped yet, the player is left where it is until Game start is marked. While the pop-out catches up, both windows show a short **Seeking to m:ss…** spinner
