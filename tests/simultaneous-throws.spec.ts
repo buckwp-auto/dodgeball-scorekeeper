@@ -82,7 +82,7 @@ test.describe('Simultaneous throws', () => {
     await expect(page.locator('.sk-editor-grid').first()).toBeVisible();
 
     // H1 is out but still throwing the ball he released as he was hit
-    await expect(page.getByRole('button', { name: /H1 \(out\)/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /H1 \(out/ })).toBeVisible();
     await page.keyboard.press(hotkeyFor('H1'));
     await page.keyboard.press(hotkeyFor('A2'));
     await page.keyboard.press(hotkeyForResult(ThrowResult.Hit)!);

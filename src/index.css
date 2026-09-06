@@ -245,3 +245,8 @@ body {
 :root[data-color-mode='dark'] .sk-onboarding-tour-card--interactive.sk-onboarding-tour-card--right::before {
   border-right-color: rgba(66, 66, 66, 0.52);
 }
+
+/* Tall panel resize: YouTube iframe would otherwise steal pointer events mid-drag. */
+.sk-track-game--panel-resizing .sk-youtube-player {
+  pointer-events: none;
+}

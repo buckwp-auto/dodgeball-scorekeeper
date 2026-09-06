@@ -1,4 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import { Box, Button, IconButton, Typography } from '@mui/material';
@@ -11,6 +13,7 @@ import {
   type TimelineRow,
   type TimelineSegment,
 } from '../../domain/gameEventTimeline';
+import type { TrackGameTallTimelineDock } from '../../domain/trackGameTallTimelineDock';
 import { rowBackgroundForTone } from '../../domain/timelineColors';
 import { getTimelineActionIcon } from '../../domain/throwResultIcons';
 import { PlayerPill } from './PlayerPill';
@@ -51,7 +54,16 @@ function HighlightStarButton({
   );
 }
 
-export function InsertMarker({ label }: { label?: string }) {
+export function InsertMarker({
+  label,
+  dockToggle,
+}: {
+  label?: string;
+  dockToggle?: {
+    dock: TrackGameTallTimelineDock;
+    onToggle: () => void;
+  };
+}) {
   return (
     <Box
       className="sk-timeline-insert"
@@ -75,7 +87,51 @@ export function InsertMarker({ label }: { label?: string }) {
         </Typography>
       ) : null}
       <Box sx={{ flex: 1, height: 2, bgcolor: 'grey.600' }} />
+      {dockToggle ? <TimelineDockToggleButton {...dockToggle} /> : null}
     </Box>
+  );
+}
+
+function TimelineDockToggleButton({
+  dock,
+  onToggle,
+}: {
+  dock: TrackGameTallTimelineDock;
+  onToggle: () => void;
+}) {
+  const dockToRight = dock === 'bottom';
+  return (
+    <Button
+      size="small"
+      className="sk-timeline-dock-toggle"
+      aria-label={dockToRight ? 'Dock timeline to the right' : 'Dock timeline below'}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+      onMouseDown={(event) => event.stopPropagation()}
+      endIcon={
+        dockToRight ? (
+          <ArrowForwardIcon fontSize="small" />
+        ) : (
+          <ArrowDownwardIcon fontSize="small" />
+        )
+      }
+      sx={{
+        flexShrink: 0,
+        color: 'grey.300',
+        textTransform: 'none',
+        fontSize: 12,
+        fontWeight: 600,
+        minWidth: 0,
+        px: 1,
+        py: 0.25,
+        lineHeight: 1.2,
+        '&:hover': { color: 'grey.100', bgcolor: 'grey.800' },
+      }}
+    >
+      {dockToRight ? 'Dock Right' : 'Dock Below'}
+    </Button>
   );
 }
 
@@ -308,6 +364,7 @@ export function GameEventsTimeline({
   showEndInsertMarker,
   canSetFromPlayer,
   fillHeight = true,
+  dockToggle,
   onSelectEvent,
   onDeselectEvent,
   onToggleHighlight,
@@ -320,6 +377,11 @@ export function GameEventsTimeline({
   showEndInsertMarker: boolean;
   canSetFromPlayer?: boolean;
   fillHeight?: boolean;
+  /** Tall/pop-out: arrow on the Next event row to dock timeline bottom ↔ right. */
+  dockToggle?: {
+    dock: TrackGameTallTimelineDock;
+    onToggle: () => void;
+  };
   onSelectEvent: (eventId: string) => void;
   onDeselectEvent: () => void;
   onToggleHighlight?: (eventId: string) => void;
@@ -345,9 +407,27 @@ export function GameEventsTimeline({
         alignSelf: fillHeight ? 'stretch' : 'auto',
       }}
     >
+      {dockToggle && !showEndInsertMarker ? (
+        <Box
+          className="sk-timeline-dock-bar"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            px: 1,
+            minHeight: ROW_MIN_HEIGHT,
+            borderBottom: '1px solid',
+            borderColor: 'grey.800',
+          }}
+        >
+          <TimelineDockToggleButton {...dockToggle} />
+        </Box>
+      ) : null}
       {flatItems.map((item) => {
         if (item.kind === 'insert-end') {
-          return <InsertMarker key="insert-end" label="Next event" />;
+          return (
+            <InsertMarker key="insert-end" label="Next event" dockToggle={dockToggle} />
+          );
         }
         if (item.kind === 'insert-after') {
           return <InsertMarker key={`insert-${item.entryId}`} />;

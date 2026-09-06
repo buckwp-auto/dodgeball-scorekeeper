@@ -5,7 +5,7 @@ import {
   type ErrorDraft,
   type GamePlayerInfo,
 } from '../../domain/gameEvents';
-import { sortGamePlayerInfos } from '../../domain/gameElimination';
+import { sortGamePlayerInfos, formatEliminatedPlayerLabel } from '../../domain/gameElimination';
 import {
   applyOtherOffenseHotkey,
   buildPermanentPlayerHotkeys,
@@ -31,6 +31,7 @@ export function ErrorEditor({
   homeTeamName,
   awayTeamName,
   eliminatedGamePlayerIds,
+  eliminationOrder = new Map(),
   onChange,
 }: {
   draft: ErrorDraft;
@@ -38,6 +39,7 @@ export function ErrorEditor({
   homeTeamName: string;
   awayTeamName: string;
   eliminatedGamePlayerIds: ReadonlySet<string>;
+  eliminationOrder?: ReadonlyMap<string, number>;
   onChange: (draft: ErrorDraft) => void;
 }) {
   const hotkeys = buildPermanentPlayerHotkeys(players);
@@ -55,16 +57,20 @@ export function ErrorEditor({
   const homePlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome),
     eliminatedGamePlayerIds,
+    eliminationOrder,
   );
   const awayPlayers = sortGamePlayerInfos(
     players.filter((row) => !row.teamHome),
     eliminatedGamePlayerIds,
+    eliminationOrder,
   );
 
   const isOut = (id: string) => eliminatedGamePlayerIds.has(id);
 
   const label = (row: GamePlayerInfo) =>
-    isOut(row.gamePlayerId) ? `${row.playerName} (out)` : row.playerName;
+    isOut(row.gamePlayerId)
+      ? formatEliminatedPlayerLabel(row.playerName, eliminationOrder.get(row.gamePlayerId))
+      : row.playerName;
 
   const chipLabel = (row: GamePlayerInfo | undefined) =>
     row ? label(row) : '?';

@@ -141,11 +141,31 @@ describe('applyPlayerHotkeyToThrowDrafts permanent keys', () => {
     const catchDeflect = applyPlayerHotkeyToThrowDrafts(drafts, players, 'g');
     expect(catchDeflect?.[0].deflections[0].resultId).toBe(DeflectionResult.Catch);
     expect(catchDeflect?.[0].resultId).toBe(ThrowResult.Hit);
+    // No one is out yet → Recovered defaults to None
+    expect(catchDeflect?.[0].recoveredId).toBeNull();
 
     // Defending Ned (J) goes back to toggling the throw target
     const retarget = applyPlayerHotkeyToThrowDrafts(drafts, players, 'j');
     expect(retarget?.[0].targetGamePlayerId).toBe('');
     expect(retarget?.[0].deflections[0].receiverGamePlayerId).toBe('a-zoe');
+  });
+
+  it('defaults Recovered to the defending team first-out on Catch', () => {
+    const drafts: ThrowDraft[] = [
+      {
+        ...emptyThrowDraft(),
+        throwerGamePlayerId: 'h-amy',
+        targetGamePlayerId: 'a-ned',
+        resultId: ThrowResult.Hit,
+      },
+    ];
+    const live = {
+      eliminatedGamePlayerIds: new Set(['a-zoe']),
+      eliminationOrder: new Map([['a-zoe', 1]]),
+    };
+    const withCatch = applyPlayerHotkeyToThrowDrafts(drafts, players, 'g', live);
+    expect(withCatch?.[0].resultId).toBe(ThrowResult.Catch);
+    expect(withCatch?.[0].recoveredId).toBe('a-zoe');
   });
 });
 
