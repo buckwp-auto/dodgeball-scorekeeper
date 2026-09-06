@@ -2,8 +2,10 @@ import { Box } from '@mui/material';
 
 export function TrackGameTallResizeHandle({
   onPointerDown,
+  gridColumn = 2,
 }: {
   onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+  gridColumn?: number;
 }) {
   return (
     <Box
@@ -14,7 +16,7 @@ export function TrackGameTallResizeHandle({
       title="Drag to resize scoring panel"
       onPointerDown={onPointerDown}
       sx={{
-        gridColumn: 2,
+        gridColumn,
         gridRow: '1 / -1',
         width: 6,
         cursor: 'col-resize',

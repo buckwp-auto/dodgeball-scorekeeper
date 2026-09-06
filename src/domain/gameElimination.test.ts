@@ -15,10 +15,13 @@ import {
 import {
   buildEliminationTimeline,
   computeGameLiveState,
+  defaultCatchRecoveredId,
   ELIMINATED_SELECTION_GRACE_SECONDS,
   findStaleEliminatedSelections,
   finishResultForLiveWinner,
+  formatEliminatedPlayerLabel,
   isPlayerEliminatedInGame,
+  ordinalLabel,
   sortGamePlayerInfos,
   sortRosterWithEliminations,
 } from './gameElimination';
@@ -490,5 +493,103 @@ describe('finish event', () => {
     persistFinishGameEvent(data, gameId, { resultId: GameEventFinishResult.WinHome });
     const live = computeGameLiveState(data, match.Id, gameId);
     expect(live.hasFinishEvent).toBe(true);
+  });
+});
+
+describe('elimination return-queue order', () => {
+  it('labels English ordinals', () => {
+    expect(ordinalLabel(1)).toBe('1st');
+    expect(ordinalLabel(2)).toBe('2nd');
+    expect(ordinalLabel(3)).toBe('3rd');
+    expect(ordinalLabel(4)).toBe('4th');
+    expect(ordinalLabel(11)).toBe('11th');
+    expect(ordinalLabel(21)).toBe('21st');
+    expect(formatEliminatedPlayerLabel('Alex', 1)).toBe('Alex (out 1st)');
+    expect(formatEliminatedPlayerLabel('Alex', undefined)).toBe('Alex (out)');
+  });
+
+  it('ranks currently out players per team in elimination order', () => {
+    const data = createEmptyDatabase();
+    const home = addTeam(data, 'Home');
+    const away = addTeam(data, 'Away');
+    const h1 = addPlayer(data, home.Id, 'H1');
+    const a1 = addPlayer(data, away.Id, 'A1');
+    const a2 = addPlayer(data, away.Id, 'A2');
+    const a3 = addPlayer(data, away.Id, 'A3');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, h1.Id, true);
+    for (const player of [a1, a2, a3]) {
+      toggleMatchPlayer(data, match.Id, player.Id, false);
+    }
+    const gameId = addGame(data, match.Id);
+    for (const player of [h1, a1, a2, a3]) {
+      toggleGamePlayer(data, match.Id, gameId, player.Id);
+    }
+    const infos = getGamePlayerInfos(data, match.Id, gameId);
+    const gp = (name: string) => infos.find((row) => row.playerName === name)!.gamePlayerId;
+
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gp('H1'),
+        targetGamePlayerId: gp('A2'),
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gp('H1'),
+        targetGamePlayerId: gp('A3'),
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gp('H1'),
+        targetGamePlayerId: gp('A1'),
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+      },
+    ]);
+
+    let live = computeGameLiveState(data, match.Id, gameId);
+    expect(live.eliminationOrder.get(gp('A2'))).toBe(1);
+    expect(live.eliminationOrder.get(gp('A3'))).toBe(2);
+    expect(live.eliminationOrder.get(gp('A1'))).toBe(3);
+    expect(
+      defaultCatchRecoveredId(
+        false,
+        infos,
+        live.eliminatedGamePlayerIds,
+        live.eliminationOrder,
+        new Set([gp('A1')]),
+      ),
+    ).toBe(gp('A2'));
+
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gp('H1'),
+        targetGamePlayerId: gp('A1'),
+        resultId: ThrowResult.Catch,
+        deflections: [],
+        recoveredId: gp('A2'),
+      },
+    ]);
+    live = computeGameLiveState(data, match.Id, gameId);
+    expect(live.eliminatedGamePlayerIds.has(gp('A2'))).toBe(false);
+    expect(live.eliminationOrder.get(gp('A3'))).toBe(1);
+    expect(live.eliminationOrder.get(gp('A1'))).toBe(2);
+    expect(live.eliminationOrder.get(gp('H1'))).toBe(1);
+
+    const sorted = sortGamePlayerInfos(
+      infos.filter((row) => !row.teamHome),
+      live.eliminatedGamePlayerIds,
+      live.eliminationOrder,
+    );
+    expect(sorted.map((row) => row.playerName)).toEqual(['A2', 'A3', 'A1']);
   });
 });

@@ -29,6 +29,11 @@ export type GameLiveState = {
   eliminatedGamePlayerIds: ReadonlySet<Guid>;
   /** Video offset of the event that put each out player out; null when untimed. */
   eliminatedAtSeconds: ReadonlyMap<Guid, number | null>;
+  /**
+   * 1-based return-queue rank among currently out players on the same team
+   * (1st = next back in on a catch by default).
+   */
+  eliminationOrder: ReadonlyMap<Guid, number>;
   activeHomeCount: number;
   activeAwayCount: number;
   isGameOver: boolean;
@@ -70,14 +75,28 @@ function deflectionEliminatesReceiver(resultId: number): boolean {
   );
 }
 
+function markOut(eliminated: Set<Guid>, outSequence: Guid[], gamePlayerId: Guid): void {
+  if (eliminated.has(gamePlayerId)) return;
+  eliminated.add(gamePlayerId);
+  outSequence.push(gamePlayerId);
+}
+
+function markIn(eliminated: Set<Guid>, outSequence: Guid[], gamePlayerId: Guid): void {
+  if (!eliminated.has(gamePlayerId)) return;
+  eliminated.delete(gamePlayerId);
+  const index = outSequence.indexOf(gamePlayerId);
+  if (index >= 0) outSequence.splice(index, 1);
+}
+
 function applyGameEventEliminations(
   eliminated: Set<Guid>,
+  outSequence: Guid[],
   eventId: Guid,
   throwsByEvent: ReturnType<typeof buildThrowsDetail>,
   errorsByEvent: ReturnType<typeof indexGameEventErrors>,
 ): void {
   for (const detail of throwsByEvent.get(eventId) ?? []) {
-    applyThrowEliminations(eliminated, detail.throwRow, detail.deflections);
+    applyThrowEliminations(eliminated, outSequence, detail.throwRow, detail.deflections);
   }
   const error = errorsByEvent.get(eventId);
   if (
@@ -85,8 +104,82 @@ function applyGameEventEliminations(
     (error.OffenseId === GameEventErrorOffense.LineOut ||
       error.OffenseId === GameEventErrorOffense.BlockIllegal)
   ) {
-    eliminated.add(error.OffenderId);
+    markOut(eliminated, outSequence, error.OffenderId);
   }
+}
+
+function eliminationOrderFromSequence(
+  outSequence: readonly Guid[],
+  roster: GamePlayerInfo[],
+): Map<Guid, number> {
+  const teamHomeById = new Map(
+    roster.map((row) => [row.gamePlayerId, row.teamHome] as const),
+  );
+  const ranks = new Map<Guid, number>();
+  let homeRank = 0;
+  let awayRank = 0;
+  for (const gamePlayerId of outSequence) {
+    const teamHome = teamHomeById.get(gamePlayerId);
+    if (teamHome === undefined) continue;
+    if (teamHome) {
+      homeRank += 1;
+      ranks.set(gamePlayerId, homeRank);
+    } else {
+      awayRank += 1;
+      ranks.set(gamePlayerId, awayRank);
+    }
+  }
+  return ranks;
+}
+
+/** English ordinal for return-queue display (`1` → `1st`). */
+export function ordinalLabel(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+/** Player button / roster label while out, e.g. `Alex (out 1st)`. */
+export function formatEliminatedPlayerLabel(
+  playerName: string,
+  eliminationOrder: number | undefined,
+): string {
+  if (eliminationOrder === undefined) return `${playerName} (out)`;
+  return `${playerName} (out ${ordinalLabel(eliminationOrder)})`;
+}
+
+/**
+ * Default catch recovery: earliest out on the defending team (excluding the
+ * target / deflection receivers). `null` means None when nobody qualifies.
+ */
+export function defaultCatchRecoveredId(
+  defendingTeamHome: boolean,
+  players: readonly GamePlayerInfo[],
+  eliminatedGamePlayerIds: ReadonlySet<Guid>,
+  eliminationOrder: ReadonlyMap<Guid, number>,
+  excludedGamePlayerIds: ReadonlySet<Guid>,
+): Guid | null {
+  let bestId: Guid | null = null;
+  let bestOrder = Number.POSITIVE_INFINITY;
+  for (const player of players) {
+    if (player.teamHome !== defendingTeamHome) continue;
+    if (!eliminatedGamePlayerIds.has(player.gamePlayerId)) continue;
+    if (excludedGamePlayerIds.has(player.gamePlayerId)) continue;
+    const order = eliminationOrder.get(player.gamePlayerId);
+    if (order === undefined || order >= bestOrder) continue;
+    bestOrder = order;
+    bestId = player.gamePlayerId;
+  }
+  return bestId;
 }
 
 function countActiveBySide(
@@ -132,8 +225,15 @@ export function buildEliminationTimeline(
       videoOffsetSeconds: null,
     },
   ];
+  const outSequence: Guid[] = [];
   for (const event of gameEvents) {
-    applyGameEventEliminations(eliminated, event.Id, throwsByEvent, errorsByEvent);
+    applyGameEventEliminations(
+      eliminated,
+      outSequence,
+      event.Id,
+      throwsByEvent,
+      errorsByEvent,
+    );
     const counts = countActiveBySide(roster, eliminated);
     points.push({
       ordinal: event.Ordinal,
@@ -148,6 +248,7 @@ export function buildEliminationTimeline(
 
 function applyThrowEliminations(
   eliminated: Set<Guid>,
+  outSequence: Guid[],
   throwRow: {
     ThrowerId: Guid;
     TargetId: Guid;
@@ -160,34 +261,34 @@ function applyThrowEliminations(
 
   if (isDisarmThrowResult(throwRow.ResultId)) {
     disarmed.add(throwRow.TargetId);
-    eliminated.add(throwRow.TargetId);
+    markOut(eliminated, outSequence, throwRow.TargetId);
   }
   for (const deflection of deflections) {
     if (isDisarmDeflectionResult(deflection.ResultId)) {
       disarmed.add(deflection.ReceiverId);
-      eliminated.add(deflection.ReceiverId);
+      markOut(eliminated, outSequence, deflection.ReceiverId);
     }
   }
 
   if (throwIsCatch(throwRow.ResultId, deflections)) {
-    eliminated.add(throwRow.ThrowerId);
+    markOut(eliminated, outSequence, throwRow.ThrowerId);
     if (throwRow.RecoveredId) {
-      eliminated.delete(throwRow.RecoveredId);
+      markIn(eliminated, outSequence, throwRow.RecoveredId);
     }
     for (const gamePlayerId of disarmed) {
-      eliminated.add(gamePlayerId);
+      markOut(eliminated, outSequence, gamePlayerId);
     }
     return;
   }
 
   if (throwTargetEliminated(throwRow.ResultId)) {
-    eliminated.add(throwRow.TargetId);
+    markOut(eliminated, outSequence, throwRow.TargetId);
   }
   for (const deflection of deflections) {
     if (deflection.ResultId === DeflectionResult.Catch) {
-      eliminated.add(throwRow.ThrowerId);
+      markOut(eliminated, outSequence, throwRow.ThrowerId);
     } else if (deflectionEliminatesReceiver(deflection.ResultId)) {
-      eliminated.add(deflection.ReceiverId);
+      markOut(eliminated, outSequence, deflection.ReceiverId);
     }
   }
 }
@@ -199,6 +300,7 @@ export function computeGameLiveState(
 ): GameLiveState {
   const roster = getGamePlayerInfos(data, matchId, gameId);
   const eliminated = new Set<Guid>();
+  const outSequence: Guid[] = [];
   const eliminatedAt = new Map<Guid, number | null>();
   const throwsByEvent = buildThrowsDetail(data);
   const errorsByEvent = indexGameEventErrors(data);
@@ -206,7 +308,13 @@ export function computeGameLiveState(
 
   for (const event of gameEvents) {
     const before = new Set(eliminated);
-    applyGameEventEliminations(eliminated, event.Id, throwsByEvent, errorsByEvent);
+    applyGameEventEliminations(
+      eliminated,
+      outSequence,
+      event.Id,
+      throwsByEvent,
+      errorsByEvent,
+    );
     for (const gamePlayerId of eliminated) {
       if (!before.has(gamePlayerId)) {
         eliminatedAt.set(gamePlayerId, event.VideoOffsetSeconds ?? null);
@@ -245,6 +353,7 @@ export function computeGameLiveState(
   return {
     eliminatedGamePlayerIds: eliminated,
     eliminatedAtSeconds: eliminatedAt,
+    eliminationOrder: eliminationOrderFromSequence(outSequence, roster),
     activeHomeCount: activeHome,
     activeAwayCount: activeAway,
     isGameOver,
@@ -320,11 +429,17 @@ export type RosterRow = {
 export function sortRosterWithEliminations<T extends RosterRow>(
   rows: T[],
   eliminatedPlayerIds: ReadonlySet<string>,
+  eliminationOrder?: ReadonlyMap<string, number>,
 ): T[] {
   return [...rows].sort((a, b) => {
     const aOut = eliminatedPlayerIds.has(a.player.Id);
     const bOut = eliminatedPlayerIds.has(b.player.Id);
     if (aOut !== bOut) return aOut ? 1 : -1;
+    if (aOut && bOut && eliminationOrder) {
+      const aOrder = eliminationOrder.get(a.player.Id) ?? Number.POSITIVE_INFINITY;
+      const bOrder = eliminationOrder.get(b.player.Id) ?? Number.POSITIVE_INFINITY;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+    }
     const aSub = Boolean(a.substitute);
     const bSub = Boolean(b.substitute);
     if (aSub !== bSub) return aSub ? 1 : -1;
@@ -348,14 +463,37 @@ export function eliminatedPlayerIdsFromLive(
   return ids;
 }
 
+/** Player-id → return-queue rank for roster screens that key by `Player.Id`. */
+export function eliminationOrderByPlayerId(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  live: GameLiveState,
+): Map<string, number> {
+  const byPlayerId = new Map<string, number>();
+  for (const [gamePlayerId, order] of live.eliminationOrder) {
+    const info = getGamePlayerInfos(data, matchId, gameId).find(
+      (row) => row.gamePlayerId === gamePlayerId,
+    );
+    if (info) byPlayerId.set(info.playerId, order);
+  }
+  return byPlayerId;
+}
+
 export function sortGamePlayerInfos(
   players: GamePlayerInfo[],
   eliminatedGamePlayerIds: ReadonlySet<Guid>,
+  eliminationOrder?: ReadonlyMap<Guid, number>,
 ): GamePlayerInfo[] {
   return [...players].sort((a, b) => {
     const aOut = eliminatedGamePlayerIds.has(a.gamePlayerId);
     const bOut = eliminatedGamePlayerIds.has(b.gamePlayerId);
     if (aOut !== bOut) return aOut ? 1 : -1;
+    if (aOut && bOut && eliminationOrder) {
+      const aOrder = eliminationOrder.get(a.gamePlayerId) ?? Number.POSITIVE_INFINITY;
+      const bOrder = eliminationOrder.get(b.gamePlayerId) ?? Number.POSITIVE_INFINITY;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+    }
     return a.playerName.localeCompare(b.playerName);
   });
 }

@@ -30,6 +30,11 @@ import {
 import { getTeam } from '../domain/database';
 import { isStatsImportedMatch } from '../domain/importedMatch';
 import {
+  loadTrackGameTallTimelineDock,
+  saveTrackGameTallTimelineDock,
+  type TrackGameTallTimelineDock,
+} from '../domain/trackGameTallTimelineDock';
+import {
   areThrowDraftsComplete,
   deleteGameEvent,
   draftsEqual,
@@ -849,7 +854,10 @@ export function GameEventsPage() {
       }
 
       if (visibleTab === 'throw') {
-        const next = applyPlayerHotkeyToThrowDrafts(throwDrafts, players, key);
+        const next = applyPlayerHotkeyToThrowDrafts(throwDrafts, players, key, {
+          eliminatedGamePlayerIds: live.eliminatedGamePlayerIds,
+          eliminationOrder: live.eliminationOrder,
+        });
         if (next) updateThrowDrafts(next);
         return;
       }
@@ -887,6 +895,7 @@ export function GameEventsPage() {
       updateThrowDrafts,
       visibleTab,
       live.eliminatedGamePlayerIds,
+      live.eliminationOrder,
       errorDraft,
     ],
   );
@@ -894,13 +903,28 @@ export function GameEventsPage() {
   useDocumentHotkeys(handleTrackGameHotkey, true, { capture: true });
 
   const youtubeTall = hasYoutube && youtubeMode === 'tall';
-  const { panelWidth: tallPanelWidth, onResizePointerDown } =
-    useTrackGameTallPanelWidth(youtubeTall);
+  const {
+    panelWidth: tallPanelWidth,
+    containerRef: tallPanelContainerRef,
+    onResizePointerDown,
+  } = useTrackGameTallPanelWidth(youtubeTall);
+  const [tallTimelineDock, setTallTimelineDock] = useState<TrackGameTallTimelineDock>(
+    loadTrackGameTallTimelineDock,
+  );
   const youtubePopout = hasYoutube && youtubeMode === 'popout';
   const youtubeDocked = hasYoutube && youtubeMode === 'docked';
   const youtubeTopBand = hasYoutube && youtubeMode !== 'docked';
   const stackedView = youtubeTall || youtubePopout;
   const editorCompact = stackedView;
+  const timelineDockedRight = stackedView && tallTimelineDock === 'right';
+
+  const toggleTallTimelineDock = useCallback(() => {
+    setTallTimelineDock((prev) => {
+      const next: TrackGameTallTimelineDock = prev === 'bottom' ? 'right' : 'bottom';
+      saveTrackGameTallTimelineDock(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     setTrackGameImmersive(stackedView);
@@ -913,6 +937,9 @@ export function GameEventsPage() {
     insertBeforeEventId,
     showEndInsertMarker: showEndInsertMarker,
     canSetFromPlayer: hasYoutube && youtubeMode !== 'hidden',
+    dockToggle: stackedView
+      ? { dock: tallTimelineDock, onToggle: toggleTallTimelineDock }
+      : undefined,
     onSelectEvent: handleSelectEvent,
     onDeselectEvent: handleDone,
     onToggleHighlight: handleToggleHighlight,
@@ -926,16 +953,27 @@ export function GameEventsPage() {
 
   return (
     <Box
+      ref={tallPanelContainerRef}
       className="sk-track-game"
       sx={{
         display: 'grid',
-        gridTemplateColumns: stackedView
-          ? youtubeTall
-            ? `${tallPanelWidth}px 6px minmax(0, 1fr)`
-            : '1fr'
-          : '1fr 300px',
+        // Tall panel width is a CSS var so drag updates skip React re-renders
+        ...(youtubeTall
+          ? { ['--sk-tall-panel-width' as string]: `${tallPanelWidth}px` }
+          : null),
+        gridTemplateColumns: youtubeTall
+          ? timelineDockedRight
+            ? 'var(--sk-tall-panel-width) 6px minmax(0, 1fr) minmax(280px, 300px)'
+            : 'var(--sk-tall-panel-width) 6px minmax(0, 1fr)'
+          : stackedView
+            ? timelineDockedRight
+              ? 'minmax(0, 1fr) minmax(280px, 300px)'
+              : '1fr'
+            : '1fr 300px',
         gridTemplateRows: stackedView
-          ? 'minmax(0, 7fr) minmax(0, 3fr)'
+          ? timelineDockedRight
+            ? 'minmax(0, 1fr)'
+            : 'minmax(0, 7fr) minmax(0, 3fr)'
           : hasYoutube
             ? 'auto 1fr'
             : '1fr',
@@ -969,7 +1007,10 @@ export function GameEventsPage() {
       ) : null}
 
       {youtubeTall ? (
-        <TrackGameTallResizeHandle onPointerDown={onResizePointerDown} />
+        <TrackGameTallResizeHandle
+          onPointerDown={onResizePointerDown}
+          gridColumn={2}
+        />
       ) : null}
 
       {!stackedView && hasYoutube ? (
@@ -1289,7 +1330,10 @@ export function GameEventsPage() {
                 players={players}
                 homeTeamName={homeTeam?.Name ?? 'Home'}
                 awayTeamName={awayTeam?.Name ?? 'Away'}
-                eliminatedGamePlayerIds={live.eliminatedGamePlayerIds}
+                liveElimination={{
+                  eliminatedGamePlayerIds: live.eliminatedGamePlayerIds,
+                  eliminationOrder: live.eliminationOrder,
+                }}
                 onChange={updateThrowDrafts}
               />
             ) : null}
@@ -1300,6 +1344,7 @@ export function GameEventsPage() {
                 homeTeamName={homeTeam?.Name ?? 'Home'}
                 awayTeamName={awayTeam?.Name ?? 'Away'}
                 eliminatedGamePlayerIds={live.eliminatedGamePlayerIds}
+                eliminationOrder={live.eliminationOrder}
                 onChange={setErrorDraft}
               />
             ) : null}
@@ -1326,18 +1371,29 @@ export function GameEventsPage() {
 
       <Box
         sx={{
-          gridColumn: stackedView && youtubeTall ? 1 : stackedView ? '1 / -1' : 2,
-          gridRow: stackedView
-            ? 2
-            : youtubeDocked
-              ? '1 / -1'
-              : youtubeTopBand || hasYoutube
-                ? 2
-                : 1,
+          gridColumn: timelineDockedRight
+            ? youtubeTall
+              ? 4
+              : 2
+            : stackedView && youtubeTall
+              ? 1
+              : stackedView
+                ? '1 / -1'
+                : 2,
+          gridRow: timelineDockedRight
+            ? 1
+            : stackedView
+              ? 2
+              : youtubeDocked
+                ? '1 / -1'
+                : youtubeTopBand || hasYoutube
+                  ? 2
+                  : 1,
           minHeight: 0,
           minWidth: 0,
           overflow: 'hidden',
-          borderTop: stackedView ? 1 : 0,
+          borderTop: stackedView && !timelineDockedRight ? 1 : 0,
+          borderLeft: timelineDockedRight ? 1 : 0,
           borderColor: 'divider',
         }}
       >

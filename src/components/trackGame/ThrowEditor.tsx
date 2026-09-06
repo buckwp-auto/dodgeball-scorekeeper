@@ -26,7 +26,11 @@ import {
   hotkeyForResult,
   RECOVERED_NONE_HOTKEY,
 } from '../../domain/hotkeys';
-import { sortGamePlayerInfos } from '../../domain/gameElimination';
+import {
+  defaultCatchRecoveredId,
+  formatEliminatedPlayerLabel,
+  sortGamePlayerInfos,
+} from '../../domain/gameElimination';
 import { getThrowResultIcon } from '../../domain/throwResultIcons';
 import {
   EditorChoiceButton,
@@ -42,6 +46,16 @@ import {
 
 const TEAM_THROW_HELP =
   'Group throws released at the same moment by the same team. Throws from the opposing team belong in their own event, even when they happen simultaneously.';
+
+export type ThrowLiveElimination = {
+  eliminatedGamePlayerIds: ReadonlySet<string>;
+  eliminationOrder: ReadonlyMap<string, number>;
+};
+
+const EMPTY_ELIMINATION: ThrowLiveElimination = {
+  eliminatedGamePlayerIds: new Set(),
+  eliminationOrder: new Map(),
+};
 
 /**
  * Side throwing in a group of simultaneous throws, or null while undecided.
@@ -81,35 +95,79 @@ function isRecoveredCandidate(
   return true;
 }
 
-function withThrower(draft: ThrowDraft, gamePlayerId: string): ThrowDraft {
-  // The target stays put: the group's throwing side fixes which team each column holds
+function recoveryExcludedIds(draft: ThrowDraft): Set<string> {
+  const ids = new Set<string>();
+  if (draft.targetGamePlayerId) ids.add(draft.targetGamePlayerId);
+  for (const row of draft.deflections) {
+    if (row.receiverGamePlayerId) ids.add(row.receiverGamePlayerId);
+  }
+  return ids;
+}
+
+/** Fill Recovered with the defending team's first-out when Catch is newly required. */
+function withDefaultRecoveredIfNeeded(
+  draft: ThrowDraft,
+  players: GamePlayerInfo[],
+  live: ThrowLiveElimination,
+  groupThrowingHome: boolean | null,
+): ThrowDraft {
+  if (!throwDraftNeedsRecovered(draft)) {
+    return draft.recoveredId === undefined ? draft : { ...draft, recoveredId: undefined };
+  }
+  if (draft.recoveredId !== undefined) return draft;
+  const throwingHome = groupThrowingHome ?? resolveGroupThrowingHome([draft], players);
+  if (throwingHome === null) return draft;
   return {
+    ...draft,
+    recoveredId: defaultCatchRecoveredId(
+      !throwingHome,
+      players,
+      live.eliminatedGamePlayerIds,
+      live.eliminationOrder,
+      recoveryExcludedIds(draft),
+    ),
+  };
+}
+
+function withThrower(
+  draft: ThrowDraft,
+  gamePlayerId: string,
+  players: GamePlayerInfo[],
+  live: ThrowLiveElimination,
+): ThrowDraft {
+  // The target stays put: the group's throwing side fixes which team each column holds
+  const next: ThrowDraft = {
     ...draft,
     throwerGamePlayerId: gamePlayerId,
     deflections: throwResultAllowsDeflections(draft.resultId)
       ? draft.deflections
       : [],
-    recoveredId:
-      draft.resultId === ThrowResult.Catch ||
-      draft.deflections.some((row) => row.resultId === DeflectionResult.Catch)
-        ? draft.recoveredId
-        : undefined,
+    recoveredId: throwDraftNeedsRecovered(draft) ? draft.recoveredId : undefined,
   };
+  return withDefaultRecoveredIfNeeded(next, players, live, null);
 }
 
-function withTarget(draft: ThrowDraft, gamePlayerId: string): ThrowDraft {
-  return {
+function withTarget(
+  draft: ThrowDraft,
+  gamePlayerId: string,
+  players: GamePlayerInfo[],
+  live: ThrowLiveElimination,
+): ThrowDraft {
+  const next: ThrowDraft = {
     ...draft,
     targetGamePlayerId: gamePlayerId,
     deflections: throwResultAllowsDeflections(draft.resultId)
       ? draft.deflections
       : [],
   };
+  return withDefaultRecoveredIfNeeded(next, players, live, null);
 }
 
 function withResult(
   draft: ThrowDraft,
   resultId: ThrowResult | null,
+  players: GamePlayerInfo[],
+  live: ThrowLiveElimination,
 ): ThrowDraft {
   if (resultId === null) {
     return {
@@ -119,15 +177,15 @@ function withResult(
       recoveredId: undefined,
     };
   }
-  return {
+  const next: ThrowDraft = {
     ...draft,
     resultId,
     deflections: throwResultAllowsDeflections(resultId)
       ? draft.deflections
       : [],
-    recoveredId:
-      resultId === ThrowResult.Catch ? draft.recoveredId : undefined,
+    recoveredId: resultId === ThrowResult.Catch ? draft.recoveredId : undefined,
   };
+  return withDefaultRecoveredIfNeeded(next, players, live, null);
 }
 
 function withToggledRecovery(
@@ -158,18 +216,25 @@ function withDeflectionResult(
   draft: ThrowDraft,
   index: number,
   resultId: DeflectionResult,
+  players: GamePlayerInfo[],
+  live: ThrowLiveElimination,
 ): ThrowDraft {
-  let next = draft.deflections.map((row, i) =>
+  let nextDeflections = draft.deflections.map((row, i) =>
     i === index ? { ...row, resultId } : row,
   );
   if (resultId === DeflectionResult.Catch) {
-    next = next.map((row, i) =>
+    nextDeflections = nextDeflections.map((row, i) =>
       i !== index && row.resultId === DeflectionResult.Catch
         ? { ...row, resultId: DeflectionResult.Hit }
         : row,
     );
   }
-  return { ...draft, deflections: next };
+  return withDefaultRecoveredIfNeeded(
+    { ...draft, deflections: nextDeflections },
+    players,
+    live,
+    null,
+  );
 }
 
 function SingleThrowEditor({
@@ -180,7 +245,7 @@ function SingleThrowEditor({
   onChange,
   onDelete,
   canDelete,
-  eliminatedGamePlayerIds,
+  liveElimination,
   groupThrowingHome,
   hotkeys,
   section = 'all',
@@ -193,34 +258,41 @@ function SingleThrowEditor({
   onChange: (next: ThrowDraft) => void;
   onDelete?: () => void;
   canDelete: boolean;
-  eliminatedGamePlayerIds: ReadonlySet<string>;
+  liveElimination: ThrowLiveElimination;
   groupThrowingHome: boolean | null;
   hotkeys: ReadonlyMap<string, string>;
   section?: 'all' | 'players' | 'actions';
   throwLabel?: string;
 }) {
+  const { eliminatedGamePlayerIds, eliminationOrder } = liveElimination;
   const homePlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome),
     eliminatedGamePlayerIds,
+    eliminationOrder,
   );
   const awayPlayers = sortGamePlayerInfos(
     players.filter((row) => !row.teamHome),
     eliminatedGamePlayerIds,
+    eliminationOrder,
   );
   const throwingHome = groupThrowingHome ?? true;
   const defendingHome = !throwingHome;
   const throwingPlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome === throwingHome),
     eliminatedGamePlayerIds,
+    eliminationOrder,
   );
   const defendingPlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome === defendingHome),
     eliminatedGamePlayerIds,
+    eliminationOrder,
   );
   const showTarget = groupThrowingHome !== null;
   const isOut = (gamePlayerId: string) => eliminatedGamePlayerIds.has(gamePlayerId);
   const playerLabel = (row: GamePlayerInfo): string =>
-    isOut(row.gamePlayerId) ? `${row.playerName} (out)` : row.playerName;
+    isOut(row.gamePlayerId)
+      ? formatEliminatedPlayerLabel(row.playerName, eliminationOrder.get(row.gamePlayerId))
+      : row.playerName;
   const chipLabel = (pool: GamePlayerInfo[], gamePlayerId: string): string => {
     const row = pool.find((entry) => entry.gamePlayerId === gamePlayerId);
     return row ? playerLabel(row) : '?';
@@ -235,6 +307,7 @@ function SingleThrowEditor({
       (row) => !excludedFromTarget.has(row.gamePlayerId) || row.gamePlayerId === draft.targetGamePlayerId,
     ),
     eliminatedGamePlayerIds,
+    eliminationOrder,
   );
 
   const pendingThrower = !draft.throwerGamePlayerId;
@@ -243,15 +316,15 @@ function SingleThrowEditor({
   const deflectionFocusIndex = focusedDeflectionIndex(draft);
 
   const setThrower = (gamePlayerId: string) => {
-    onChange(withThrower(draft, gamePlayerId));
+    onChange(withThrower(draft, gamePlayerId, players, liveElimination));
   };
 
   const setTarget = (gamePlayerId: string) => {
-    onChange(withTarget(draft, gamePlayerId));
+    onChange(withTarget(draft, gamePlayerId, players, liveElimination));
   };
 
   const setResult = (resultId: ThrowResult | null) => {
-    onChange(withResult(draft, resultId));
+    onChange(withResult(draft, resultId, players, liveElimination));
   };
 
   const addDeflection = () => {
@@ -275,11 +348,23 @@ function SingleThrowEditor({
     onChange({ ...draft, deflections: draft.deflections.filter((_, i) => i !== index) });
   };
 
-  const recoveredCandidates = defendingPlayers.filter(
-    (row) =>
-      row.gamePlayerId !== draft.targetGamePlayerId &&
-      !draft.deflections.some((d) => d.receiverGamePlayerId === row.gamePlayerId),
-  );
+  const recoveredCandidates = [...defendingPlayers]
+    .filter(
+      (row) =>
+        row.gamePlayerId !== draft.targetGamePlayerId &&
+        !draft.deflections.some((d) => d.receiverGamePlayerId === row.gamePlayerId),
+    )
+    .sort((a, b) => {
+      const aOut = eliminatedGamePlayerIds.has(a.gamePlayerId);
+      const bOut = eliminatedGamePlayerIds.has(b.gamePlayerId);
+      if (aOut !== bOut) return aOut ? -1 : 1;
+      if (aOut && bOut) {
+        const aOrder = eliminationOrder.get(a.gamePlayerId) ?? Number.POSITIVE_INFINITY;
+        const bOrder = eliminationOrder.get(b.gamePlayerId) ?? Number.POSITIVE_INFINITY;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+      }
+      return a.playerName.localeCompare(b.playerName);
+    });
 
   const renderResultIcon = (resultId: ThrowResult) => {
     const Icon = getThrowResultIcon(resultId);
@@ -369,7 +454,17 @@ function SingleThrowEditor({
                     hotkey={hotkeyForDeflectionResult(resultId)}
                     selected={deflection.resultId === resultId}
                     startIcon={renderResultIcon(resultId as unknown as ThrowResult)}
-                    onClick={() => onChange(withDeflectionResult(draft, index, resultId))}
+                    onClick={() =>
+                      onChange(
+                        withDeflectionResult(
+                          draft,
+                          index,
+                          resultId,
+                          players,
+                          liveElimination,
+                        ),
+                      )
+                    }
                   >
                     {deflectionResultLabels[resultId]}
                   </EditorChoiceButton>
@@ -766,14 +861,14 @@ export function ThrowEditor({
   homeTeamName,
   awayTeamName,
   onChange,
-  eliminatedGamePlayerIds,
+  liveElimination = EMPTY_ELIMINATION,
 }: {
   drafts: ThrowDraft[];
   players: GamePlayerInfo[];
   homeTeamName: string;
   awayTeamName: string;
   onChange: (drafts: ThrowDraft[]) => void;
-  eliminatedGamePlayerIds: ReadonlySet<string>;
+  liveElimination?: ThrowLiveElimination;
 }) {
   const hotkeys = buildPermanentPlayerHotkeys(players);
   const groupThrowingHome = resolveGroupThrowingHome(drafts, players);
@@ -814,7 +909,7 @@ export function ThrowEditor({
             players={players}
             homeTeamName={homeTeamName}
             awayTeamName={awayTeamName}
-            eliminatedGamePlayerIds={eliminatedGamePlayerIds}
+            liveElimination={liveElimination}
             groupThrowingHome={groupThrowingHome}
             hotkeys={hotkeys}
             canDelete={false}
@@ -836,7 +931,7 @@ export function ThrowEditor({
               players={players}
               homeTeamName={homeTeamName}
               awayTeamName={awayTeamName}
-              eliminatedGamePlayerIds={eliminatedGamePlayerIds}
+              liveElimination={liveElimination}
               groupThrowingHome={groupThrowingHome}
               hotkeys={hotkeys}
               canDelete={drafts.length > 1}
@@ -859,7 +954,7 @@ export function ThrowEditor({
           players={players}
           homeTeamName={homeTeamName}
           awayTeamName={awayTeamName}
-          eliminatedGamePlayerIds={eliminatedGamePlayerIds}
+          liveElimination={liveElimination}
           groupThrowingHome={groupThrowingHome}
           hotkeys={hotkeys}
           canDelete={drafts.length > 1}
@@ -894,6 +989,7 @@ export function applyPlayerHotkeyToThrowDrafts(
   drafts: ThrowDraft[],
   players: GamePlayerInfo[],
   key: string,
+  liveElimination: ThrowLiveElimination = EMPTY_ELIMINATION,
 ): ThrowDraft[] | null {
   if (drafts.length === 0) return null;
   const draft = drafts[drafts.length - 1];
@@ -904,12 +1000,27 @@ export function applyPlayerHotkeyToThrowDrafts(
   const deflectionIndex = focusedDeflectionIndex(draft);
   const deflectionResultId = getDeflectionResultForKey(key);
   if (deflectionIndex >= 0 && deflectionResultId !== null) {
-    return patch(withDeflectionResult(draft, deflectionIndex, deflectionResultId));
+    return patch(
+      withDeflectionResult(
+        draft,
+        deflectionIndex,
+        deflectionResultId,
+        players,
+        liveElimination,
+      ),
+    );
   }
 
   const resultId = getThrowResultForKey(key);
   if (resultId !== null) {
-    return patch(withResult(draft, draft.resultId === resultId ? null : resultId));
+    return patch(
+      withResult(
+        draft,
+        draft.resultId === resultId ? null : resultId,
+        players,
+        liveElimination,
+      ),
+    );
   }
 
   const groupThrowingHome = resolveGroupThrowingHome(drafts, players);
@@ -944,21 +1055,21 @@ export function applyPlayerHotkeyToThrowDrafts(
   // Phase 1: with no side chosen yet, any player key picks/toggles thrower
   if (groupThrowingHome === null) {
     if (draft.throwerGamePlayerId === hit.gamePlayerId) {
-      return patch(withThrower(draft, ''));
+      return patch(withThrower(draft, '', players, liveElimination));
     }
-    return patch(withThrower(draft, hit.gamePlayerId));
+    return patch(withThrower(draft, hit.gamePlayerId, players, liveElimination));
   }
 
   // Phase 2: throwing side = thrower, defending side = target (by person, not display column)
   if (hit.teamHome === throwingHome) {
     if (draft.throwerGamePlayerId === hit.gamePlayerId) {
-      return patch(withThrower(draft, ''));
+      return patch(withThrower(draft, '', players, liveElimination));
     }
-    return patch(withThrower(draft, hit.gamePlayerId));
+    return patch(withThrower(draft, hit.gamePlayerId, players, liveElimination));
   }
 
   if (draft.targetGamePlayerId === hit.gamePlayerId) {
-    return patch(withTarget(draft, ''));
+    return patch(withTarget(draft, '', players, liveElimination));
   }
-  return patch(withTarget(draft, hit.gamePlayerId));
+  return patch(withTarget(draft, hit.gamePlayerId, players, liveElimination));
 }

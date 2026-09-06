@@ -24,6 +24,7 @@ import { autoSelectGameRoster } from '../domain/rosterAutoSelect';
 import {
   computeGameLiveState,
   eliminatedPlayerIdsFromLive,
+  eliminationOrderByPlayerId,
   sortRosterWithEliminations,
 } from '../domain/gameElimination';
 import {
@@ -84,6 +85,13 @@ export function GamePage() {
         : new Set<string>(),
     [data, matchId, gameId, live],
   );
+  const eliminationOrder = useMemo(
+    () =>
+      live
+        ? eliminationOrderByPlayerId(data, matchId, gameId, live)
+        : new Map<string, number>(),
+    [data, matchId, gameId, live],
+  );
 
   const homeRosterRaw = useMemo(() => {
     if (!match) return [];
@@ -96,13 +104,13 @@ export function GamePage() {
   }, [data, match, gameId]);
 
   const homeRoster = useMemo(
-    () => sortRosterWithEliminations(homeRosterRaw, eliminatedIds),
-    [homeRosterRaw, eliminatedIds],
+    () => sortRosterWithEliminations(homeRosterRaw, eliminatedIds, eliminationOrder),
+    [homeRosterRaw, eliminatedIds, eliminationOrder],
   );
 
   const awayRoster = useMemo(
-    () => sortRosterWithEliminations(awayRosterRaw, eliminatedIds),
-    [awayRosterRaw, eliminatedIds],
+    () => sortRosterWithEliminations(awayRosterRaw, eliminatedIds, eliminationOrder),
+    [awayRosterRaw, eliminatedIds, eliminationOrder],
   );
 
   const rosterHotkeys = useMemo(
@@ -333,6 +341,7 @@ export function GamePage() {
           onToggle={handleTogglePlayer}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
+          eliminationOrder={eliminationOrder}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{
@@ -352,6 +361,7 @@ export function GamePage() {
           onToggle={handleTogglePlayer}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
+          eliminationOrder={eliminationOrder}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{

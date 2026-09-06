@@ -262,7 +262,7 @@ test.describe('Game tracking (full roster)', () => {
     await expect(timeline).toContainText('H1 threw at A1');
     await expect(timeline).toContainText('Illegal Block (No Blocking)');
     await expect(
-      page.locator('.sk-editor-grid').getByRole('button', { name: /A1 \(out\)/ }),
+      page.locator('.sk-editor-grid').getByRole('button', { name: /A1 \(out/ }),
     ).toBeVisible();
     await expect(page.getByText(/Eliminated! \(Home Hawks win\)/)).toBeVisible();
 

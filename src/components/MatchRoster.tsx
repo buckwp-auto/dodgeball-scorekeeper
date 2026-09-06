@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import type { ImageRef } from '../domain/imageRef';
 import type { PlayerMatchCandidate } from '../domain/playerMatch';
+import { formatEliminatedPlayerLabel } from '../domain/gameElimination';
 import { HotkeyBadge } from './HotkeyBadge';
 import { EntityAvatar } from './EntityAvatar';
 import { TextButton } from './Ui';
@@ -26,6 +27,7 @@ export function PlayerRoster({
   onToggle,
   hotkeyForPlayerId,
   eliminatedPlayerIds,
+  eliminationOrder,
   onToggleSubstitute,
   onRemove,
   canRemovePlayer,
@@ -42,6 +44,7 @@ export function PlayerRoster({
   onToggle: (playerId: string) => void;
   hotkeyForPlayerId?: (playerId: string) => string | null;
   eliminatedPlayerIds?: ReadonlySet<string>;
+  eliminationOrder?: ReadonlyMap<string, number>;
   onToggleSubstitute?: (playerId: string) => void;
   onRemove?: (playerId: string) => void;
   canRemovePlayer?: (playerId: string) => boolean;
@@ -96,7 +99,12 @@ export function PlayerRoster({
             <EntityAvatar name={player.Name} image={player.Image} size={24} />
             <Box sx={{ flex: 1 }}>
               <TextButton expand onClick={() => onToggle(player.Id)}>
-                {eliminated ? `${player.Name} (out)` : player.Name}
+                {eliminated
+                  ? formatEliminatedPlayerLabel(
+                      player.Name,
+                      eliminationOrder?.get(player.Id),
+                    )
+                  : player.Name}
               </TextButton>
             </Box>
             {onToggleSubstitute && selected ? (
