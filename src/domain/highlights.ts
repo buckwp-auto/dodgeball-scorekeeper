@@ -1,4 +1,4 @@
-import { getMatchName, getTeam } from './database';
+import { getMatchDisplayName, getTeam } from './database';
 import type { GameEventRow } from './gameEvents';
 import { getGamePlayerInfos } from './gameEvents';
 import { buildTimelineEntry, type TimelineEntry } from './gameEventTimeline';
@@ -101,7 +101,7 @@ export function getLeagueHighlightGroups(
   for (const [matchId, games] of byMatch) {
     const match = getMatchById(data, matchId);
     if (!match) continue;
-    const matchName = getMatchName(data, match);
+    const matchName = getMatchDisplayName(data, match);
     const homeName = getTeam(data, match.TeamIdHome)?.Name ?? 'Home';
     const awayName = getTeam(data, match.TeamIdAway)?.Name ?? 'Away';
     const youtubeUrl = match.YoutubeUrl?.trim() || null;

@@ -1,4 +1,4 @@
-import { getMatchName, getMatches, getPlayersForTeam, getTeams } from './database';
+import { getMatchDisplayName, getMatches, getPlayersForTeam, getTeams } from './database';
 import {
   getMatchGames,
   getMatchPlayers,
@@ -57,7 +57,7 @@ export function getPlayerGamesPlayed(
       ids.has(row.PlayerId),
     );
     if (matchPlayers.length === 0) continue;
-    const matchName = getMatchName(data, match);
+    const matchName = getMatchDisplayName(data, match);
     for (const game of getMatchGames(data, match.Id)) {
       const onGame = matchPlayers.filter((row) =>
         isPlayerInGame(data, game.gameId, row.PlayerId, match.Id),

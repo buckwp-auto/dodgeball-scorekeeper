@@ -154,6 +154,45 @@ test.describe('Match workflow', () => {
     await expect(page.locator('.history')).toContainText('Ended match');
     await expect(page.locator('.history')).toContainText('Undid match end');
   });
+
+  test('adds match labels and shows them on the matches list', async ({ page }) => {
+    await gotoScorekeeper(page);
+    await page.getByRole('button', { name: 'Skip tour' }).click();
+    await addTeam(page, 'Home Hawks');
+    await addTeam(page, 'Away Owls');
+    await addTeam(page, 'Side Eagles');
+    await createMatch(page, 'Home Hawks', 'Away Owls');
+
+    const labelsField = page.locator('.sk-match-labels-field input');
+    await labelsField.click();
+    await labelsField.fill('Week 3');
+    await page.getByRole('option', { name: 'Week 3' }).click();
+    await labelsField.fill('Charity Night');
+    await labelsField.press('Enter');
+    await expect(page.locator('.sk-match-label').filter({ hasText: 'Week 3' })).toBeVisible();
+    await expect(page.locator('.sk-match-label').filter({ hasText: 'Charity Night' })).toBeVisible();
+
+    await navigateMenu(page, 'Matches');
+    await createMatch(page, 'Home Hawks', 'Side Eagles');
+    await navigateMenu(page, 'Matches');
+
+    const hawksOwls = page.locator('.sk-match-row').filter({ hasText: 'Home Hawks vs. Away Owls' });
+    const hawksEagles = page.locator('.sk-match-row').filter({ hasText: 'Home Hawks vs. Side Eagles' });
+    await expect(hawksOwls).toBeVisible();
+    await expect(hawksEagles).toBeVisible();
+
+    await page.getByLabel('Search matches').fill('Week');
+    await expect(hawksOwls).toBeVisible();
+    await expect(hawksEagles).toHaveCount(0);
+
+    await page.getByLabel('Search matches').fill('Eagles');
+    await expect(hawksEagles).toBeVisible();
+    await expect(hawksOwls).toHaveCount(0);
+
+    await page.getByLabel('Search matches').fill('');
+    await expect(hawksOwls).toBeVisible();
+    await expect(hawksEagles).toBeVisible();
+  });
 });
 
 // Full roster + game event tracking: see selectMatchRoster helper (used when React parity lands).

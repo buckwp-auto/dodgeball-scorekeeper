@@ -1,12 +1,14 @@
-import { Button, Stack } from '@mui/material';
-import { useRef, useState } from 'react';
+import { Button, Stack, TextField } from '@mui/material';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { MatchLabelChips } from '../components/MatchLabels';
 import { MatchStatsImportDialog } from '../components/MatchStatsImportDialog';
 import { MatchScoreSpoiler } from '../components/MatchScoreSpoiler';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader, TeamSearch, TextButton } from '../components/Ui';
-import { getMatches, getTeam, getTeams } from '../domain/database';
+import { getMatchName, getMatches, getTeam, getTeams } from '../domain/database';
 import { isStatsImportedMatchId } from '../domain/importedMatch';
+import { matchPassesListSearch } from '../domain/matchLabels';
 import { buildMatchListSpoiler } from '../domain/matchListSpoiler';
 import {
   createMatchFromStatisticsCsv,
@@ -25,10 +27,16 @@ export function MatchesPage() {
   const matches = getMatches(data);
   const [homeId, setHomeId] = useState<string | null>(null);
   const [awayId, setAwayId] = useState<string | null>(null);
+  const [listQuery, setListQuery] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
   const [importCsvText, setImportCsvText] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+
+  const filteredMatches = useMemo(
+    () => matches.filter(({ match }) => matchPassesListSearch(data, match, listQuery)),
+    [data, matches, listQuery],
+  );
 
   const canAdd = homeId !== null && awayId !== null;
   const homeTeam = homeId ? getTeam(data, homeId) : undefined;
@@ -134,11 +142,22 @@ export function MatchesPage() {
           </Stack>
         </div>
       </div>
+      <TextField
+        label="Search matches"
+        placeholder="Team name or label…"
+        value={listQuery}
+        onChange={(event) => setListQuery(event.target.value)}
+        size="small"
+        fullWidth
+        className="sk-matches-search"
+        sx={{ mb: 2, maxWidth: 420 }}
+      />
       <table className="sk-grid" data-tour="matches-list">
         <tbody>
-          {matches.map(({ match, matchName }) => {
+          {filteredMatches.map(({ match, matchName }) => {
             const spoiler = buildMatchListSpoiler(data, match.Id);
             const statsImported = isStatsImportedMatchId(data, match.Id);
+            const pairingName = getMatchName(data, match);
             return (
               <tr key={match.Id} className="sk-match-row">
                 <td>
@@ -156,8 +175,9 @@ export function MatchesPage() {
                         )
                       }
                     >
-                      {matchName}
+                      {pairingName}
                     </TextButton>
+                    <MatchLabelChips match={match} />
                     {spoiler ? (
                       <MatchScoreSpoiler matchName={matchName} spoiler={spoiler} />
                     ) : null}

@@ -8,6 +8,7 @@ import {
   assertMaxLength,
   clampName,
 } from './limits';
+import { formatMatchDisplayName, getMatchLabels } from './matchLabels';
 import type { DatabaseDto, Guid, MatchRow, PlayerRow, TeamPlayerRow, TeamRow } from './types';
 
 export const STORAGE_KEY = 'SCOREKEEPER_DATA';
@@ -92,6 +93,7 @@ export function getPlayersForTeam(data: DatabaseDto, teamId: Guid): PlayerRow[] 
     .sort((a, b) => a.Name.localeCompare(b.Name) || a.Id.localeCompare(b.Id));
 }
 
+/** Team pairing only (`Home vs. Away`). Prefer `getMatchDisplayName` for lists. */
 export function getMatchName(data: DatabaseDto, match: MatchRow): string {
   const teams = table<TeamRow>(data, 'Team');
   const home = teams.find((team) => team.Id === match.TeamIdHome);
@@ -100,9 +102,14 @@ export function getMatchName(data: DatabaseDto, match: MatchRow): string {
   return `${home.Name} vs. ${away.Name}`;
 }
 
+/** Pairing plus labels for list / picker / resume UI. */
+export function getMatchDisplayName(data: DatabaseDto, match: MatchRow): string {
+  return formatMatchDisplayName(getMatchName(data, match), getMatchLabels(match));
+}
+
 export function getMatches(data: DatabaseDto): { match: MatchRow; matchName: string }[] {
   return table<MatchRow>(data, 'Match')
-    .map((match) => ({ match, matchName: getMatchName(data, match) }))
+    .map((match) => ({ match, matchName: getMatchDisplayName(data, match) }))
     .sort((a, b) => a.matchName.localeCompare(b.matchName));
 }
 
