@@ -1,6 +1,7 @@
 import { Alert, Button, Stack, TextField } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { MatchLabelsEditor } from '../components/MatchLabels';
 import { MatchStatsImportDialog } from '../components/MatchStatsImportDialog';
 import { PlayerRoster } from '../components/MatchRoster';
 import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
@@ -11,6 +12,11 @@ import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
 import { buildStatisticsCsvBytes } from '../domain/statisticsCsv';
 import { isStatsImportedMatch } from '../domain/importedMatch';
 import { getMatchName, getTeam } from '../domain/database';
+import {
+  getMatchLabels,
+  listMatchLabelSuggestions,
+  setMatchLabels,
+} from '../domain/matchLabels';
 import {
   previewRemovePlayerFromMatch,
   removeMatchSidePlayerConfirmMessage,
@@ -194,6 +200,8 @@ export function MatchPage() {
   const canTrack = canNavigateToMatchPage(data, matchId) && !statsImported;
   const youtubeValid =
     !youtubeDraft.trim() || Boolean(parseYoutubeVideoId(youtubeDraft));
+  const matchLabels = getMatchLabels(match);
+  const labelSuggestions = listMatchLabelSuggestions(data);
 
   const saveYoutubeUrl = () => {
     const next = youtubeDraft.trim() || null;
@@ -205,6 +213,13 @@ export function MatchPage() {
       if (row) row.YoutubeUrl = next;
       return null;
     }, next ? 'Updated match YouTube URL.' : 'Cleared match YouTube URL.');
+  };
+
+  const saveLabels = (next: string[]) => {
+    mutate((draft) => {
+      setMatchLabels(draft, matchId, next);
+      return null;
+    }, 'Updated match labels.');
   };
 
   const statisticsBytes = () => buildStatisticsCsvBytes(data, matchId);
@@ -346,6 +361,11 @@ export function MatchPage() {
         ) : null}
       </Stack>
       <Stack spacing={1} sx={{ mb: 2, maxWidth: 720 }}>
+        <MatchLabelsEditor
+          value={matchLabels}
+          suggestions={labelSuggestions}
+          onChange={saveLabels}
+        />
         <TextField
           label="YouTube URL"
           placeholder="https://www.youtube.com/watch?v=…"

@@ -1,4 +1,4 @@
-import { getMatchName, getMatches, getPlayer } from '../database';
+import { getMatchDisplayName, getMatches, getPlayer } from '../database';
 import { getGameName, getMatchById, getMatchPlayers } from '../matchGame';
 import { throwResultLabels, throwResultUiOrder } from '../gameEvents';
 import {
@@ -173,7 +173,7 @@ export function resolveStatsQuery(
 export function statsPageTitle(data: DatabaseDto, scope: StatsScope): string {
   if (scope.kind === 'league') return 'League stats';
   const match = getMatchById(data, scope.matchId);
-  const matchName = match ? getMatchName(data, match) : 'Match';
+  const matchName = match ? getMatchDisplayName(data, match) : 'Match';
   if (scope.kind === 'match') return `Match stats — ${matchName}`;
   const label = getGameName(data, scope.matchId, scope.gameId);
   return `${label} stats — ${matchName}`;

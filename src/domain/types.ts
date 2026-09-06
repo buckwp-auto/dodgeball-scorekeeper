@@ -31,6 +31,8 @@ export type MatchRow = {
   TeamIdHome: Guid;
   TeamIdAway: Guid;
   Notes: string | null;
+  /** Optional free-text labels (week, playoffs, GOTW, …). */
+  Labels?: string[];
   /** Optional YouTube watch/share URL for match VOD. */
   YoutubeUrl?: string | null;
   /** Cloud uid of the user who created the match (match scorer). */
