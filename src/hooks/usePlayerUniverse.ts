@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SAMPLE_LEAGUE_LABEL } from '../domain/localLeagueLabel';
 import {
   buildUniversePlayers,
   type UniversePlayer,
 } from '../domain/playerUniverse';
+import { SAMPLE_PLAYER_UNIVERSE } from '../domain/samplePlayerUniverse';
 import type { DatabaseDto } from '../domain/types';
 import { useAuth } from '../state/AuthContext';
+import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
 
 type CachedRoster = {
@@ -24,10 +27,13 @@ export type PlayerUniverseState = {
 
 export function usePlayerUniverse(): PlayerUniverseState {
   const { configured, user } = useAuth();
+  const { localLeagueLabel } = useDatabase();
   const { leagues, memberships, activeLeagueId } = useLeague();
   const [entries, setEntries] = useState<CachedRoster[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const useSampleFixture = localLeagueLabel === SAMPLE_LEAGUE_LABEL;
 
   const targets = useMemo(
     () =>
@@ -128,7 +134,12 @@ export function usePlayerUniverse(): PlayerUniverseState {
     };
   }, [targets, targetsKey]);
 
-  const universe = useMemo(() => buildUniversePlayers(entries), [entries]);
+  const universe = useMemo(() => {
+    const fromCloud = buildUniversePlayers(entries);
+    if (fromCloud.length > 0) return fromCloud;
+    if (useSampleFixture) return SAMPLE_PLAYER_UNIVERSE;
+    return [];
+  }, [entries, useSampleFixture]);
 
   return { universe, loading, error };
 }
