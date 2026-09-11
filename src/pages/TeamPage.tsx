@@ -247,9 +247,12 @@ export function TeamPage() {
               {...params}
               size="small"
               label="Player Name"
-              inputProps={{
-                ...params.inputProps,
-                maxLength: MAX_PLAYER_NAME,
+              slotProps={{
+                ...params.slotProps,
+                htmlInput: {
+                  ...params.slotProps.htmlInput,
+                  maxLength: MAX_PLAYER_NAME,
+                },
               }}
               sx={{ minWidth: 260 }}
             />
