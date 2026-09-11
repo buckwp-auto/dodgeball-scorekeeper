@@ -240,20 +240,37 @@ export async function setMemberStatus(
   await batch.commit();
 }
 
+async function loadRosterDoc(
+  db: Firestore,
+  leagueId: string,
+): Promise<RosterDoc> {
+  const rosterSnap = await getDoc(
+    doc(db, 'leagues', leagueId, 'roster', 'current'),
+  );
+  if (!rosterSnap.exists()) {
+    return {
+      tables: emptyRosterTables(),
+      updatedAt: new Date().toISOString(),
+      revision: 0,
+    };
+  }
+  return rosterSnap.data() as RosterDoc;
+}
+
+/** Roster tables only — for cross-league player suggestions without pulling matches. */
+export async function loadLeagueRoster(
+  db: Firestore,
+  leagueId: string,
+): Promise<DatabaseDto> {
+  const rosterData = await loadRosterDoc(db, leagueId);
+  return mergeLeagueDocuments(rosterData, []);
+}
+
 export async function loadLeagueDatabase(
   db: Firestore,
   leagueId: string,
 ): Promise<{ data: DatabaseDto; revisions: CloudRevisions }> {
-  const rosterSnap = await getDoc(
-    doc(db, 'leagues', leagueId, 'roster', 'current'),
-  );
-  const rosterData = rosterSnap.exists()
-    ? (rosterSnap.data() as RosterDoc)
-    : {
-        tables: emptyRosterTables(),
-        updatedAt: new Date().toISOString(),
-        revision: 0,
-      };
+  const rosterData = await loadRosterDoc(db, leagueId);
 
   const matchesSnap = await getDocs(
     collection(db, 'leagues', leagueId, 'matches'),
