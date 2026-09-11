@@ -15,6 +15,8 @@ import {
   loadFinishDraftFromEvent,
   loadThrowDraftsFromEvent,
   NO_BLOCKING_STARTED_LABEL,
+  TIMEOUT_ENDS_LABEL,
+  TIMEOUT_LABEL,
   type GameEventRow,
   type GameEventType,
   type GamePlayerInfo,
@@ -221,6 +223,24 @@ export function buildTimelineEntry(
           tone: 'neutral',
           actions: [{ kind: 'error' }],
           segments: [{ kind: 'text', text: NO_BLOCKING_STARTED_LABEL }],
+        },
+      ],
+    };
+  }
+  if (type === 'timeout' || type === 'timeoutEnd') {
+    return {
+      ...base,
+      rows: [
+        {
+          role: 'error',
+          tone: 'neutral',
+          actions: [{ kind: 'error' }],
+          segments: [
+            {
+              kind: 'text',
+              text: type === 'timeout' ? TIMEOUT_LABEL : TIMEOUT_ENDS_LABEL,
+            },
+          ],
         },
       ],
     };

@@ -33,14 +33,14 @@
 
 ## Track Game
 
-Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar** (or a scrollable **bottom timeline strip** in Tall / Pop-out stacked layout, with **Dock Right** to place the timeline beside the video instead). A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, **game running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus the first game’s **Game start** stamp; game time is the VOD clock minus this game’s **Game start** stamp. Neither is a wall clock. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
+Main scoring surface: optional **YouTube player** (tall / small-docked / hide) with a center editor + dark **timeline sidebar** (or a scrollable **bottom timeline strip** in Tall / Pop-out stacked layout, with **Dock Right** to place the timeline beside the video instead). A dark **digital scoreboard** (`sk-scoreboard`) shows **match score**, **match running time**, **game running time**, and **players remaining** in large tabular digits. Match time is the VOD clock minus the first game’s **Game start** stamp, minus any **Timeout** intervals; game time is the VOD clock minus this game’s **Game start** stamp, minus timeouts in that game. Neither is a wall clock. While a timeout is open (Timeout recorded, Timeout ends not yet), both clocks freeze and the scoreboard labels show **paused**. Empty states: **No video** when the match has no VOD, **Stamp Game start** when no start offset exists, and **—** when the player is hidden, not ready, or still before Game start.
 
 ### Event types
 
 | Tab | Purpose |
 |-----|---------|
 | **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional deflections, catch recovery |
-| **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), or **No Blocking Started** (player-less game marker) |
+| **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), **No Blocking Started** (player-less game marker), or **Timeout** / **Timeout ends** (player-less markers that pause match and game clocks) |
 | **Finish** | Winner (home / away / tie) |
 
 ### Editor UX
@@ -64,6 +64,7 @@ Derived from persisted events (not a separate toggle):
 - Line-out / wasted ball → offender out
 - **Illegal block** (Other tab only) → offender out; requires a thrower on the opposite team. Still an error event (not a Throw Hit). Old saves without `ThrowerId` still load and still out the offender.
 - **No Blocking Started** — manual game marker on **Other**; no live elimination effect
+- **Timeout** / **Timeout ends** — player-less markers on **Other**; pause match and game running times until Timeout ends (VOD may keep playing; clocks subtract the pause). Other scoring events can still be recorded while a timeout is open. No live elimination or stats credit
 - **Recovered** player on a catch is removed from the eliminated set
 - Outs sort to the bottom (by return-queue order within the out group) and show “(out 1st)”, “(out 2nd)”, …
 - Return-queue order is per team and derived from elimination chronology (FIFO); scorers can still pick a different recovered player when someone stepped off earlier than the hit order
@@ -101,7 +102,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Match / Game roster 7–12 (home) | `Q 1 2 3 4 5` |
 | Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
 | Throw results | `R T Y U G H` |
-| Other tab (line-out, wasted ball, illegal block, no blocking started) | `1 2 3 4` (fixed order; re-press toggles off). Player keys pick the offender; for illegal block they pick thrower then offender by team, same as Throw |
+| Other tab (line-out, wasted ball, illegal block, no blocking started, timeout, timeout ends) | `1 2 3 4 5 6` (fixed order; re-press toggles off). Player keys pick the offender; for illegal block they pick thrower then offender by team, same as Throw |
 | Editor tabs | `/` Throw, `'` Other, `\` Finish |
 | Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
 | Recovered None | `M` |
@@ -113,7 +114,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |
 
-Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable. Switch editor tabs with `/` (Throw), `'` (Other), and `\` (Finish) — digits stay bound to Other offenses (`1–4`) and roster overflow (`Q 1 2 3 4 5` / `P 0 9 8 7 6`). `Enter` in a timestamp or other text field still commits that field (document hotkeys ignore focused inputs).
+Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable. Switch editor tabs with `/` (Throw), `'` (Other), and `\` (Finish) — digits stay bound to Other offenses (`1–6`) and roster overflow (`Q 1 2 3 4 5` / `P 0 9 8 7 6`). `Enter` in a timestamp or other text field still commits that field (document hotkeys ignore focused inputs).
 
 ## Statistics & interop
 

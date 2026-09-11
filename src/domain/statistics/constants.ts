@@ -63,6 +63,12 @@ export enum GameEventErrorOffense {
   BlockIllegal = 3,
 }
 
+/** Discriminator on `GameEventTimeout` (timeout start vs timeout ends). */
+export enum GameEventTimeoutKind {
+  Start = 1,
+  End = 2,
+}
+
 export function invertCompetitionOutcome(
   outcome: ECompetitionOutcome,
 ): ECompetitionOutcome {

@@ -198,9 +198,9 @@ describe('track game tab hotkeys', () => {
 });
 
 describe('other tab offense hotkeys', () => {
-  it('maps 1-4 to fixed offense choices in UI order', () => {
-    expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4']);
-    expect(otherOffenseUiOrder).toHaveLength(4);
+  it('maps 1-6 to fixed offense choices in UI order', () => {
+    expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(otherOffenseUiOrder).toHaveLength(6);
     expect(hotkeyForOtherOffenseIndex(0)).toBe('1');
     const choice2 = getOtherOffenseChoiceForKey('2');
     expect(choice2?.kind).toBe('offense');
@@ -208,6 +208,8 @@ describe('other tab offense hotkeys', () => {
       GameEventErrorOffense.WastedBall,
     );
     expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
+    expect(getOtherOffenseChoiceForKey('5')?.kind).toBe('timeout');
+    expect(getOtherOffenseChoiceForKey('6')?.kind).toBe('timeoutEnd');
   });
 
   it('leaves no digit free (tab switch uses / \' \\ instead)', () => {
@@ -247,9 +249,26 @@ describe('other tab offense hotkeys', () => {
       throwerGamePlayerId: '',
       offenseId: null,
       noBlockingStarted: true,
+      timeoutStarted: false,
+      timeoutEnded: false,
     });
     const cleared = applyOtherOffenseHotkey(started, noBlocking);
     expect(cleared.noBlockingStarted).toBe(false);
+  });
+
+  it('toggles timeout markers and clears offender fields', () => {
+    const draft = {
+      offenderGamePlayerId: 'gp-1',
+      offenseId: GameEventErrorOffense.LineOut,
+    };
+    const timeout = otherOffenseUiOrder[4]!;
+    const started = applyOtherOffenseHotkey(draft, timeout);
+    expect(started.timeoutStarted).toBe(true);
+    expect(started.offenseId).toBeNull();
+    expect(started.offenderGamePlayerId).toBe('');
+    const ends = applyOtherOffenseHotkey(started, otherOffenseUiOrder[5]!);
+    expect(ends.timeoutEnded).toBe(true);
+    expect(ends.timeoutStarted).toBe(false);
   });
 
   it('clears thrower when leaving illegal block', () => {

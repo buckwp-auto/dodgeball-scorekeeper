@@ -200,6 +200,7 @@ const EMPTY_TABLE_NAMES = [
   'GameEventNoBlocking',
   'GameEventStart',
   'GameEventThrow',
+  'GameEventTimeout',
   'GamePlayer',
   'Match',
   'MatchEvent',

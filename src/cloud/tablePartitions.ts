@@ -23,6 +23,7 @@ export const MATCH_TABLES = [
   'GameEventNoBlocking',
   'GameEventStart',
   'GameEventThrow',
+  'GameEventTimeout',
   'Throw',
   'Deflection',
 ] as const satisfies readonly EntityTableName[];

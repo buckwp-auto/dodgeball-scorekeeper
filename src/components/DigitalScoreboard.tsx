@@ -175,6 +175,9 @@ export function DigitalScoreboard({
   const matchClockEmpty = runningTime != null && isMatchRunningTimeEmpty(runningTime);
   const gameClockEmpty =
     gameRunningTime != null && isMatchRunningTimeEmpty(gameRunningTime);
+  const clocksPaused =
+    (runningTime?.status === 'ready' && runningTime.paused) ||
+    (gameRunningTime?.status === 'ready' && gameRunningTime.paused);
   const scoreDigitSize = minimal
     ? '1.05rem'
     : compact
@@ -292,7 +295,7 @@ export function DigitalScoreboard({
           >
             {runningTime ? (
               <ScoreboardCell
-                label="Match time"
+                label={clocksPaused ? 'Match time (paused)' : 'Match time'}
                 className="sk-scoreboard-clock"
                 compact={compact}
                 minimal={minimal}
@@ -305,7 +308,7 @@ export function DigitalScoreboard({
             ) : null}
             {gameRunningTime ? (
               <ScoreboardCell
-                label="Game time"
+                label={clocksPaused ? 'Game time (paused)' : 'Game time'}
                 className="sk-scoreboard-game-clock"
                 compact={compact}
                 minimal={minimal}

@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from './database';
-import { getGameStartEvent, setGameEventVideoOffset } from './gameEvents';
+import {
+  getGameStartEvent,
+  persistTimeoutGameEvent,
+  setGameEventVideoOffset,
+} from './gameEvents';
 import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import {
   MATCH_CLOCK_NO_START,
   MATCH_CLOCK_NO_TIME,
   MATCH_CLOCK_NO_VIDEO,
+  collectTimeoutPauseIntervals,
   formatMatchRunningTime,
   gameClockStartOffsetSeconds,
   matchClockStartOffsetSeconds,
   resolveMatchRunningTime,
 } from './matchClock';
+import { GameEventTimeoutKind } from './statistics/constants';
 
 function setupMatchWithTwoGames() {
   const data = createEmptyDatabase();
@@ -104,14 +110,45 @@ describe('resolveMatchRunningTime', () => {
         startOffsetSeconds: 90,
         videoNowSeconds: 152,
       }),
-    ).toEqual({ status: 'ready', elapsedSeconds: 62 });
+    ).toEqual({ status: 'ready', elapsedSeconds: 62, paused: false });
+  });
+
+  it('subtracts closed timeout pauses and freezes while a timeout is open', () => {
+    expect(
+      resolveMatchRunningTime({
+        hasVideo: true,
+        startOffsetSeconds: 0,
+        videoNowSeconds: 150,
+        pauseIntervals: [{ startSeconds: 100, endSeconds: 120 }],
+      }),
+    ).toEqual({ status: 'ready', elapsedSeconds: 130, paused: false });
+
+    expect(
+      resolveMatchRunningTime({
+        hasVideo: true,
+        startOffsetSeconds: 0,
+        videoNowSeconds: 150,
+        pauseIntervals: [{ startSeconds: 100, endSeconds: null }],
+      }),
+    ).toEqual({ status: 'ready', elapsedSeconds: 100, paused: true });
+  });
+
+  it('ignores pause intervals entirely before the clock start offset', () => {
+    expect(
+      resolveMatchRunningTime({
+        hasVideo: true,
+        startOffsetSeconds: 200,
+        videoNowSeconds: 260,
+        pauseIntervals: [{ startSeconds: 50, endSeconds: 80 }],
+      }),
+    ).toEqual({ status: 'ready', elapsedSeconds: 60, paused: false });
   });
 });
 
 describe('formatMatchRunningTime', () => {
   it('formats elapsed video time and empty-state labels', () => {
     expect(
-      formatMatchRunningTime({ status: 'ready', elapsedSeconds: 62 }),
+      formatMatchRunningTime({ status: 'ready', elapsedSeconds: 62, paused: false }),
     ).toBe('1:02');
     expect(formatMatchRunningTime({ status: 'no-video' })).toBe(MATCH_CLOCK_NO_VIDEO);
     expect(formatMatchRunningTime({ status: 'no-start-stamp' })).toBe(
@@ -121,5 +158,42 @@ describe('formatMatchRunningTime', () => {
       MATCH_CLOCK_NO_TIME,
     );
     expect(formatMatchRunningTime({ status: 'before-start' })).toBe(MATCH_CLOCK_NO_TIME);
+  });
+});
+
+describe('collectTimeoutPauseIntervals', () => {
+  it('pairs timeout start/end per game and scopes match vs game', () => {
+    const { data, match, game1, game2 } = setupMatchWithTwoGames();
+    setGameEventVideoOffset(data, getGameStartEvent(data, game1)!.Id, 0);
+    setGameEventVideoOffset(data, getGameStartEvent(data, game2)!.Id, 200);
+
+    persistTimeoutGameEvent(data, game1, GameEventTimeoutKind.Start, {
+      videoOffsetSeconds: 40,
+    });
+    persistTimeoutGameEvent(data, game1, GameEventTimeoutKind.End, {
+      videoOffsetSeconds: 55,
+    });
+    persistTimeoutGameEvent(data, game2, GameEventTimeoutKind.Start, {
+      videoOffsetSeconds: 220,
+    });
+
+    expect(collectTimeoutPauseIntervals(data, { gameId: game1 })).toEqual([
+      { startSeconds: 40, endSeconds: 55 },
+    ]);
+    expect(collectTimeoutPauseIntervals(data, { gameId: game2 })).toEqual([
+      { startSeconds: 220, endSeconds: null },
+    ]);
+    expect(collectTimeoutPauseIntervals(data, { matchId: match.Id })).toEqual([
+      { startSeconds: 40, endSeconds: 55 },
+      { startSeconds: 220, endSeconds: null },
+    ]);
+  });
+
+  it('ignores unpaired timeout ends', () => {
+    const { data, game1 } = setupMatchWithTwoGames();
+    persistTimeoutGameEvent(data, game1, GameEventTimeoutKind.End, {
+      videoOffsetSeconds: 30,
+    });
+    expect(collectTimeoutPauseIntervals(data, { gameId: game1 })).toEqual([]);
   });
 });
