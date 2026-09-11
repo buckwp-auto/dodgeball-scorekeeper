@@ -13,6 +13,7 @@ import {
   DeflectionResult,
   GameEventErrorOffense,
   GameEventFinishResult,
+  GameEventTimeoutKind,
   ThrowResult,
 } from './statistics/constants';
 import { getStatisticsSummaryCsvText } from './statistics/statisticsFormatService';
@@ -32,6 +33,7 @@ import {
   persistErrorGameEvent,
   persistFinishGameEvent,
   persistNoBlockingGameEvent,
+  persistTimeoutGameEvent,
   persistThrowGameEvent,
   previewRemoveGamePlayer,
   previewRemovePlayerFromMatch,
@@ -161,6 +163,28 @@ describe('game event recording', () => {
     const [entry] = buildTimelineEntries(data, gameId, match.Id);
     expect(entry.type).toBe('noBlocking');
     expect(entry.rows[0].segments.some((seg) => seg.kind === 'text')).toBe(true);
+  });
+
+  it('records timeout and timeout ends markers with undo/redo', () => {
+    const { data, match, gameId } = setupOneGameMatch();
+    const startId = persistTimeoutGameEvent(data, gameId, GameEventTimeoutKind.Start, {
+      videoOffsetSeconds: 90,
+    });
+    const endId = persistTimeoutGameEvent(data, gameId, GameEventTimeoutKind.End, {
+      videoOffsetSeconds: 110,
+    });
+    expect(getGameEventType(data, startId)).toBe('timeout');
+    expect(getGameEventType(data, endId)).toBe('timeoutEnd');
+
+    const entries = buildTimelineEntries(data, gameId, match.Id);
+    expect(entries.find((row) => row.id === startId)?.type).toBe('timeout');
+    expect(entries.find((row) => row.id === endId)?.type).toBe('timeoutEnd');
+
+    const undone = undoLastGameEvent(data, gameId);
+    expect(undone?.type).toBe('timeoutEnd');
+    expect(getGameEventType(data, endId)).toBeNull();
+    restoreGameEventSnapshot(data, undone!);
+    expect(getGameEventType(data, endId)).toBe('timeoutEnd');
   });
 
   it('slots a new stamped event between earlier and later video times', () => {

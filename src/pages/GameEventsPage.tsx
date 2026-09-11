@@ -72,6 +72,7 @@ import {
 import { buildTimelineEntries } from '../domain/gameEventTimeline';
 import { rememberLastGame, rememberLastMatch } from '../domain/lastScoring';
 import {
+  collectTimeoutPauseIntervals,
   gameClockStartOffsetSeconds,
   matchClockStartOffsetSeconds,
   resolveMatchRunningTime,
@@ -104,7 +105,9 @@ import { TrackGameHotkeyHints } from '../components/trackGame/TrackGameHotkeyHin
 type TabKey = TrackGameTab;
 
 function editorTabForEventType(type: GameEventType | null): TabKey | 'start' | null {
-  if (type === 'noBlocking') return 'error';
+  if (type === 'noBlocking' || type === 'timeout' || type === 'timeoutEnd') {
+    return 'error';
+  }
   if (type === 'start') return 'start';
   return type;
 }
@@ -251,6 +254,7 @@ export function GameEventsPage() {
         hasVideo: hasYoutube,
         startOffsetSeconds: matchClockStartOffsetSeconds(data, matchId),
         videoNowSeconds,
+        pauseIntervals: collectTimeoutPauseIntervals(data, { matchId }),
       }),
     [data, matchId, hasYoutube, videoNowSeconds],
   );
@@ -261,6 +265,7 @@ export function GameEventsPage() {
         hasVideo: hasYoutube,
         startOffsetSeconds: gameClockStartOffsetSeconds(data, gameId),
         videoNowSeconds,
+        pauseIntervals: collectTimeoutPauseIntervals(data, { gameId }),
       }),
     [data, gameId, hasYoutube, videoNowSeconds],
   );
@@ -427,7 +432,12 @@ export function GameEventsPage() {
         const drafts = loadThrowDraftsFromEvent(data, eventId);
         setThrowDrafts(drafts);
         setSavedSnapshot(JSON.stringify(drafts));
-      } else if (type === 'error' || type === 'noBlocking') {
+      } else if (
+        type === 'error' ||
+        type === 'noBlocking' ||
+        type === 'timeout' ||
+        type === 'timeoutEnd'
+      ) {
         const draft = loadOtherDraftFromEvent(data, eventId);
         setErrorDraft(draft);
         setSavedSnapshot(JSON.stringify(draft));
@@ -652,7 +662,10 @@ export function GameEventsPage() {
     setSelectedEventId(null);
     const rawType =
       lockedEventType && lockedEventType !== 'start' ? lockedEventType : activeTab;
-    const type = rawType === 'noBlocking' ? 'error' : rawType;
+    const type =
+      rawType === 'noBlocking' || rawType === 'timeout' || rawType === 'timeoutEnd'
+        ? 'error'
+        : rawType;
     setActiveTab(type);
     setPendingWipeFinish(false);
     loadDraftsForSelection(null);
@@ -670,7 +683,11 @@ export function GameEventsPage() {
     setSelectedEventId(eventId);
     const type = getGameEventType(data, eventId);
     if (type && type !== 'start') {
-      setActiveTab(type === 'noBlocking' ? 'error' : type);
+      setActiveTab(
+        type === 'noBlocking' || type === 'timeout' || type === 'timeoutEnd'
+          ? 'error'
+          : type,
+      );
     }
     loadDraftsForSelection(eventId);
     const entry = timeline.find((row) => row.id === eventId);
@@ -868,7 +885,13 @@ export function GameEventsPage() {
           setErrorDraft((prev) => applyOtherOffenseHotkey(prev, offenseChoice));
           return;
         }
-        if (errorDraft.noBlockingStarted) return;
+        if (
+          errorDraft.noBlockingStarted ||
+          errorDraft.timeoutStarted ||
+          errorDraft.timeoutEnded
+        ) {
+          return;
+        }
         const hotkeys = buildPermanentPlayerHotkeys(players);
         const gamePlayerId = findGamePlayerIdByHotkey(hotkeys, key);
         if (!gamePlayerId || live.eliminatedGamePlayerIds.has(gamePlayerId)) return;

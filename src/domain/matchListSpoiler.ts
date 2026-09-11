@@ -1,9 +1,15 @@
-import { isStatsImportedMatchId } from './importedMatch';
+import {
+  isStatsImportedMatchId,
+} from './importedMatch';
 import {
   getGameStartEvent,
   lastStampedVideoOffsetInGame,
 } from './gameEvents';
 import { getMatchById, getMatchGames } from './matchGame';
+import {
+  collectTimeoutPauseIntervals,
+  pauseSecondsOverlapping,
+} from './matchClock';
 import {
   buildMatchSeries,
   formatMatchSeriesScore,
@@ -78,7 +84,12 @@ export function formatInProgressGameClock(
   if (last == null || !Number.isFinite(last)) return null;
   const start = getGameStartEvent(data, gameId)?.VideoOffsetSeconds;
   if (start != null && Number.isFinite(start)) {
-    return formatVideoTime(Math.max(0, last - start));
+    const paused = pauseSecondsOverlapping(
+      start,
+      last,
+      collectTimeoutPauseIntervals(data, { gameId }),
+    );
+    return formatVideoTime(Math.max(0, last - start - paused));
   }
   return formatVideoTime(last);
 }

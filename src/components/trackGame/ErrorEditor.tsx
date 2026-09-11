@@ -1,5 +1,6 @@
 import { Box } from '@mui/material';
 import {
+  errorDraftIsMarker,
   errorDraftNeedsThrower,
   resolveErrorThrowingHome,
   type ErrorDraft,
@@ -43,16 +44,20 @@ export function ErrorEditor({
   onChange: (draft: ErrorDraft) => void;
 }) {
   const hotkeys = buildPermanentPlayerHotkeys(players);
-  const noBlockingMode = Boolean(draft.noBlockingStarted);
+  const markerMode = errorDraftIsMarker(draft);
   const illegalBlock = errorDraftNeedsThrower(draft);
   const throwingHome = resolveErrorThrowingHome(draft, players);
   const offender = players.find((row) => row.gamePlayerId === draft.offenderGamePlayerId);
   const thrower = players.find((row) => row.gamePlayerId === draft.throwerGamePlayerId);
-  const showBothTeamsAsOffender = !noBlockingMode && !illegalBlock && !draft.offenderGamePlayerId;
+  const showBothTeamsAsOffender = !markerMode && !illegalBlock && !draft.offenderGamePlayerId;
   const pendingOffender =
-    !noBlockingMode && !illegalBlock && !draft.offenderGamePlayerId;
+    !markerMode && !illegalBlock && !draft.offenderGamePlayerId;
   const pendingMistake =
-    !noBlockingMode && draft.offenseId === null && !draft.noBlockingStarted;
+    !markerMode &&
+    draft.offenseId === null &&
+    !draft.noBlockingStarted &&
+    !draft.timeoutStarted &&
+    !draft.timeoutEnded;
 
   const homePlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome),
@@ -110,7 +115,7 @@ export function ErrorEditor({
 
   return (
     <EditorGrid>
-      {noBlockingMode ? (
+      {markerMode ? (
         <EditorLabel gridColumn="1 / -1">Game event</EditorLabel>
       ) : illegalBlock ? (
         showIllegalBlockSides ? (
@@ -129,9 +134,9 @@ export function ErrorEditor({
           {showBothTeamsAsOffender ? <Box /> : null}
         </>
       )}
-      <EditorLabel>{noBlockingMode ? '' : 'Mistake'}</EditorLabel>
+      <EditorLabel>{markerMode ? '' : 'Mistake'}</EditorLabel>
 
-      {noBlockingMode ? null : illegalBlock && !showIllegalBlockSides ? (
+      {markerMode ? null : illegalBlock && !showIllegalBlockSides ? (
         <>
           <TeamBanner name={homeTeamName} teamHome />
           <TeamBanner name={awayTeamName} teamHome={false} />
@@ -273,7 +278,7 @@ export function ErrorEditor({
         </>
       ) : null}
 
-      {!noBlockingMode && !illegalBlock && showBothTeamsAsOffender ? (
+      {!markerMode && !illegalBlock && showBothTeamsAsOffender ? (
         <>
           <EditorChoiceStack pending={pendingOffender}>
             {homePlayers.map((row) => (
@@ -318,7 +323,7 @@ export function ErrorEditor({
         </>
       ) : null}
 
-      {!noBlockingMode && !illegalBlock && !showBothTeamsAsOffender ? (
+      {!markerMode && !illegalBlock && !showBothTeamsAsOffender ? (
         <>
           {offender?.teamHome ? (
             <EditorChoiceStack pending={pendingOffender}>
@@ -365,15 +370,17 @@ export function ErrorEditor({
         </>
       ) : null}
 
-      {noBlockingMode ? <Box sx={{ gridColumn: '1 / -1' }} /> : null}
+      {markerMode ? <Box sx={{ gridColumn: '1 / -1' }} /> : null}
 
-      <Box data-tour="other-offenses" sx={{ gridColumn: noBlockingMode ? '1 / -1' : 3 }}>
+      <Box data-tour="other-offenses" sx={{ gridColumn: markerMode ? '1 / -1' : 3 }}>
       <EditorChoiceStack
-        pending={pendingMistake && !noBlockingMode}
+        pending={pendingMistake && !markerMode}
       >
         {otherOffenseUiOrder.map((choice, index) => (
           <EditorChoiceButton
-            key={choice.kind === 'noBlocking' ? 'noBlocking' : choice.offenseId}
+            key={
+              choice.kind === 'offense' ? choice.offenseId : choice.kind
+            }
             hotkey={hotkeyForOtherOffenseIndex(index)}
             selected={isOtherOffenseChoiceActive(draft, choice)}
             onClick={() => toggleOffenseChoice(index)}

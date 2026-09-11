@@ -332,7 +332,12 @@ export function gameHasDeflectionThrowEvent(data: DatabaseDto, gameId: Guid): bo
 export function gameHasOtherEvent(data: DatabaseDto, gameId: Guid): boolean {
   return getGameEvents(data, gameId).some((event) => {
     const type = getGameEventType(data, event.Id);
-    return type === 'error' || type === 'noBlocking';
+    return (
+      type === 'error' ||
+      type === 'noBlocking' ||
+      type === 'timeout' ||
+      type === 'timeoutEnd'
+    );
   });
 }
 

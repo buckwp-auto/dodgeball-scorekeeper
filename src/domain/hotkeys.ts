@@ -3,6 +3,8 @@ import {
   deflectionResultUiOrder,
   errorOffenseLabels,
   NO_BLOCKING_STARTED_LABEL,
+  TIMEOUT_ENDS_LABEL,
+  TIMEOUT_LABEL,
   throwResultUiOrder,
 } from './gameEvents';
 
@@ -31,11 +33,11 @@ export const RECOVERED_NONE_HOTKEY = 'm';
 
 /**
  * Fixed Other-tab offense keys (stable layout; do not overlap player/result keys).
- * Digits are not used to *switch* tabs — they are bound here (1–4) and as Match/Game
+ * Digits are not used to *switch* tabs — they are bound here (1–6) and as Match/Game
  * roster overflow (home `Q 1 2 3 4 5`, away `P 0 9 8 7 6`). Tab switch keys are
  * {@link TRACK_GAME_TAB_HOTKEYS} (`/` `'` `\`).
  */
-export const OTHER_OFFENSE_HOTKEYS = ['1', '2', '3', '4'] as const;
+export const OTHER_OFFENSE_HOTKEYS = ['1', '2', '3', '4', '5', '6'] as const;
 
 /** Track Game editor tabs — Throw / Other / Finish. */
 export type TrackGameTab = 'throw' | 'error' | 'finish';
@@ -70,17 +72,23 @@ export function getTrackGameTabForKey(key: string): TrackGameTab | null {
 
 export type OtherOffenseChoice =
   | { kind: 'offense'; offenseId: GameEventErrorOffense }
-  | { kind: 'noBlocking' };
+  | { kind: 'noBlocking' }
+  | { kind: 'timeout' }
+  | { kind: 'timeoutEnd' };
 
 export const otherOffenseUiOrder: OtherOffenseChoice[] = [
   { kind: 'offense', offenseId: GameEventErrorOffense.LineOut },
   { kind: 'offense', offenseId: GameEventErrorOffense.WastedBall },
   { kind: 'offense', offenseId: GameEventErrorOffense.BlockIllegal },
   { kind: 'noBlocking' },
+  { kind: 'timeout' },
+  { kind: 'timeoutEnd' },
 ];
 
 export function labelForOtherOffenseChoice(choice: OtherOffenseChoice): string {
   if (choice.kind === 'noBlocking') return NO_BLOCKING_STARTED_LABEL;
+  if (choice.kind === 'timeout') return TIMEOUT_LABEL;
+  if (choice.kind === 'timeoutEnd') return TIMEOUT_ENDS_LABEL;
   return errorOffenseLabels[choice.offenseId];
 }
 
@@ -98,11 +106,23 @@ export function getOtherOffenseChoiceForKey(key: string): OtherOffenseChoice | n
 }
 
 export function isOtherOffenseChoiceActive(
-  draft: { offenseId: GameEventErrorOffense | null; noBlockingStarted?: boolean },
+  draft: {
+    offenseId: GameEventErrorOffense | null;
+    noBlockingStarted?: boolean;
+    timeoutStarted?: boolean;
+    timeoutEnded?: boolean;
+  },
   choice: OtherOffenseChoice,
 ): boolean {
   if (choice.kind === 'noBlocking') return Boolean(draft.noBlockingStarted);
-  return !draft.noBlockingStarted && draft.offenseId === choice.offenseId;
+  if (choice.kind === 'timeout') return Boolean(draft.timeoutStarted);
+  if (choice.kind === 'timeoutEnd') return Boolean(draft.timeoutEnded);
+  return (
+    !draft.noBlockingStarted &&
+    !draft.timeoutStarted &&
+    !draft.timeoutEnded &&
+    draft.offenseId === choice.offenseId
+  );
 }
 
 export type OtherTabDraft = {
@@ -110,7 +130,23 @@ export type OtherTabDraft = {
   throwerGamePlayerId?: string;
   offenseId: GameEventErrorOffense | null;
   noBlockingStarted?: boolean;
+  timeoutStarted?: boolean;
+  timeoutEnded?: boolean;
 };
+
+function markerDraft(
+  flags: Pick<OtherTabDraft, 'noBlockingStarted' | 'timeoutStarted' | 'timeoutEnded'>,
+): OtherTabDraft {
+  return {
+    offenderGamePlayerId: '',
+    throwerGamePlayerId: '',
+    offenseId: null,
+    noBlockingStarted: false,
+    timeoutStarted: false,
+    timeoutEnded: false,
+    ...flags,
+  };
+}
 
 export function applyOtherOffenseHotkey(
   draft: OtherTabDraft,
@@ -118,19 +154,26 @@ export function applyOtherOffenseHotkey(
 ): OtherTabDraft {
   if (choice.kind === 'noBlocking') {
     return draft.noBlockingStarted
-      ? { ...draft, noBlockingStarted: false }
-      : {
-          offenderGamePlayerId: '',
-          throwerGamePlayerId: '',
-          offenseId: null,
-          noBlockingStarted: true,
-        };
+      ? markerDraft({})
+      : markerDraft({ noBlockingStarted: true });
+  }
+  if (choice.kind === 'timeout') {
+    return draft.timeoutStarted
+      ? markerDraft({})
+      : markerDraft({ timeoutStarted: true });
+  }
+  if (choice.kind === 'timeoutEnd') {
+    return draft.timeoutEnded
+      ? markerDraft({})
+      : markerDraft({ timeoutEnded: true });
   }
   const nextOffense = draft.offenseId === choice.offenseId ? null : choice.offenseId;
   const keepThrower = nextOffense === GameEventErrorOffense.BlockIllegal;
   return {
     ...draft,
     noBlockingStarted: false,
+    timeoutStarted: false,
+    timeoutEnded: false,
     offenseId: nextOffense,
     throwerGamePlayerId: keepThrower ? draft.throwerGamePlayerId ?? '' : '',
   };
@@ -141,7 +184,9 @@ export function applyPlayerHotkeyToErrorDraft(
   players: PlayerHotkeySource[],
   key: string,
 ): OtherTabDraft | null {
-  if (draft.noBlockingStarted) return null;
+  if (draft.noBlockingStarted || draft.timeoutStarted || draft.timeoutEnded) {
+    return null;
+  }
   const map = buildPermanentPlayerHotkeys(players);
   const gamePlayerId = findGamePlayerIdByHotkey(map, key);
   if (!gamePlayerId) return null;
