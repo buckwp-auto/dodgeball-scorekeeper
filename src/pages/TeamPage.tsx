@@ -1,19 +1,35 @@
-import { Button, Chip, Stack, TextField, Typography } from '@mui/material';
-import { useState } from 'react';
+import {
+  Autocomplete,
+  Button,
+  Chip,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { EntityAvatar } from '../components/EntityAvatar';
 import { ImageUrlField } from '../components/ImageUrlField';
-import { FormOneLine, PageHeader, TextButton } from '../components/Ui';
+import { PageHeader, TextButton } from '../components/Ui';
 import {
+  addPlayer as addPlayerOp,
   getPlayer,
   getPlayersForTeam,
   getTeam,
   playerIsUsedInMatches,
+  setPlayerImage as setPlayerImageOp,
   teamIsUsedInMatches,
 } from '../domain/database';
+import { imageSrc } from '../domain/imageRef';
 import { linkedPlayerLabel } from '../domain/playerMatch';
 import { playerHref } from '../domain/playerProfile';
+import {
+  suggestUniversePlayers,
+  universePlayerLabel,
+  type UniversePlayerCandidate,
+} from '../domain/playerUniverse';
 import { MAX_PLAYER_NAME, MAX_TEAM_NAME } from '../domain/limits';
+import { usePlayerUniverse } from '../hooks/usePlayerUniverse';
 import { useDatabase } from '../state/DatabaseContext';
 
 export function TeamPage() {
@@ -21,14 +37,15 @@ export function TeamPage() {
   const navigate = useNavigate();
   const {
     data,
-    addPlayer,
     renamePlayer,
     deletePlayer,
     renameTeam,
     deleteTeam,
     setTeamImage,
     setPlayerImage,
+    mutate,
   } = useDatabase();
+  const { universe, error: universeError } = usePlayerUniverse();
   const [playerName, setPlayerName] = useState('');
   const [editingTeam, setEditingTeam] = useState(false);
   const [teamEditName, setTeamEditName] = useState('');
@@ -38,15 +55,37 @@ export function TeamPage() {
 
   const team = getTeam(data, teamId);
   const players = team ? getPlayersForTeam(data, teamId) : [];
+  const suggestions = useMemo(
+    () =>
+      suggestUniversePlayers(universe, {
+        query: playerName,
+        excludeNames: players.map((player) => player.Name),
+      }),
+    [universe, playerName, players],
+  );
 
   if (!team) {
     return <PageHeader>Team</PageHeader>;
   }
 
-  const submit = () => {
-    if (!playerName.trim()) return;
-    addPlayer(teamId, playerName);
+  const submit = (candidate?: UniversePlayerCandidate) => {
+    const name = (candidate?.playerName ?? playerName).trim();
+    if (!name) return;
+    const photoUrl = candidate ? imageSrc(candidate.image) : null;
+    mutate(
+      (draft) => {
+        const player = addPlayerOp(draft, teamId, name);
+        if (photoUrl) setPlayerImageOp(draft, player.Id, photoUrl);
+        return {
+          playerName: player.Name,
+          teamName: team.Name,
+        };
+      },
+      ({ playerName: addedName, teamName }) =>
+        `Added player (${addedName}) to team (${teamName}).`,
+    );
     setPlayerName('');
+    setError(null);
   };
 
   const saveTeamName = () => {
@@ -89,6 +128,8 @@ export function TeamPage() {
       setError(err instanceof Error ? err.message : 'Delete failed');
     }
   };
+
+  const displayError = error ?? universeError;
 
   return (
     <>
@@ -160,18 +201,74 @@ export function TeamPage() {
         />
       </Stack>
 
-      <FormOneLine
-        label="Player Name"
-        buttonText="Add Player"
-        value={playerName}
-        onValueChange={setPlayerName}
-        onSubmit={submit}
-        canSubmit={playerName.trim().length > 0}
-        maxLength={MAX_PLAYER_NAME}
-      />
-      {error ? (
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'flex-start', mb: 2, flexWrap: 'wrap' }}
+        className="sk-add-team-player"
+      >
+        <Autocomplete
+          freeSolo
+          options={suggestions}
+          filterOptions={(options) => options}
+          inputValue={playerName}
+          onInputChange={(_, value, reason) => {
+            if (reason !== 'input' && reason !== 'clear') return;
+            setPlayerName(value);
+          }}
+          getOptionLabel={(option) =>
+            typeof option === 'string' ? option : universePlayerLabel(option)
+          }
+          isOptionEqualToValue={(option, value) =>
+            typeof value !== 'string' && option.key === value.key
+          }
+          onChange={(_, value) => {
+            if (!value) return;
+            if (typeof value === 'string') {
+              if (value.trim()) submit();
+              return;
+            }
+            submit(value);
+          }}
+          renderOption={(props, option) => (
+            <li {...props} key={option.key} className="sk-add-player-suggestion">
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <EntityAvatar
+                  name={option.playerName}
+                  image={option.image}
+                  size={24}
+                />
+                <span>{universePlayerLabel(option)}</span>
+              </Stack>
+            </li>
+          )}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              size="small"
+              label="Player Name"
+              inputProps={{
+                ...params.inputProps,
+                maxLength: MAX_PLAYER_NAME,
+              }}
+              sx={{ minWidth: 260 }}
+            />
+          )}
+          sx={{ flex: '1 1 260px', maxWidth: 480 }}
+        />
+        <Button
+          size="small"
+          variant="contained"
+          disabled={!playerName.trim()}
+          onClick={() => submit()}
+          sx={{ mt: 0.5 }}
+        >
+          Add Player
+        </Button>
+      </Stack>
+      {displayError ? (
         <p className="sk-error" style={{ color: '#c62828' }}>
-          {error}
+          {displayError}
         </p>
       ) : null}
       <table className="sk-grid">
