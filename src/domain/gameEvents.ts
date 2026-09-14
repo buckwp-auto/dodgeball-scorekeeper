@@ -100,6 +100,7 @@ export const throwResultUiOrder: ThrowResult[] = [
 
 export const deflectionResultUiOrder: DeflectionResult[] = [
   DeflectionResult.Hit,
+  DeflectionResult.Dodge,
   DeflectionResult.Block,
   DeflectionResult.Disarm,
   DeflectionResult.Catch,
@@ -122,6 +123,7 @@ export const deflectionResultLabels: Record<DeflectionResult, string> = {
   [DeflectionResult.BlockFailed]: 'Failed Block',
   [DeflectionResult.Catch]: 'Catch',
   [DeflectionResult.CatchFailed]: 'Failed Catch',
+  [DeflectionResult.Dodge]: 'Dodge',
   [DeflectionResult.Disarm]: 'Disarm',
 };
 
@@ -425,13 +427,33 @@ export function getGamePlayerInfos(
   );
 }
 
+/** Continuations (persisted as Deflection rows) after any non-Catch primary result. */
 export function throwResultAllowsDeflections(resultId: ThrowResult | null): boolean {
   if (resultId === null) return false;
-  return (
-    resultId === ThrowResult.Hit ||
-    resultId === ThrowResult.Block ||
-    resultId === ThrowResult.Disarm
-  );
+  return resultId !== ThrowResult.Catch;
+}
+
+/** Catch ends the ball — no further continuation rows after a Catch (primary or chain). */
+export function throwDraftAllowsMoreDeflections(draft: ThrowDraft): boolean {
+  if (!throwResultAllowsDeflections(draft.resultId)) return false;
+  return !draft.deflections.some((row) => row.resultId === DeflectionResult.Catch);
+}
+
+/** Apply a continuation result; Catch truncates later rows and demotes earlier catches to Hit. */
+export function nextDeflectionsAfterResult(
+  deflections: DeflectionDraft[],
+  index: number,
+  resultId: DeflectionResult,
+): DeflectionDraft[] {
+  let next = deflections.map((row, i) => (i === index ? { ...row, resultId } : row));
+  if (resultId === DeflectionResult.Catch) {
+    next = next.slice(0, index + 1).map((row, i) =>
+      i !== index && row.resultId === DeflectionResult.Catch
+        ? { ...row, resultId: DeflectionResult.Hit }
+        : row,
+    );
+  }
+  return next;
 }
 
 export function throwDraftNeedsRecovered(draft: ThrowDraft): boolean {

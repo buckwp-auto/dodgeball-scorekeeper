@@ -20,7 +20,7 @@
 - **Stats** — in-app leaderboards, standings, and charts for the open league, a match, or a single game; Match / Game / Player dropdowns jump between those views and player pages
 - **League Stat Settings** — players per team per game (default 6), highlight-leaderboard minimums (15 games / 2 matches / 20 throws & targets, each toggleable, default on), plus stat-credit policy (team throws, deflection weights, multi-kills/catches); local always editable, cloud admin-only; cloud admin can paste league logo and banner URLs
 - **History** — commit log for local mutations
-- **MUI shell** — drawer nav (light gray / dark charcoal by theme), primary blue (`#1565c0`), appearance menu next to the Scorekeeper title (System / Light / Dark); on Track Game **Tall** or **Pop-out** layout the nav drawer hides behind a mid-screen edge toggle so scoring uses the full width; sync bar shows **Local only**, a named **Local league** pill after loading a `.scrkpr`/sample (outlined), or **Syncing** plus a filled primary pill for the open cloud league; **Help** page with how-to guides and FAQ; first-visit **navigation tour** (popover tooltips on Overview, main nav links, and the sync bar — skippable, restartable from Help); **game tracking tour** on Help loads the sample league, adds a practice game, and interactively walks roster → Track Game → throws (single, team, deflection), Other events, and finishing a game; tour tips show the same hotkey badges as Track Game and use a semi-transparent card on interactive scoring steps so controls stay visible; Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored; wrapped **button rows** keep an 8px vertical gap so stacked buttons do not touch
+- **MUI shell** — drawer nav (light gray / dark charcoal by theme), primary blue (`#1565c0`), appearance menu next to the Scorekeeper title (System / Light / Dark); on Track Game **Tall** or **Pop-out** layout the nav drawer hides behind a mid-screen edge toggle so scoring uses the full width; sync bar shows **Local only**, a named **Local league** pill after loading a `.scrkpr`/sample (outlined), or **Syncing** plus a filled primary pill for the open cloud league; **Help** page with how-to guides and FAQ; first-visit **navigation tour** (popover tooltips on Overview, main nav links, and the sync bar — skippable, restartable from Help); **game tracking tour** on Help loads the sample league, adds a practice game, and interactively walks roster → Track Game → throws (single, team, continuation), Other events, and finishing a game; tour tips show the same hotkey badges as Track Game and use a semi-transparent card on interactive scoring steps so controls stay visible; Playwright-friendly class names where needed; resume-scoring control when a last game/match is stored; wrapped **button rows** keep an 8px vertical gap so stacked buttons do not touch
 
 ## Roster & match setup
 
@@ -39,7 +39,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 | Tab | Purpose |
 |-----|---------|
-| **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional deflections, catch recovery |
+| **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional continuations, catch recovery |
 | **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), **No Blocking Started** (player-less game marker), or **Timeout** / **Timeout ends** (player-less markers that pause match and game clocks) |
 | **Finish** | Winner (home / away / tie) |
 
@@ -47,7 +47,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 - Three-column grid (home / away / result) with slightly taller team banners separated from player rows (result column spacer keeps tops aligned); six player buttons stretch to the same total height as the six result rows
 - Throw results shown with **MUI icons**; result can be chosen before thrower
-- **Deflections** chain on eligible results (Hit, Block, Disarm); `Z` focuses the new row so player keys pick the receiver and `R Y U G` set the deflection result (Dodge/Miss stay on the throw)
+- **Continuations** (persisted as Deflection rows) chain on any primary result except Catch; `Z` focuses the new row so player keys pick the receiver and `R T Y U G` set the continuation result (Hit, Dodge, Block, Disarm, Catch). A continuation **Catch** ends the chain (no further rows) and shows Recovered under that catch. **Miss** stays on the throw only (intent vs the initial target). Continuations credit every receiver for Elu% while Hit% still counts one throw
 - **Catch recovery** — defaults to the defending team’s first-out (`(out 1st)`); pick another teammate (including later outs) or **None** (`M`) when return order differs from elimination order
 - Auto-commit when a draft is complete and dirty; **Done / Restore / Insert below / Delete**
 - **Undo / Redo** (`-` / `+`) remove or restore the last entered event (session redo stack; cleared when a new event is committed). Distinct from `N` (delete selected) and `V` (restore draft from saved selection)
@@ -74,7 +74,7 @@ Derived from persisted events (not a separate toggle):
 
 - Match page: optional **YouTube URL** field; **tall VOD player** on Match and Game roster screens (playback hotkeys, no Track Game action tooltip) so you can see who is playing vs subbing
 - Track Game layouts (session preference):
-  - **Tall** (`]`) — tall 16:9 player on the right (full viewport height); scoring editor on the left with a **draggable divider** (width remembered in session storage) and a compact stacked header (scoreboard with team rows plus clocks below, game title, tabs), player buttons on top, and results/deflections/team throws in a scrollable pane below. App nav collapses to a mid-screen edge toggle; the event timeline defaults under the editor, with a **Dock Right** control on the **Next event** row to place it to the right of the video instead (session preference; **Dock Below** returns it). Keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
+  - **Tall** (`]`) — tall 16:9 player on the right (full viewport height); scoring editor on the left with a **draggable divider** (width remembered in session storage) and a compact stacked header (scoreboard with team rows plus clocks below, game title, tabs), player buttons on top, and results/continuations/team throws in a scrollable pane below. App nav collapses to a mid-screen edge toggle; the event timeline defaults under the editor, with a **Dock Right** control on the **Next event** row to place it to the right of the video instead (session preference; **Dock Below** returns it). Keyboard-icon tooltip on the player bar for playback (`Space` `←`/`→` `,` `.`) and action keys (Done, Delete, Undo, …)
   - **Small** (`[`) — player centered in the editor column; timeline rises full-height beside it
   - **Hide** — scoring only (timestamps pause)
   - **Pop-out** — second window for the VOD; main Track Game page uses the same stacked layout as Tall (nav drawer, compact editor, bottom timeline, same Dock Right control) with a control bar instead of the in-page player. Persists across games in the same match (and match/game roster screens). Closes when you leave the match, dock back, or close the window. Opening Track Game with an active pop-out seeks to **Game start** (finished games) or the **latest stamped event** (in progress); if nothing is stamped yet, the player is left where it is until Game start is marked. While the pop-out catches up, both windows show a short **Seeking to m:ss…** spinner
@@ -104,9 +104,9 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Throw results | `R T Y U G H` |
 | Other tab (line-out, wasted ball, illegal block, no blocking started, timeout, timeout ends) | `1 2 3 4 5 6` (fixed order; re-press toggles off). Player keys pick the offender; for illegal block they pick thrower then offender by team, same as Throw |
 | Editor tabs | `/` Throw, `'` Other, `\` Finish |
-| Deflection (after `Z`) | receiver = defending player keys; result = `R Y U G` |
+| Continuation (after `Z`) | receiver = defending player keys; result = `R T Y U G` (no Miss) |
 | Recovered None | `M` |
-| Actions | `Z` deflect, `X` or `Enter` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
+| Actions | `Z` continue, `X` or `Enter` done, `C` add throw, `V` restore draft, `B` insert below, `N` delete selected |
 | Undo / redo last event | `-` undo, `+` redo |
 | Confirm wipe finish | `X` or `Enter` Done after last out, then `Enter` |
 | Game Complete | `Enter` Next game (same match) |
@@ -129,8 +129,8 @@ Match / Game roster keys follow on-screen order (starters, then subs; outs last 
 - **Team standings** (game W-L-T + match W-L from finished games) and match series scoreboard
 - Charts (`@mui/x-charts`): throw-result mix, top-N bars, home vs away, game elimination timeline; thrower→target heatmap on match/game
 - Display metrics (catches, recoveries, rates, VOR/WAR) sit on top of the engine — **golden CSV unchanged** under the default Legacy policy
-- Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (hit = incoming Hit, Disarm, or legacy failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − hit/error deaths − 2×times caught (Deaths exclude catch-outs; times caught is separate); **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
-- **Legacy CSV export** keeps the original column layout: Disarm and deprecated failed block/catch fold into **Hit**; `BlockFailed` / `CatchFailed` columns emit **0**
+- Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (targeted includes primary targets and continuation receivers; hit = incoming Hit, Disarm, or legacy failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − hit/error deaths − 2×times caught (Deaths exclude catch-outs; times caught is separate); **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
+- **Legacy CSV export** keeps Disarm and deprecated failed block/catch folded into **Hit**; `BlockFailed` / `CatchFailed` columns emit **0**; continuation **Dodge** is an explicit column under Throws/Targeted (Deflection)
 - Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page
 - **Legacy statistics CSV import** — on Match (**Import Match Statistics**) or Matches (**Import from statistics CSV**): backfill scorekeeper2-style aggregate stats without event logs; confirm roster mapping, enter **home/away game wins** (and optional ties / match finished); lands on match stats. Imported matches skip Track Match/Game (routes redirect to stats). No per-game stats, heatmaps, highlights, or event undo. Re-import replaces prior imported stats; cannot import into matches that already have tracked events
 - Domain statistics service aligned with legacy kill/death/catch aggregates; credit is a recalculated view over persisted events. Illegal-block errors with a thrower add a direct Hit kill (and kill credit) for that thrower without changing throw counts

@@ -84,6 +84,8 @@ export function displayDeflectionResultLabel(resultId: DeflectionResult): string
       return 'Block';
     case DeflectionResult.Catch:
       return 'Catch';
+    case DeflectionResult.Dodge:
+      return 'Dodge';
     case DeflectionResult.Disarm:
       return 'Disarm';
     default:

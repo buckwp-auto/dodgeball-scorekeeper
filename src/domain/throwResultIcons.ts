@@ -28,13 +28,14 @@ const icons: Record<ThrowResult, SvgIconComponent> = {
   [ThrowResult.Disarm]: BackHandIcon,
 };
 
-/** Deflection result pickers reuse the matching throw-result icons. */
+/** Deflection/continuation result pickers reuse the matching throw-result icons. */
 const deflectionIcons: Record<DeflectionResult, SvgIconComponent> = {
   [DeflectionResult.Hit]: icons[ThrowResult.Hit],
   [DeflectionResult.Block]: icons[ThrowResult.Block],
   [DeflectionResult.BlockFailed]: icons[ThrowResult.BlockFailed],
   [DeflectionResult.Catch]: icons[ThrowResult.Catch],
   [DeflectionResult.CatchFailed]: icons[ThrowResult.CatchFailed],
+  [DeflectionResult.Dodge]: icons[ThrowResult.Dodge],
   [DeflectionResult.Disarm]: icons[ThrowResult.Disarm],
 };
 

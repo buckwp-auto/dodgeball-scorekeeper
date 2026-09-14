@@ -48,21 +48,26 @@ import {
   gameEventIncludesGamePlayer,
 } from './gameEvents';
 
-function setupOneGameMatch(extraHome = false) {
+function setupOneGameMatch(options: boolean | { extraHome?: boolean; extraAway?: boolean } = false) {
+  const extraHome = typeof options === 'boolean' ? options : Boolean(options.extraHome);
+  const extraAway = typeof options === 'boolean' ? false : Boolean(options.extraAway);
   const data = createEmptyDatabase();
   const home = addTeam(data, 'Home Hawks');
   const away = addTeam(data, 'Away Owls');
   const h1 = addPlayer(data, home.Id, 'Alex');
   const h2 = extraHome ? addPlayer(data, home.Id, 'Blake') : null;
   const a1 = addPlayer(data, away.Id, 'Casey');
+  const a2 = extraAway ? addPlayer(data, away.Id, 'Drew') : null;
   const match = addMatch(data, home.Id, away.Id);
   toggleMatchPlayer(data, match.Id, h1.Id, true);
   if (h2) toggleMatchPlayer(data, match.Id, h2.Id, true);
   toggleMatchPlayer(data, match.Id, a1.Id, false);
+  if (a2) toggleMatchPlayer(data, match.Id, a2.Id, false);
   const gameId = addGame(data, match.Id);
   toggleGamePlayer(data, match.Id, gameId, h1.Id);
   if (h2) toggleGamePlayer(data, match.Id, gameId, h2.Id);
   toggleGamePlayer(data, match.Id, gameId, a1.Id);
+  if (a2) toggleGamePlayer(data, match.Id, gameId, a2.Id);
 
   const gamePlayers = data.Tables.GamePlayer as {
     Id: string;
@@ -86,6 +91,7 @@ function setupOneGameMatch(extraHome = false) {
     homeGp: gpFor(h1.Id),
     homeGp2: h2 ? gpFor(h2.Id) : null,
     awayGp: gpFor(a1.Id),
+    awayGp2: a2 ? gpFor(a2.Id) : null,
   };
 }
 
@@ -619,17 +625,38 @@ describe('buildTimelineEntries', () => {
     );
   });
 
-  it('keeps recovered inline and deflections on extra rows', () => {
+  it('keeps recovered inline on a primary Catch', () => {
     const { data, match, gameId, homeGp, homeGp2, awayGp } = setupOneGameMatch(true);
     persistThrowGameEvent(data, gameId, match.Id, [
       {
         throwerGamePlayerId: homeGp.Id,
         targetGamePlayerId: awayGp.Id,
         resultId: ThrowResult.Catch,
+        deflections: [],
+        recoveredId: homeGp2!.Id,
+      },
+    ]);
+
+    const [entry] = buildTimelineEntries(data, gameId, match.Id);
+    expect(entry.rows).toHaveLength(1);
+    expect(entry.rows[0].tone).toBe('catch');
+    expect(flattenText(entry.rows[0].segments)).toBe(
+      'Alex threw at Casey, resulting in a Catch · recovered Blake',
+    );
+  });
+
+  it('puts recovered on the continuation Catch row, not the primary throw', () => {
+    const { data, match, gameId, homeGp, homeGp2, awayGp, awayGp2 } =
+      setupOneGameMatch({ extraHome: true, extraAway: true });
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Dodge,
         deflections: [
           {
-            receiverGamePlayerId: awayGp.Id,
-            resultId: DeflectionResult.Block,
+            receiverGamePlayerId: awayGp2!.Id,
+            resultId: DeflectionResult.Catch,
           },
         ],
         recoveredId: homeGp2!.Id,
@@ -638,14 +665,13 @@ describe('buildTimelineEntries', () => {
 
     const [entry] = buildTimelineEntries(data, gameId, match.Id);
     expect(entry.rows).toHaveLength(2);
-    expect(entry.rows[0].tone).toBe('catch');
     expect(flattenText(entry.rows[0].segments)).toBe(
-      'Alex threw at Casey, resulting in a Catch · recovered Blake',
+      'Alex threw at Casey, resulting in a Dodge',
     );
     expect(entry.rows[1].role).toBe('deflection');
-    expect(entry.rows[1].tone).toBe('block');
+    expect(entry.rows[1].tone).toBe('catch');
     expect(flattenText(entry.rows[1].segments)).toBe(
-      'Casey deflected, resulting in a Block',
+      'Drew continued, resulting in a Catch · recovered Blake',
     );
   });
 

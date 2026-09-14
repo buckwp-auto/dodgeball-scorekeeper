@@ -295,6 +295,35 @@ describe('buildDisplayStats', () => {
     expect(byName(rows, 'Drew')?.elusivenessRate).toBe(1);
   });
 
+  it('credits Elu% for a screened throw continuation Dodge without raising Hit%', () => {
+    const { data, match, gameId, homeGp, awayGp, awayGp2 } = setupMatch({
+      extraAway: true,
+    });
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Miss,
+        deflections: [
+          { receiverGamePlayerId: awayGp2!.Id, resultId: DeflectionResult.Dodge },
+        ],
+        recoveredId: undefined,
+      },
+    ]);
+
+    const rows = buildDisplayStats(data, { kind: 'match', matchId: match.Id });
+    const alex = byName(rows, 'Alex')!;
+    const casey = byName(rows, 'Casey')!;
+    const drew = byName(rows, 'Drew')!;
+
+    expect(alex.throws).toBe(1);
+    expect(alex.hitRate).toBe(0);
+    expect(casey.targets).toBe(1);
+    expect(casey.elusivenessRate).toBe(1);
+    expect(drew.targets).toBe(1);
+    expect(drew.elusivenessRate).toBe(1);
+  });
+
   it('restricts game scope to one game', () => {
     const { data, match, gameId, homeGp, awayGp, h1, a1 } = setupMatch();
     persistThrowGameEvent(data, gameId, match.Id, [

@@ -6,7 +6,7 @@ import {
   resolveGroupThrowingHome,
 } from '../components/trackGame/ThrowEditor';
 import type { GamePlayerInfo, ThrowDraft } from './gameEvents';
-import { emptyThrowDraft } from './gameEvents';
+import { emptyThrowDraft, nextDeflectionsAfterResult, throwDraftAllowsMoreDeflections } from './gameEvents';
 import { DeflectionResult, ThrowResult } from './statistics/constants';
 import { RECOVERED_NONE_HOTKEY } from './hotkeys';
 
@@ -92,7 +92,7 @@ describe('applyPlayerHotkeyToThrowDrafts permanent keys', () => {
     expect(recoverOut?.[0].recoveredId).toBe('a-zoe');
   });
 
-  it('focuses a pending deflection and routes receiver plus result keys there', () => {
+  it('focuses a pending continuation and routes receiver plus result keys there', () => {
     const drafts: ThrowDraft[] = [
       {
         ...emptyThrowDraft(),
@@ -113,15 +113,90 @@ describe('applyPlayerHotkeyToThrowDrafts permanent keys', () => {
     expect(withReceiver?.[0].throwerGamePlayerId).toBe('h-amy');
     expect(withReceiver?.[0].targetGamePlayerId).toBe('a-ned');
 
-    // Y is Block on the deflection, not Dodge on the throw
+    // Y is Block on the continuation, not on the throw
     const withBlock = applyPlayerHotkeyToThrowDrafts(opened, players, 'y');
     expect(withBlock?.[0].deflections[0].resultId).toBe(DeflectionResult.Block);
     expect(withBlock?.[0].resultId).toBe(ThrowResult.Hit);
 
-    // T (Dodge) still changes the throw result and is not a deflection result
-    const dodgeThrow = applyPlayerHotkeyToThrowDrafts(opened, players, 't');
-    expect(dodgeThrow?.[0].resultId).toBe(ThrowResult.Dodge);
-    expect(dodgeThrow?.[0].deflections).toEqual([]);
+    // T sets Dodge on the focused continuation
+    const dodgeContinuation = applyPlayerHotkeyToThrowDrafts(opened, players, 't');
+    expect(dodgeContinuation?.[0].resultId).toBe(ThrowResult.Hit);
+    expect(dodgeContinuation?.[0].deflections[0].resultId).toBe(DeflectionResult.Dodge);
+  });
+
+  it('allows continuations after Dodge or Miss and keeps Miss on the throw', () => {
+    const dodgePrimary: ThrowDraft[] = [
+      {
+        ...emptyThrowDraft(),
+        throwerGamePlayerId: 'h-amy',
+        targetGamePlayerId: 'a-ned',
+        resultId: ThrowResult.Dodge,
+      },
+    ];
+    const opened = addDeflectionToDrafts(dodgePrimary);
+    expect(opened[0].deflections).toHaveLength(1);
+
+    const hitWithContinuation: ThrowDraft[] = [
+      {
+        ...emptyThrowDraft(),
+        throwerGamePlayerId: 'h-amy',
+        targetGamePlayerId: 'a-ned',
+        resultId: ThrowResult.Hit,
+        deflections: [
+          { receiverGamePlayerId: 'a-zoe', resultId: DeflectionResult.Dodge },
+        ],
+      },
+    ];
+    // H is Miss on the throw (not a continuation result) and keeps the chain
+    const missKey = applyPlayerHotkeyToThrowDrafts(hitWithContinuation, players, 'h');
+    expect(missKey?.[0].resultId).toBe(ThrowResult.Miss);
+    expect(missKey?.[0].deflections).toEqual([
+      { receiverGamePlayerId: 'a-zoe', resultId: DeflectionResult.Dodge },
+    ]);
+  });
+
+  it('does not allow continuations after Catch', () => {
+    const drafts: ThrowDraft[] = [
+      {
+        ...emptyThrowDraft(),
+        throwerGamePlayerId: 'h-amy',
+        targetGamePlayerId: 'a-ned',
+        resultId: ThrowResult.Catch,
+        recoveredId: null,
+      },
+    ];
+    expect(addDeflectionToDrafts(drafts)[0].deflections).toEqual([]);
+  });
+
+  it('refuses another continuation after a continuation Catch', () => {
+    const drafts: ThrowDraft[] = [
+      {
+        ...emptyThrowDraft(),
+        throwerGamePlayerId: 'h-amy',
+        targetGamePlayerId: 'a-ned',
+        resultId: ThrowResult.Dodge,
+        deflections: [
+          { receiverGamePlayerId: 'a-zoe', resultId: DeflectionResult.Catch },
+        ],
+        recoveredId: null,
+      },
+    ];
+    expect(addDeflectionToDrafts(drafts)[0].deflections).toHaveLength(1);
+    expect(throwDraftAllowsMoreDeflections(drafts[0])).toBe(false);
+  });
+
+  it('truncates later continuations when Catch is set mid-chain', () => {
+    const next = nextDeflectionsAfterResult(
+      [
+        { receiverGamePlayerId: 'a-zoe', resultId: DeflectionResult.Block },
+        { receiverGamePlayerId: 'a-ned', resultId: DeflectionResult.Hit },
+      ],
+      0,
+      DeflectionResult.Catch,
+    );
+    expect(next).toEqual([
+      { receiverGamePlayerId: 'a-zoe', resultId: DeflectionResult.Catch },
+    ]);
   });
 
   it('keeps result keys on the last deflection after a receiver is chosen', () => {

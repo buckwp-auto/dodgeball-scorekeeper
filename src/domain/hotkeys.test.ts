@@ -142,14 +142,15 @@ describe('result hotkeys', () => {
     expect(getThrowResultForKey('h')).toBe(ThrowResult.Miss);
   });
 
-  it('maps r y u g to deflection results and skips dodge/miss', () => {
+  it('maps r t y u g to continuation results and skips miss', () => {
     expect(getDeflectionResultForKey('r')).toBe(DeflectionResult.Hit);
+    expect(getDeflectionResultForKey('t')).toBe(DeflectionResult.Dodge);
     expect(getDeflectionResultForKey('y')).toBe(DeflectionResult.Block);
     expect(getDeflectionResultForKey('u')).toBe(DeflectionResult.Disarm);
     expect(getDeflectionResultForKey('g')).toBe(DeflectionResult.Catch);
     expect(getDeflectionResultForKey('h')).toBeNull();
-    expect(getDeflectionResultForKey('t')).toBeNull();
     expect(hotkeyForDeflectionResult(DeflectionResult.Hit)).toBe('r');
+    expect(hotkeyForDeflectionResult(DeflectionResult.Dodge)).toBe('t');
     expect(hotkeyForDeflectionResult(DeflectionResult.Block)).toBe('y');
     expect(hotkeyForDeflectionResult(DeflectionResult.Disarm)).toBe('u');
   });

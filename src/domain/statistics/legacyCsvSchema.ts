@@ -62,6 +62,7 @@ function deflectionEnumObject(): Record<string, number> {
     BlockFailed: DeflectionResult.BlockFailed,
     Catch: DeflectionResult.Catch,
     CatchFailed: DeflectionResult.CatchFailed,
+    Dodge: DeflectionResult.Dodge,
   };
 }
 

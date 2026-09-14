@@ -246,7 +246,7 @@ export const GAME_ACTION_HOTKEYS: ReadonlyArray<{
   action: TrackGameAction;
   label: string;
 }> = [
-  { key: 'z', action: 'addDeflection', label: 'Deflect' },
+  { key: 'z', action: 'addDeflection', label: 'Continue' },
   { key: 'x', action: 'done', label: 'Done' },
   { key: 'c', action: 'addThrow', label: 'Add team throw' },
   { key: 'v', action: 'restore', label: 'Restore' },
@@ -370,7 +370,7 @@ export function getThrowResultForKey(key: string): ThrowResult | null {
   return throwResultUiOrder[index] ?? null;
 }
 
-/** Same keys as throw results, skipping Dodge (`T`) and Miss (`P`). */
+/** Same keys as throw results, including Dodge (`T`); Miss (`H`) stays primary-only. */
 export function hotkeyForDeflectionResult(resultId: DeflectionResult): string | null {
   return hotkeyForResult(resultId as unknown as ThrowResult);
 }
@@ -378,10 +378,7 @@ export function hotkeyForDeflectionResult(resultId: DeflectionResult): string | 
 export function getDeflectionResultForKey(key: string): DeflectionResult | null {
   const throwResult = getThrowResultForKey(key);
   if (throwResult === null) return null;
-  if (
-    throwResult === ThrowResult.Dodge ||
-    throwResult === ThrowResult.Miss
-  ) {
+  if (throwResult === ThrowResult.Miss) {
     return null;
   }
   return deflectionResultUiOrder.includes(throwResult as unknown as DeflectionResult)
