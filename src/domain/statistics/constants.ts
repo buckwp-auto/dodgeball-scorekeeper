@@ -48,6 +48,7 @@ export enum DeflectionResult {
   Catch = 4,
   /** @deprecated Stored on old saves; display and credit as Hit. */
   CatchFailed = 5,
+  Dodge = 6,
   Disarm = 8,
 }
 

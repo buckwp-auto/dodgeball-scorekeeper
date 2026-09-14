@@ -62,6 +62,8 @@ export function toneForDeflectionResult(resultId: DeflectionResult): TimelineRow
       return 'hit';
     case DeflectionResult.Catch:
       return 'catch';
+    case DeflectionResult.Dodge:
+      return 'dodge';
     case DeflectionResult.Block:
       return 'block';
   }

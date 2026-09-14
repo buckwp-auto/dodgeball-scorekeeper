@@ -3,7 +3,9 @@ import { DeflectionResult, ThrowResult } from './statistics/constants';
 import {
   displayDeflectionResultLabel,
   displayThrowResultLabel,
+  isConnectingHitDeflectionResult,
   isConnectingHitThrowResult,
+  isIncomingEluHitDeflectionResult,
   isIncomingEluHitThrowResult,
 } from './throwResults';
 
@@ -18,5 +20,11 @@ describe('throwResults helpers', () => {
     expect(isConnectingHitThrowResult(ThrowResult.Disarm)).toBe(true);
     expect(isIncomingEluHitThrowResult(ThrowResult.Disarm)).toBe(true);
     expect(displayThrowResultLabel(ThrowResult.Disarm)).toBe('Disarm');
+  });
+
+  it('treats continuation Dodge as targeted but not an elu hit', () => {
+    expect(displayDeflectionResultLabel(DeflectionResult.Dodge)).toBe('Dodge');
+    expect(isIncomingEluHitDeflectionResult(DeflectionResult.Dodge)).toBe(false);
+    expect(isConnectingHitDeflectionResult(DeflectionResult.Dodge)).toBe(false);
   });
 });

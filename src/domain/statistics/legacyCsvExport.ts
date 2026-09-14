@@ -10,7 +10,7 @@ import {
 import type { StatisticAggregates } from './statisticAggregates';
 import type { PlayerStatistics } from './statisticsService';
 
-/** Legacy CSV columns — frozen; Disarm is folded into Hit, failed columns emit 0. */
+/** Legacy CSV columns — Disarm is folded into Hit, failed columns emit 0; Dodge is explicit. */
 export const LEGACY_KILL_TYPE_COLUMNS = [
   EKillType.Hit,
   EKillType.BlockFailed,
@@ -34,12 +34,14 @@ export const LEGACY_THROW_RESULT_COLUMNS = [
   ThrowResult.Miss,
 ] as const;
 
+/** Legacy CSV columns — Disarm is folded into Hit; failed columns emit 0; Dodge is explicit. */
 export const LEGACY_DEFLECTION_RESULT_COLUMNS = [
   DeflectionResult.Hit,
   DeflectionResult.Block,
   DeflectionResult.BlockFailed,
   DeflectionResult.Catch,
   DeflectionResult.CatchFailed,
+  DeflectionResult.Dodge,
 ] as const;
 
 function enumKey(

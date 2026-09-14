@@ -112,14 +112,14 @@ function getStatisticsSummaryFormat(): {
       title: 'Throws (Deflection) (Individual)',
       getAggregate: (s) => s.offenseDeflectionsIndividual,
       keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
-      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5 },
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5, Dodge: 6 },
       legacyRemap: true,
     },
     {
       title: 'Throws (Deflection) (Group)',
       getAggregate: (s) => s.offenseDeflectionsGroup,
       keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
-      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5 },
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5, Dodge: 6 },
       legacyRemap: true,
     },
     {
@@ -139,7 +139,7 @@ function getStatisticsSummaryFormat(): {
       title: 'Targeted (Deflection)',
       getAggregate: (s) => s.defenseDeflections,
       keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
-      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5 },
+      enumObject: { Hit: 1, Block: 2, BlockFailed: 3, Catch: 4, CatchFailed: 5, Dodge: 6 },
       legacyRemap: true,
     },
   ];

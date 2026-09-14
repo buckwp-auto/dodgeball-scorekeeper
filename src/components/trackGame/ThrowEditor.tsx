@@ -11,6 +11,8 @@ import {
   deflectionResultLabels,
   deflectionResultUiOrder,
   emptyThrowDraft,
+  nextDeflectionsAfterResult,
+  throwDraftAllowsMoreDeflections,
   throwResultAllowsDeflections,
   throwResultLabels,
   throwResultUiOrder,
@@ -219,18 +221,11 @@ function withDeflectionResult(
   players: GamePlayerInfo[],
   live: ThrowLiveElimination,
 ): ThrowDraft {
-  let nextDeflections = draft.deflections.map((row, i) =>
-    i === index ? { ...row, resultId } : row,
-  );
-  if (resultId === DeflectionResult.Catch) {
-    nextDeflections = nextDeflections.map((row, i) =>
-      i !== index && row.resultId === DeflectionResult.Catch
-        ? { ...row, resultId: DeflectionResult.Hit }
-        : row,
-    );
-  }
   return withDefaultRecoveredIfNeeded(
-    { ...draft, deflections: nextDeflections },
+    {
+      ...draft,
+      deflections: nextDeflectionsAfterResult(draft.deflections, index, resultId),
+    },
     players,
     live,
     null,
@@ -328,6 +323,7 @@ function SingleThrowEditor({
   };
 
   const addDeflection = () => {
+    if (!throwDraftAllowsMoreDeflections(draft)) return;
     onChange({
       ...draft,
       deflections: [
@@ -400,16 +396,51 @@ function SingleThrowEditor({
     </EditorChoiceStack>
   );
 
+  const canAddContinuation = throwDraftAllowsMoreDeflections(draft);
+  const recoveredAfterPrimaryCatch =
+    showTarget &&
+    throwDraftNeedsRecovered(draft) &&
+    draft.resultId === ThrowResult.Catch;
+
+  const recoveredChoices = (
+    <EditorChoiceStack
+      pending={draft.recoveredId === undefined}
+      gridColumn={stacked ? '1 / -1' : 2}
+    >
+      <EditorChoiceButton
+        hotkey={RECOVERED_NONE_HOTKEY}
+        selected={draft.recoveredId === null}
+        onClick={() => onChange(withToggledRecovery(draft, null))}
+      >
+        None
+      </EditorChoiceButton>
+      {recoveredCandidates.map((row) => (
+        <EditorChoiceButton
+          key={row.gamePlayerId}
+          hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
+          selected={draft.recoveredId === row.gamePlayerId}
+          playerId={row.playerId}
+          teamHome={row.teamHome}
+          onClick={() => onChange(withToggledRecovery(draft, row.gamePlayerId))}
+        >
+          {playerLabel(row)}
+        </EditorChoiceButton>
+      ))}
+    </EditorChoiceStack>
+  );
+
   const deflectionBlock =
     showTarget && draft.resultId !== null && throwResultAllowsDeflections(draft.resultId) ? (
       <Box sx={{ mt: stacked ? 1 : 2 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
           <Typography variant={stacked ? 'caption' : 'subtitle2'} sx={{ fontWeight: 700 }}>
-            Deflection
+            Continuation
           </Typography>
-          <IconButton size="small" onClick={addDeflection} aria-label="Add deflection">
-            <AddIcon fontSize="small" />
-          </IconButton>
+          {canAddContinuation ? (
+            <IconButton size="small" onClick={addDeflection} aria-label="Add continuation">
+              <AddIcon fontSize="small" />
+            </IconButton>
+          ) : null}
         </Stack>
         {draft.deflections.map((deflection, index) => (
           <Box key={index} sx={{ mb: 0.5 }}>
@@ -471,8 +502,20 @@ function SingleThrowEditor({
                 ))}
               </EditorChoiceStack>
             </EditorGrid>
+            {deflection.resultId === DeflectionResult.Catch ? (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant={stacked ? 'caption' : 'subtitle2'} sx={{ fontWeight: 700, mb: 0.5 }}>
+                  Recovered
+                </Typography>
+                <EditorGrid stacked={stacked}>
+                  {!stacked ? <Box /> : null}
+                  {recoveredChoices}
+                  {!stacked ? <Box /> : null}
+                </EditorGrid>
+              </Box>
+            ) : null}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <IconButton size="small" onClick={() => removeDeflection(index)} aria-label="Remove deflection">
+              <IconButton size="small" onClick={() => removeDeflection(index)} aria-label="Remove continuation">
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </Box>
@@ -481,38 +524,14 @@ function SingleThrowEditor({
       </Box>
     ) : null;
 
-  const recoveredBlock =
-    showTarget && throwDraftNeedsRecovered(draft) ? (
+  const recoveredBlock = recoveredAfterPrimaryCatch ? (
       <Box sx={{ mt: stacked ? 1 : 2 }}>
         <Typography variant={stacked ? 'caption' : 'subtitle2'} sx={{ fontWeight: 700, mb: 0.5 }}>
           Recovered
         </Typography>
         <EditorGrid stacked={stacked}>
           {!stacked ? <Box /> : null}
-          <EditorChoiceStack
-            pending={draft.recoveredId === undefined}
-            gridColumn={stacked ? '1 / -1' : 2}
-          >
-            <EditorChoiceButton
-              hotkey={RECOVERED_NONE_HOTKEY}
-              selected={draft.recoveredId === null}
-              onClick={() => onChange(withToggledRecovery(draft, null))}
-            >
-              None
-            </EditorChoiceButton>
-            {recoveredCandidates.map((row) => (
-              <EditorChoiceButton
-                key={row.gamePlayerId}
-                hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                selected={draft.recoveredId === row.gamePlayerId}
-                playerId={row.playerId}
-                teamHome={row.teamHome}
-                onClick={() => onChange(withToggledRecovery(draft, row.gamePlayerId))}
-              >
-                {playerLabel(row)}
-              </EditorChoiceButton>
-            ))}
-          </EditorChoiceStack>
+          {recoveredChoices}
           {!stacked ? <Box /> : null}
         </EditorGrid>
       </Box>
@@ -971,7 +990,7 @@ export function addDeflectionToDrafts(drafts: ThrowDraft[]): ThrowDraft[] {
   if (drafts.length === 0) return drafts;
   const lastIndex = drafts.length - 1;
   const draft = drafts[lastIndex];
-  if (!throwResultAllowsDeflections(draft.resultId)) return drafts;
+  if (!throwDraftAllowsMoreDeflections(draft)) return drafts;
   return drafts.map((row, i) =>
     i === lastIndex
       ? {

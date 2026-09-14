@@ -234,11 +234,11 @@ export const GAME_TRACKING_STEPS: GameTrackingStep[] = [
   },
   {
     id: 'throw-deflection',
-    title: 'Deflections',
+    title: 'Continuations',
     body: [
-      'After a hit (or similar), press ',
+      'After any result except Catch, press ',
       { action: 'addDeflection' },
-      ' to add a deflection row, then pick who touched the ball and the result. Record one throw with a deflection to continue.',
+      ' to add a continuation row (screened throws, ricochets, multi-target travel), then pick who the ball reached and the result. Record one throw with a continuation to continue.',
     ],
     anchor: 'throw-editor',
     placement: 'top',

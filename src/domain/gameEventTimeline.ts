@@ -88,6 +88,19 @@ export function buildThrowTimelineRows(
   const resultLabel = draft.resultId
     ? displayThrowResultLabel(draft.resultId)
     : '?';
+  const catchOnContinuation = draft.deflections.some(
+    (row) => row.resultId === DeflectionResult.Catch,
+  );
+  const recoveredSegments =
+    draft.recoveredId !== undefined
+      ? ([
+          { kind: 'text', text: ' · recovered ' },
+          draft.recoveredId
+            ? { kind: 'player', player: playerRef(players, draft.recoveredId) }
+            : { kind: 'text', text: 'None' },
+        ] satisfies TimelineSegment[])
+      : [];
+
   const throwSegments: TimelineSegment[] = [
     { kind: 'player', player: playerRef(players, draft.throwerGamePlayerId) },
     { kind: 'text', text: ' threw at ' },
@@ -98,13 +111,10 @@ export function buildThrowTimelineRows(
     },
   ];
 
-  if (draft.recoveredId !== undefined) {
-    throwSegments.push({ kind: 'text', text: ' · recovered ' });
-    throwSegments.push(
-      draft.recoveredId
-        ? { kind: 'player', player: playerRef(players, draft.recoveredId) }
-        : { kind: 'text', text: 'None' },
-    );
+  // Recovered belongs with the Catch — primary Catch on the throw row, else the
+  // continuation Catch row (not earlier chain results like Dodge/Block).
+  if (!catchOnContinuation) {
+    throwSegments.push(...recoveredSegments);
   }
 
   rows.push({
@@ -119,20 +129,24 @@ export function buildThrowTimelineRows(
 
   for (const deflection of draft.deflections) {
     const label = displayDeflectionResultLabel(deflection.resultId);
+    const segments: TimelineSegment[] = [
+      {
+        kind: 'player',
+        player: playerRef(players, deflection.receiverGamePlayerId),
+      },
+      {
+        kind: 'text',
+        text: ` continued, resulting in ${articleForResult(label)} ${label}`,
+      },
+    ];
+    if (deflection.resultId === DeflectionResult.Catch) {
+      segments.push(...recoveredSegments);
+    }
     rows.push({
       role: 'deflection',
       tone: toneForDeflectionResult(deflection.resultId),
       actions: [{ kind: 'deflection', resultId: deflection.resultId }],
-      segments: [
-        {
-          kind: 'player',
-          player: playerRef(players, deflection.receiverGamePlayerId),
-        },
-        {
-          kind: 'text',
-          text: ` deflected, resulting in ${articleForResult(label)} ${label}`,
-        },
-      ],
+      segments,
     });
   }
 

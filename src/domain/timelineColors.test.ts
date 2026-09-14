@@ -27,6 +27,7 @@ describe('timelineColors', () => {
     expect(toneForDeflectionResult(DeflectionResult.Block)).toBe('block');
     expect(toneForDeflectionResult(DeflectionResult.Catch)).toBe('catch');
     expect(toneForDeflectionResult(DeflectionResult.Hit)).toBe('hit');
+    expect(toneForDeflectionResult(DeflectionResult.Dodge)).toBe('dodge');
   });
 
   it('keeps team hues outside result colors and varies players by lighten/darken', () => {
