@@ -10,6 +10,22 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function appAdminPath(uid) {
+      return /databases/$(database)/documents/appAdmins/$(uid);
+    }
+
+    function isSuperAdmin() {
+      return signedIn()
+        && exists(appAdminPath(request.auth.uid))
+        && get(appAdminPath(request.auth.uid)).data.role == 'superAdmin';
+    }
+
+    function isAppAdmin() {
+      return signedIn()
+        && exists(appAdminPath(request.auth.uid))
+        && get(appAdminPath(request.auth.uid)).data.role in ['superAdmin', 'appAdmin'];
+    }
+
     function leagueDoc(leagueId) {
       return get(/databases/$(database)/documents/leagues/$(leagueId)).data;
     }
@@ -18,15 +34,33 @@ service cloud.firestore {
       return getAfter(/databases/$(database)/documents/leagues/$(leagueId)).data;
     }
 
+    function memberPath(leagueId, uid) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/members/$(uid);
+    }
+
+    function leagueMemberAdmin(leagueId) {
+      return exists(memberPath(leagueId, request.auth.uid))
+        && get(memberPath(leagueId, request.auth.uid)).data.status == 'active'
+        && get(memberPath(leagueId, request.auth.uid)).data.role == 'admin';
+    }
+
     function leagueAdmin(leagueId) {
-      return signedIn() && leagueDoc(leagueId).adminUid == request.auth.uid;
+      return signedIn()
+        && (
+          leagueDoc(leagueId).adminUid == request.auth.uid
+          || leagueMemberAdmin(leagueId)
+          || isAppAdmin()
+        );
     }
 
     function activeMember(leagueId) {
       return signedIn()
-        && exists(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid))
-        && get(/databases/$(database)/documents/leagues/$(leagueId)/members/$(request.auth.uid)).data.status
-          == 'active';
+        && exists(memberPath(leagueId, request.auth.uid))
+        && get(memberPath(leagueId, request.auth.uid)).data.status == 'active';
+    }
+
+    function canAccessLeagueData(leagueId) {
+      return activeMember(leagueId) || isAppAdmin();
     }
 
     function stringLen(value, max) {
@@ -63,6 +97,42 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAppAdmin();
+      allow create, update: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['email', 'displayName', 'lastSeenAt'])
+        && stringLen(request.resource.data.email, 254)
+        && stringLen(request.resource.data.displayName, 80)
+        && stringLen(request.resource.data.lastSeenAt, 40);
+      allow delete: if false;
+    }
+
+    match /appAdmins/{uid} {
+      allow read: if isSelf(uid) || isAppAdmin();
+      allow create: if isSuperAdmin()
+        && request.resource.data.role == 'appAdmin'
+        && request.resource.data.keys().hasOnly([
+          'role', 'email', 'displayName', 'grantedAt', 'grantedBy'
+        ])
+        && stringLen(request.resource.data.email, 254)
+        && stringLen(request.resource.data.displayName, 80)
+        && stringLen(request.resource.data.grantedAt, 40)
+        && stringLen(request.resource.data.grantedBy, 128)
+        && request.resource.data.grantedBy == request.auth.uid;
+      allow update: if isSuperAdmin()
+        && resource.data.role == 'appAdmin'
+        && request.resource.data.role == 'appAdmin'
+        && request.resource.data.keys().hasOnly([
+          'role', 'email', 'displayName', 'grantedAt', 'grantedBy'
+        ])
+        && stringLen(request.resource.data.email, 254)
+        && stringLen(request.resource.data.displayName, 80)
+        && stringLen(request.resource.data.grantedAt, 40)
+        && stringLen(request.resource.data.grantedBy, 128);
+      allow delete: if isSuperAdmin()
+        && resource.data.role == 'appAdmin';
+    }
+
     match /leagues/{leagueId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -74,10 +144,21 @@ service cloud.firestore {
         && stringLen(request.resource.data.adminDisplayName, 80)
         && stringLen(request.resource.data.adminEmail, 254)
         && stringLen(request.resource.data.createdAt, 40);
-      allow update: if leagueAdmin(leagueId)
+      allow update: if (
+        leagueAdmin(leagueId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['logo', 'banner'])
         && (!('logo' in request.resource.data) || imageRefOrNull(request.resource.data.logo))
-        && (!('banner' in request.resource.data) || imageRefOrNull(request.resource.data.banner));
+        && (!('banner' in request.resource.data) || imageRefOrNull(request.resource.data.banner))
+      ) || (
+        isAppAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'adminUid', 'adminDisplayName', 'adminEmail'
+        ])
+        && stringLen(request.resource.data.adminUid, 128)
+        && request.resource.data.adminUid.size() > 0
+        && stringLen(request.resource.data.adminDisplayName, 80)
+        && stringLen(request.resource.data.adminEmail, 254)
+      );
       allow delete: if false;
 
       match /members/{uid} {
@@ -105,16 +186,16 @@ service cloud.firestore {
           );
 
         allow update: if leagueAdmin(leagueId)
-          && request.resource.data.role == resource.data.role
           && request.resource.data.email == resource.data.email
           && request.resource.data.displayName == resource.data.displayName
+          && request.resource.data.role in ['admin', 'member']
           && request.resource.data.status in ['active', 'rejected', 'pending'];
 
         allow delete: if leagueAdmin(leagueId);
       }
 
       match /roster/{docId} {
-        allow read: if activeMember(leagueId);
+        allow read: if canAccessLeagueData(leagueId);
         // Allow create during league bootstrap (creator is admin after batch).
         allow create, update: if docId == 'current'
           && request.resource.data.keys().hasOnly(['tables', 'updatedAt', 'revision'])
@@ -122,7 +203,7 @@ service cloud.firestore {
           && request.resource.data.revision >= 0
           && stringLen(request.resource.data.updatedAt, 40)
           && (
-            activeMember(leagueId)
+            canAccessLeagueData(leagueId)
             || (
               signedIn()
               && leagueDocAfter(leagueId).adminUid == request.auth.uid
@@ -132,8 +213,8 @@ service cloud.firestore {
       }
 
       match /matches/{matchId} {
-        allow read: if activeMember(leagueId);
-        allow create, update: if activeMember(leagueId)
+        allow read: if canAccessLeagueData(leagueId);
+        allow create, update: if canAccessLeagueData(leagueId)
           && request.resource.data.keys().hasOnly([
             'tables', 'updatedAt', 'revision', 'updatedByUid'
           ])
@@ -142,7 +223,7 @@ service cloud.firestore {
           && request.resource.data.revision >= 0
           && stringLen(request.resource.data.updatedAt, 40)
           && stringLen(matchId, 80);
-        allow delete: if activeMember(leagueId);
+        allow delete: if canAccessLeagueData(leagueId);
       }
     }
   }

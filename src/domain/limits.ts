@@ -8,6 +8,7 @@ export const MAX_NOTES = 500;
 export const MAX_MATCH_LABEL = 40;
 export const MAX_MATCH_LABELS = 8;
 export const MAX_EMAIL = 254;
+export const MAX_AUTH_UID = 128;
 export const MAX_IMAGE_URL = 2048;
 export const MAX_STORAGE_PATH = 512;
 export const MAX_IMAGE_CONTENT_TYPE = 100;

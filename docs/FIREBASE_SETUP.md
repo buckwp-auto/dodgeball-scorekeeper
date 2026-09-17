@@ -16,7 +16,7 @@ Related: [`firestore.rules`](../firestore.rules), [`.env.example`](../.env.examp
 | Cloud Firestore | Leagues, members, roster, matches, rate limits |
 | App Check (reCAPTCHA) | Reduce abuse of the public web API key |
 | Web app config → Vite env | Client can talk to Firebase |
-| Deployed `firestore.rules` | Auth, membership, string limits, 100 writes/hour, admin-only league logo/banner |
+| Deployed `firestore.rules` | Auth, membership, string limits, 100 writes/hour, admin-only league logo/banner, app admin / super admin |
 
 You do **not** need Cloud Functions, Cloud Storage, or Blaze billing for the MVP. League logo/banner are optional https URLs on `LeagueMeta` (admin update only).
 
@@ -82,14 +82,16 @@ const firebaseConfig = {
 3. Pick a region close to users (e.g. `nam5` / `us-central1`) — **region cannot be changed later**.
 4. Create.
 
-Collections are created automatically on first write. Expected shape from the plan (no manual console seeding required):
+Collections are created automatically on first write. Expected shape from the plan (no manual console seeding required except the first **super admin** — see [§12](#12-super-admin-bootstrap)):
 
 ```
 leagues/{leagueId}                          # directory metadata
 leagues/{leagueId}/roster/current           # Team / Player / TeamPlayer
 leagues/{leagueId}/matches/{matchId}        # match-scoped tables
-leagues/{leagueId}/members/{uid}            # pending | active | rejected
+leagues/{leagueId}/members/{uid}            # pending | active | rejected; role admin | member
 rateLimits/{uid}/hours/{yyyyMMddHH}         # write quota counter
+users/{uid}                                 # signed-in profile (self-write; app admins can list)
+appAdmins/{uid}                             # role: superAdmin (console) | appAdmin (super admin)
 ```
 
 Optional: in **Firestore → Rules**, paste a temporary deny-all until the app’s `firestore.rules` is deployed:
@@ -159,10 +161,13 @@ Confirm the deployed rules match the plan before inviting real users:
 
 - [ ] **No unauthenticated writes** (and no public writes to league data)
 - [ ] **League metadata** readable by any signed-in user (directory)
-- [ ] **League logo/banner** updatable only by admin (`logo` / `banner` ImageRef or null; identity fields unchanged)
-- [ ] **Roster + matches** read/write only if `members/{uid}.status == 'active'`
+- [ ] **League logo/banner** updatable only by a league admin (`logo` / `banner` ImageRef or null; identity fields unchanged)
+- [ ] **Roster + matches** read/write only if `members/{uid}.status == 'active'` **or** the caller is an app admin
 - [ ] Users can create **only their own** member doc as `pending` (cannot set `active` / `admin` themselves)
-- [ ] Only **adminUid** can approve/reject members
+- [ ] League admin (`adminUid`, active `members.role == 'admin'`, or app admin) can approve/reject members and change `role`
+- [ ] App admin may transfer league `adminUid` / owner display fields
+- [ ] `users/{uid}`: self create/update; app admins may read all
+- [ ] `appAdmins/{uid}`: client can create/update/delete **only** `role: 'appAdmin'` and **only** as super admin; `superAdmin` docs are console-only
 - [ ] String length caps (league/team/player names, notes, etc.)
 - [ ] Payload / array sanity checks on roster & match docs
 - [ ] Each mutating batch increments `rateLimits/{uid}/hours/{yyyyMMddHH}` and rejects when `count >= 100`
@@ -256,6 +261,29 @@ Custom event parameters show in Realtime immediately. For Explorations / standar
 
 ---
 
+## 12. Super admin bootstrap
+
+The web app **cannot** create a `superAdmin` document. Seed it once in the Firebase console (or a one-off Admin SDK script). Intended first super admin: `william.parker.buck@gmail.com`.
+
+1. Sign in to the app once with that Google account so Firebase Auth creates the user.
+2. Firebase Console → **Authentication → Users** → copy the **User UID**.
+3. **Firestore → Data → Start collection** `appAdmins` (if needed) → document ID = that UID, fields:
+
+   | Field | Value |
+   |-------|--------|
+   | `role` | `superAdmin` (string) |
+   | `email` | `william.parker.buck@gmail.com` |
+   | `displayName` | (the Google display name, or `Will`) |
+   | `grantedAt` | ISO timestamp, e.g. `2026-09-14T00:00:00.000Z` |
+   | `grantedBy` | `console` |
+
+4. Deploy rules if you have not already: `firebase deploy --only firestore:rules`.
+5. Refresh the app. The **App admin** drawer link should appear; **Operators** is the super-admin tab for promoting or kicking **app** admins.
+
+Do **not** put the email in `firestore.rules`. Later super admins are also console (or Admin SDK) only — the client can only grant `role: 'appAdmin'`.
+
+---
+
 ## Out of scope for this setup
 
 - Firebase Hosting (GH Pages remains the static host)
@@ -276,3 +304,4 @@ Custom event parameters show in Realtime immediately. For Explorations / standar
 | App Check | App Check → Apps / APIs |
 | Usage | Project settings → Usage and billing |
 | Analytics | Project settings → Integrations → Google Analytics |
+| Super admin | Firestore → `appAdmins/{uid}` (`role: superAdmin`) |

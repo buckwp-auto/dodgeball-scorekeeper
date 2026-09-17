@@ -22,6 +22,9 @@ import { GamePage } from './pages/GamePage';
 import { GameEventsPage } from './pages/GameEventsPage';
 import { MatchesPage } from './pages/MatchesPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { AppAdminPage } from './pages/AppAdminPage';
+import { AppAdminLeaguePage } from './pages/AppAdminLeaguePage';
+import { AppOperatorsPage } from './pages/AppOperatorsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { StatsPage } from './pages/StatsPage';
 import { PlayerPage } from './pages/PlayerPage';
@@ -33,6 +36,7 @@ import type { OnboardingAnchor } from './domain/onboarding';
 import { useAnalyticsPageViews } from './hooks/useAnalyticsPageViews';
 import { DatabaseProvider } from './state/DatabaseContext';
 import { AuthProvider } from './state/AuthContext';
+import { AppRoleProvider } from './state/AppRoleContext';
 import { LeagueProvider } from './state/LeagueContext';
 import { OnboardingProvider } from './state/OnboardingContext';
 import { GameTrackingTourProvider } from './state/GameTrackingTourContext';
@@ -48,6 +52,7 @@ import { ColorModeToggle } from './components/ColorModeToggle';
 import { ImportedMatchStatsGuard } from './components/ImportedMatchStatsGuard';
 import { MadeByFooter } from './components/MadeByFooter';
 import { ResumeScoringNavItem } from './components/ResumeScoringButton';
+import { useAppRole } from './state/AppRoleContext';
 
 const drawerWidth = 200;
 
@@ -64,10 +69,18 @@ const navItems: { to: string; label: string; onboarding?: OnboardingAnchor }[] =
 
 function AppNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
+  const { isAppAdmin } = useAppRole();
+  const items = isAppAdmin
+    ? [
+        ...navItems.slice(0, 6),
+        { to: '/admin', label: 'App admin' },
+        ...navItems.slice(6),
+      ]
+    : navItems;
 
   return (
     <List disablePadding>
-      {navItems.map((item) => {
+      {items.map((item) => {
         const selected =
           item.to === '/'
             ? location.pathname === '/'
@@ -80,7 +93,7 @@ function AppNav({ onNavigate }: { onNavigate?: () => void }) {
             selected={selected}
             onClick={onNavigate}
             data-onboarding={item.onboarding}
-            className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}`}
+            className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}${item.to === '/admin' ? ' sk-app-admin-nav' : ''}`}
             sx={{ py: 0.75 }}
           >
             <ListItemText
@@ -215,6 +228,12 @@ function AppShell() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/highlights" element={<HighlightsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/admin" element={<AppAdminPage />} />
+          <Route path="/admin/operators" element={<AppOperatorsPage />} />
+          <Route
+            path="/admin/leagues/:leagueId"
+            element={<AppAdminLeaguePage />}
+          />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/history" element={<HistoryPage />} />
         </Routes>
@@ -234,19 +253,21 @@ export function App() {
 
   return (
     <AuthProvider>
-      <LeagueProvider>
-        <DatabaseProvider>
-          <OnboardingProvider>
-            <GameTrackingTourProvider>
-              <YoutubePopoutProvider>
-                <TrackGameImmersiveProvider>
-                  <AppShell />
-                </TrackGameImmersiveProvider>
-              </YoutubePopoutProvider>
-            </GameTrackingTourProvider>
-          </OnboardingProvider>
-        </DatabaseProvider>
-      </LeagueProvider>
+      <AppRoleProvider>
+        <LeagueProvider>
+          <DatabaseProvider>
+            <OnboardingProvider>
+              <GameTrackingTourProvider>
+                <YoutubePopoutProvider>
+                  <TrackGameImmersiveProvider>
+                    <AppShell />
+                  </TrackGameImmersiveProvider>
+                </YoutubePopoutProvider>
+              </GameTrackingTourProvider>
+            </OnboardingProvider>
+          </DatabaseProvider>
+        </LeagueProvider>
+      </AppRoleProvider>
     </AuthProvider>
   );
 }

@@ -1,5 +1,8 @@
 import { Box, Button, Chip, Stack, Typography } from '@mui/material';
+import { isOperatingAsAppAdmin } from '../domain/appRoles';
 import { useCloudSyncStatus } from '../hooks/useCloudSyncStatus';
+import { useAppRole } from '../state/AppRoleContext';
+import { useLeague } from '../state/LeagueContext';
 
 export function CloudSyncBar() {
   const {
@@ -13,6 +16,14 @@ export function CloudSyncBar() {
     syncError,
     saveNow,
   } = useCloudSyncStatus();
+  const { isAppAdmin } = useAppRole();
+  const { activeLeagueId, memberships } = useLeague();
+  const showOperatorChip = isOperatingAsAppAdmin({
+    isAppAdmin,
+    membershipStatus: activeLeagueId
+      ? memberships[activeLeagueId]?.status
+      : null,
+  });
 
   const isCloudPill = leaguePillKind === 'cloud';
 
@@ -57,6 +68,21 @@ export function CloudSyncBar() {
                 whiteSpace: 'nowrap',
                 display: 'block',
               },
+            }}
+          />
+        ) : null}
+        {showOperatorChip ? (
+          <Chip
+            size="small"
+            color="secondary"
+            variant="outlined"
+            label="App admin"
+            className="sk-app-admin-operator-chip"
+            sx={{
+              width: '100%',
+              height: 24,
+              fontSize: '0.7rem',
+              justifyContent: 'flex-start',
             }}
           />
         ) : null}

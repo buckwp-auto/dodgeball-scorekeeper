@@ -20,9 +20,11 @@ import type {
   CloudRevisions,
   LeagueMember,
   LeagueMeta,
+  MemberRole,
   SyncStatus,
 } from '../cloud/leagueTypes';
 import type { ImageRef } from '../domain/imageRef';
+import { canOpenLeagueAsOperator } from '../domain/appRoles';
 import {
   CLOUD_FLUSH_IDLE_MS,
   CLOUD_POLL_MS,
@@ -30,6 +32,7 @@ import {
 import type { DatabaseDto } from '../domain/types';
 import { canDeleteMatchGame } from '../domain/matchPermissions';
 import { useAuth } from './AuthContext';
+import { useAppRole } from './AppRoleContext';
 
 const ACTIVE_LEAGUE_KEY = 'SCOREKEEPER_ACTIVE_LEAGUE';
 
@@ -53,6 +56,14 @@ type LeagueContextValue = {
   requestJoin: (leagueId: string) => Promise<void>;
   approveMember: (leagueId: string, uid: string) => Promise<void>;
   rejectMember: (leagueId: string, uid: string) => Promise<void>;
+  setMemberRole: (
+    leagueId: string,
+    uid: string,
+    role: MemberRole,
+  ) => Promise<void>;
+  removeMember: (leagueId: string, uid: string) => Promise<void>;
+  transferLeagueOwner: (leagueId: string, uid: string) => Promise<void>;
+  loadLeagueMembers: (leagueId: string) => Promise<LeagueMember[]>;
   updateLeagueImages: (images: {
     logo?: ImageRef | null;
     banner?: ImageRef | null;
@@ -135,6 +146,7 @@ function hasDirtyChanges(plan: FlushPlan): boolean {
 
 export function LeagueProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { isAppAdmin, loading: appRoleLoading } = useAppRole();
   const [leagues, setLeagues] = useState<LeagueMeta[]>([]);
   const [memberships, setMemberships] = useState<
     Record<string, LeagueMember | null>
@@ -201,7 +213,11 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
             league.id,
             user.uid,
           );
-          if (league.adminUid === user.uid) {
+          const membership = nextMemberships[league.id];
+          const canListMembers =
+            league.adminUid === user.uid ||
+            (membership?.status === 'active' && membership.role === 'admin');
+          if (canListMembers) {
             nextMembers[league.id] = await cloud.api.listMembers(
               cloud.db,
               league.id,
@@ -271,6 +287,44 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     },
     [user, refreshDirectory],
   );
+
+  const setMemberRole = useCallback(
+    async (leagueId: string, uid: string, role: MemberRole) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.api.setMemberRole(cloud.db, user, leagueId, uid, role);
+      await refreshDirectory();
+    },
+    [user, refreshDirectory],
+  );
+
+  const removeMember = useCallback(
+    async (leagueId: string, uid: string) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.api.removeMember(cloud.db, user, leagueId, uid);
+      await refreshDirectory();
+    },
+    [user, refreshDirectory],
+  );
+
+  const transferLeagueOwner = useCallback(
+    async (leagueId: string, uid: string) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.api.transferLeagueOwner(cloud.db, user, leagueId, uid);
+      await refreshDirectory();
+    },
+    [user, refreshDirectory],
+  );
+
+  const loadLeagueMembers = useCallback(async (leagueId: string) => {
+    const cloud = await loadCloud();
+    if (!cloud) return [];
+    const members = await cloud.api.listMembers(cloud.db, leagueId);
+    setMembersByLeague((prev) => ({ ...prev, [leagueId]: members }));
+    return members;
+  }, []);
 
   const updateLeagueImages = useCallback(
     async (images: { logo?: ImageRef | null; banner?: ImageRef | null }) => {
@@ -401,13 +455,14 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const canOverrideActiveLeague = useMemo(() => {
     if (!user || !activeLeagueId) return false;
+    if (isAppAdmin) return true;
     const league = leagues.find((row) => row.id === activeLeagueId);
     const membership = memberships[activeLeagueId];
     return (
       league?.adminUid === user.uid ||
       (membership?.status === 'active' && membership.role === 'admin')
     );
-  }, [user, activeLeagueId, leagues, memberships]);
+  }, [user, activeLeagueId, leagues, memberships, isAppAdmin]);
 
   const canDeleteMatchesAndGames = !activeLeagueId || canOverrideActiveLeague;
 
@@ -431,7 +486,12 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         leagueId,
         user.uid,
       );
-      if (membership?.status !== 'active') {
+      if (
+        !canOpenLeagueAsOperator({
+          membershipStatus: membership?.status,
+          isAppAdmin,
+        })
+      ) {
         throw new Error('You must be an approved member to open this league');
       }
       clearFlushTimer();
@@ -451,7 +511,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       );
       return data;
     },
-    [user, markClean],
+    [user, markClean, isAppAdmin],
   );
 
   const leaveLeague = useCallback(async () => {
@@ -542,20 +602,37 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   }, [user, activeLeagueId]);
 
   // Auto-open the last league after sign-in when membership is still active
+  // (or the signed-in user is an app admin).
   useEffect(() => {
     if (!user || activeLeagueId || autoOpenAttemptedRef.current) return;
-    if (!directoryReady || refreshing) return;
+    if (!directoryReady || refreshing || appRoleLoading) return;
     const storedId = loadStoredLeagueId();
     autoOpenAttemptedRef.current = true;
     if (!storedId) return;
-    if (memberships[storedId]?.status !== 'active') return;
+    if (
+      !canOpenLeagueAsOperator({
+        membershipStatus: memberships[storedId]?.status,
+        isAppAdmin,
+      })
+    ) {
+      return;
+    }
     void openLeague(storedId).catch((error) => {
       console.error('auto-open league failed', error);
       setSyncError(
         error instanceof Error ? error.message : 'Failed to reopen last league',
       );
     });
-  }, [user, activeLeagueId, directoryReady, refreshing, memberships, openLeague]);
+  }, [
+    user,
+    activeLeagueId,
+    directoryReady,
+    refreshing,
+    appRoleLoading,
+    memberships,
+    isAppAdmin,
+    openLeague,
+  ]);
 
   const value = useMemo(
     () => ({
@@ -575,6 +652,10 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       requestJoin,
       approveMember,
       rejectMember,
+      setMemberRole,
+      removeMember,
+      transferLeagueOwner,
+      loadLeagueMembers,
       updateLeagueImages,
       openLeague,
       leaveLeague,
@@ -601,6 +682,10 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       requestJoin,
       approveMember,
       rejectMember,
+      setMemberRole,
+      removeMember,
+      transferLeagueOwner,
+      loadLeagueMembers,
       updateLeagueImages,
       openLeague,
       leaveLeague,
