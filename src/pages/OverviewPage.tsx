@@ -34,7 +34,9 @@ import {
   localLeagueLabelFromFilename,
 } from '../domain/localLeagueLabel';
 import { fetchSampleLeagueDatabase } from '../domain/sampleLeague';
+import { canOpenLeagueAsOperator } from '../domain/appRoles';
 import { useAuth } from '../state/AuthContext';
+import { useAppRole } from '../state/AppRoleContext';
 import { useDatabase } from '../state/DatabaseContext';
 import {
   getStoredActiveLeagueId,
@@ -54,6 +56,7 @@ export function OverviewPage() {
   const hasMatches = getMatches(data).length > 0;
   const { configured, user, loading: authLoading, signInWithGoogle, signOut } =
     useAuth();
+  const { isAppAdmin } = useAppRole();
   const {
     leagues,
     memberships,
@@ -351,7 +354,10 @@ export function OverviewPage() {
                     const membership = memberships[league.id];
                     const status = membership?.status;
                     const isActive = activeLeagueId === league.id;
-                    const canOpen = status === 'active';
+                    const canOpen = canOpenLeagueAsOperator({
+                      membershipStatus: status,
+                      isAppAdmin,
+                    });
                     return (
                       <TableRow key={league.id} selected={isActive}>
                         <TableCell>

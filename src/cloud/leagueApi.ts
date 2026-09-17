@@ -13,6 +13,7 @@ import {
   type ImageRef,
 } from '../domain/imageRef';
 import {
+  MAX_AUTH_UID,
   MAX_DISPLAY_NAME,
   MAX_EMAIL,
   MAX_LEAGUE_NAME,
@@ -34,6 +35,7 @@ import type {
   LeagueMember,
   LeagueMeta,
   MatchDoc,
+  MemberRole,
   MemberStatus,
   RosterDoc,
 } from './leagueTypes';
@@ -236,6 +238,80 @@ export async function setMemberStatus(
   batch.update(ref, {
     status,
     joinedAt: status === 'active' ? new Date().toISOString() : null,
+  });
+  await batch.commit();
+}
+
+export async function setMemberRole(
+  db: Firestore,
+  actor: User,
+  leagueId: string,
+  memberUid: string,
+  role: MemberRole,
+): Promise<void> {
+  const existing = await getMembership(db, leagueId, memberUid);
+  if (!existing) throw new Error('Member not found');
+
+  const batch = writeBatch(db);
+  await appendRateLimitToBatch(db, batch, actor.uid);
+  const patch: {
+    role: MemberRole;
+    status?: MemberStatus;
+    joinedAt?: string;
+  } = { role };
+  if (role === 'admin' && existing.status !== 'active') {
+    patch.status = 'active';
+    patch.joinedAt = new Date().toISOString();
+  }
+  batch.update(doc(db, 'leagues', leagueId, 'members', memberUid), patch);
+  await batch.commit();
+}
+
+export async function removeMember(
+  db: Firestore,
+  actor: User,
+  leagueId: string,
+  memberUid: string,
+): Promise<void> {
+  const leaguesSnap = await getDoc(doc(db, 'leagues', leagueId));
+  const ownerUid = leaguesSnap.exists()
+    ? String(leaguesSnap.data().adminUid ?? '')
+    : '';
+  if (ownerUid && ownerUid === memberUid) {
+    throw new Error('Transfer ownership before removing the league owner');
+  }
+
+  const batch = writeBatch(db);
+  await appendRateLimitToBatch(db, batch, actor.uid);
+  batch.delete(doc(db, 'leagues', leagueId, 'members', memberUid));
+  await batch.commit();
+}
+
+export async function transferLeagueOwner(
+  db: Firestore,
+  actor: User,
+  leagueId: string,
+  newOwnerUid: string,
+): Promise<void> {
+  const uid = newOwnerUid.trim();
+  assertMaxLength(uid, MAX_AUTH_UID, 'User id');
+  if (!uid) throw new Error('New owner required');
+
+  const member = await getMembership(db, leagueId, uid);
+  if (!member) throw new Error('New owner must already be a league member');
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+  await appendRateLimitToBatch(db, batch, actor.uid);
+  batch.update(doc(db, 'leagues', leagueId), {
+    adminUid: uid,
+    adminDisplayName: clampName(member.displayName, MAX_DISPLAY_NAME),
+    adminEmail: clampName(member.email, MAX_EMAIL),
+  });
+  batch.update(doc(db, 'leagues', leagueId, 'members', uid), {
+    role: 'admin' satisfies MemberRole,
+    status: 'active' satisfies MemberStatus,
+    joinedAt: member.joinedAt ?? now,
   });
   await batch.commit();
 }

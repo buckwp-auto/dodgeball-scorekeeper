@@ -11,7 +11,7 @@ Related: [FEATURES.md](./FEATURES.md) (product behavior), [FIREBASE_SETUP.md](./
 - **Golden CSV is a contract.** Under the default **Legacy** stat-credit policy, `tests/fixtures/*.golden.csv` must stay byte-identical. Display stats / credit views sit *on top* of the engine — they do not change CSV output.
 - **Limits are shared.** String lengths and write quotas in `src/domain/limits.ts` must stay in sync with [`firestore.rules`](../firestore.rules). Changing one without the other is a bug.
 - **UI is MUI, not custom CSS.** Layout and theming use `@mui/material` + `sx`. Global CSS is only for Playwright hooks, a few layout grids, and legacy `bw-*` search widgets.
-- **Admins mass-destroy; scorers undo their game.** League admins (and local-only mode) own league-wide destructive actions: delete teams/core roster players, delete matches, replace shared league data, change league settings. People entering a match or game must be able to **undo their own scoring work** without being admin: change who’s active in a game, remove a player they added by mistake from Match/Game add, roll back events when editing that game’s roster, undo/delete events they recorded. Do not require admin for those, and do not let match/game entry delete the core team roster or other mass-destroy paths.
+- **Admins mass-destroy; scorers undo their game.** League admins (and local-only mode) own league-wide destructive actions: delete teams/core roster players, delete matches, replace shared league data, change league settings. **App admins** are operators, not a league membership: they can open any cloud league and act as a league admin there without joining. **Super admin** (Firestore console only) can promote or kick app admins. People entering a match or game must be able to **undo their own scoring work** without being admin: change who’s active in a game, remove a player they added by mistake from Match/Game add, roll back events when editing that game’s roster, undo/delete events they recorded. Do not require admin for those, and do not let match/game entry delete the core team roster or other mass-destroy paths.
 
 ## Layout
 
@@ -20,7 +20,7 @@ Related: [FEATURES.md](./FEATURES.md) (product behavior), [FIREBASE_SETUP.md](./
 | `src/domain/` | Pure logic: database, events, elimination, hotkeys, statistics, limits |
 | `src/pages/` | Route screens (`OverviewPage`, `GamePage`, …) |
 | `src/components/` | Shared UI (`stats/`, `trackGame/`, `Ui.tsx`, …) |
-| `src/state/` | React context: `DatabaseContext`, `AuthContext`, `LeagueContext`, `ColorModeContext` |
+| `src/state/` | React context: `DatabaseContext`, `AuthContext`, `AppRoleContext`, `LeagueContext`, `ColorModeContext` |
 | `src/cloud/` | Firebase Auth / Firestore API (no UI) |
 | `src/hooks/` | Reusable hooks (`useDocumentHotkeys`, `useLastScoring`, …) |
 | `src/theme.ts` | MUI theme (`createAppTheme`, primary `#1565c0`, light/dark) |
@@ -128,7 +128,7 @@ Don’t invent `data-testid` unless a control can’t be reached by role + `sk-*
 - Firebase is **optional**. The app must work locally (session storage + `.scrkpr` import/export) with no env configured.
 - Client config is public; security is Auth + App Check + Firestore rules. Never commit `.env` / secrets.
 - New writable cloud fields: update **TypeScript types**, **`limits.ts`**, **`firestore.rules`**, and [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) if setup steps change.
-- Admin-only vs member-vs-creator permissions belong in domain helpers (e.g. `matchPermissions.ts`) *and* rules — UI hiding is not enough. Same split as above: admin for mass destroy; match creator / scorer for undoing the game they are managing.
+- Admin-only vs member-vs-creator permissions belong in domain helpers (e.g. `matchPermissions.ts`, `appRoles.ts`) *and* rules — UI hiding is not enough. Same split as above: admin for mass destroy; match creator / scorer for undoing the game they are managing. App admin / super admin live in `appAdmins/{uid}` (super admin docs are console-only; the client cannot mint `superAdmin`).
 - Rate limit: `WRITES_PER_HOUR` (100). Don’t add unbounded write loops on the client.
 
 ## Documentation

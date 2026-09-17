@@ -48,6 +48,7 @@ const HOW_TO_SECTIONS = [
     title: 'Cloud leagues (optional)',
     body:
       'When Firebase is configured, sign in on Overview to create or join a shared league. Admins approve members and can replace league data on import. ' +
+      'App admins (drawer App admin, when granted) can open any league and manage its members. Super admin is seeded in Firebase and can promote or kick app admins. ' +
       'Scorers can still undo their own game work without admin rights.',
   },
 ] as const;
@@ -71,7 +72,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Who can delete teams, matches, or the whole league?',
-    a: 'League admins (or local-only mode) handle destructive league actions. Match creators and scorers can delete games they manage and undo roster changes for that match.',
+    a: 'League admins (or local-only mode) handle destructive league actions. Match creators and scorers can delete games they manage and undo roster changes for that match. App admins can do the same for any cloud league; super admins also manage who is an app admin.',
   },
   {
     q: 'How do keyboard shortcuts work?',
