@@ -1,5 +1,6 @@
 import { newIdTimestamp } from './id';
 import { resolvePlayersPerSide } from './leagueSettings';
+import { isPlayerIneligibleForGame, isSoftExitedInGame } from './playerDeparture';
 import { linkPlayer } from './playerMatch';
 import type { DatabaseDto, Guid, MatchPlayerRow, MatchRow, PlayerRow } from './types';
 import { addPlayer, getPlayer, getPlayersForTeam } from './database';
@@ -309,6 +310,9 @@ function removeGameScopedRows(data: DatabaseDto, gameId: Guid): void {
   data.Tables.GameEventError = table(data, 'GameEventError').filter(
     (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
   );
+  data.Tables.GameEventPlayerDeparture = table(data, 'GameEventPlayerDeparture').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
   data.Tables.GameEventFinish = table(data, 'GameEventFinish').filter(
     (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
   );
@@ -416,9 +420,10 @@ export function countGameSidePlayers(
   const matchPlayers = new Map(
     getMatchPlayers(data, matchId).map((row) => [row.Id, row]),
   );
-  return getGamePlayers(data, gameId).filter(
-    (row) => matchPlayers.get(row.MatchPlayerId)?.TeamHome === teamHome,
-  ).length;
+  return getGamePlayers(data, gameId).filter((row) => {
+    if (matchPlayers.get(row.MatchPlayerId)?.TeamHome !== teamHome) return false;
+    return !isSoftExitedInGame(data, gameId, row.Id);
+  }).length;
 }
 
 export function canNavigateToGameEvents(
@@ -459,6 +464,9 @@ export function toggleGamePlayer(
   if (index >= 0) {
     rows.splice(index, 1);
     return true;
+  }
+  if (isPlayerIneligibleForGame(data, matchId, gameId, playerId)) {
+    return false;
   }
   const limit = resolvePlayersPerSide(data);
   if (countGameSidePlayers(data, matchId, gameId, matchPlayer.TeamHome) >= limit) {

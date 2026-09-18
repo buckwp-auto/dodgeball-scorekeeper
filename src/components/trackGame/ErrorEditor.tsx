@@ -1,12 +1,17 @@
 import { Box } from '@mui/material';
 import {
+  errorDraftIsDeparture,
   errorDraftIsMarker,
   errorDraftNeedsThrower,
   resolveErrorThrowingHome,
   type ErrorDraft,
   type GamePlayerInfo,
 } from '../../domain/gameEvents';
-import { sortGamePlayerInfos, formatEliminatedPlayerLabel } from '../../domain/gameElimination';
+import { formatEliminatedPlayerLabel } from '../../domain/gameElimination';
+import {
+  formatDepartedPlayerLabel,
+  sortGamePlayerInfosWithDepartures,
+} from '../../domain/playerDeparture';
 import {
   applyOtherOffenseHotkey,
   buildPermanentPlayerHotkeys,
@@ -32,6 +37,7 @@ export function ErrorEditor({
   homeTeamName,
   awayTeamName,
   eliminatedGamePlayerIds,
+  softExitedGamePlayerIds = new Set<string>(),
   eliminationOrder = new Map(),
   onChange,
 }: {
@@ -40,42 +46,54 @@ export function ErrorEditor({
   homeTeamName: string;
   awayTeamName: string;
   eliminatedGamePlayerIds: ReadonlySet<string>;
+  softExitedGamePlayerIds?: ReadonlySet<string>;
   eliminationOrder?: ReadonlyMap<string, number>;
   onChange: (draft: ErrorDraft) => void;
 }) {
   const hotkeys = buildPermanentPlayerHotkeys(players);
   const markerMode = errorDraftIsMarker(draft);
+  const departureMode = errorDraftIsDeparture(draft);
   const illegalBlock = errorDraftNeedsThrower(draft);
   const throwingHome = resolveErrorThrowingHome(draft, players);
   const offender = players.find((row) => row.gamePlayerId === draft.offenderGamePlayerId);
   const thrower = players.find((row) => row.gamePlayerId === draft.throwerGamePlayerId);
-  const showBothTeamsAsOffender = !markerMode && !illegalBlock && !draft.offenderGamePlayerId;
+  const showBothTeamsAsOffender =
+    !markerMode && !illegalBlock && !departureMode && !draft.offenderGamePlayerId;
   const pendingOffender =
-    !markerMode && !illegalBlock && !draft.offenderGamePlayerId;
+    !markerMode && !illegalBlock && !departureMode && !draft.offenderGamePlayerId;
   const pendingMistake =
     !markerMode &&
     draft.offenseId === null &&
+    draft.departureKind == null &&
     !draft.noBlockingStarted &&
     !draft.timeoutStarted &&
     !draft.timeoutEnded;
 
-  const homePlayers = sortGamePlayerInfos(
-    players.filter((row) => row.teamHome),
-    eliminatedGamePlayerIds,
-    eliminationOrder,
-  );
-  const awayPlayers = sortGamePlayerInfos(
-    players.filter((row) => !row.teamHome),
-    eliminatedGamePlayerIds,
-    eliminationOrder,
-  );
+  const sortPlayers = (rows: GamePlayerInfo[]) =>
+    sortGamePlayerInfosWithDepartures(
+      rows,
+      softExitedGamePlayerIds,
+      eliminatedGamePlayerIds,
+      eliminationOrder,
+    );
+  const homePlayers = sortPlayers(players.filter((row) => row.teamHome));
+  const awayPlayers = sortPlayers(players.filter((row) => !row.teamHome));
 
-  const isOut = (id: string) => eliminatedGamePlayerIds.has(id);
+  const isDeparted = (id: string) => softExitedGamePlayerIds.has(id);
+  const isOut = (id: string) => eliminatedGamePlayerIds.has(id) || isDeparted(id);
 
-  const label = (row: GamePlayerInfo) =>
-    isOut(row.gamePlayerId)
-      ? formatEliminatedPlayerLabel(row.playerName, eliminationOrder.get(row.gamePlayerId))
-      : row.playerName;
+  const label = (row: GamePlayerInfo) => {
+    if (isDeparted(row.gamePlayerId)) {
+      return formatDepartedPlayerLabel(row.playerName, draft.departureKind ?? undefined);
+    }
+    if (eliminatedGamePlayerIds.has(row.gamePlayerId)) {
+      return formatEliminatedPlayerLabel(
+        row.playerName,
+        eliminationOrder.get(row.gamePlayerId),
+      );
+    }
+    return row.playerName;
+  };
 
   const chipLabel = (row: GamePlayerInfo | undefined) =>
     row ? label(row) : '?';
@@ -100,18 +118,12 @@ export function ErrorEditor({
   const throwingPlayers =
     throwingHome === null
       ? []
-      : sortGamePlayerInfos(
-          players.filter((row) => row.teamHome === throwingHome),
-          eliminatedGamePlayerIds,
-        );
+      : sortPlayers(players.filter((row) => row.teamHome === throwingHome));
   const defendingHome = throwingHome === null ? null : !throwingHome;
   const defendingPlayers =
     defendingHome === null
       ? []
-      : sortGamePlayerInfos(
-          players.filter((row) => row.teamHome === defendingHome),
-          eliminatedGamePlayerIds,
-        );
+      : sortPlayers(players.filter((row) => row.teamHome === defendingHome));
 
   return (
     <EditorGrid>
@@ -126,6 +138,13 @@ export function ErrorEditor({
         ) : (
           <EditorLabel gridColumn="1 / 3">Thrower</EditorLabel>
         )
+      ) : departureMode ? (
+        <>
+          <EditorLabel gridColumn={showBothTeamsAsOffender ? undefined : offender?.teamHome ? '1' : '2'}>
+            Player
+          </EditorLabel>
+          {showBothTeamsAsOffender ? <Box /> : null}
+        </>
       ) : (
         <>
           <EditorLabel gridColumn={showBothTeamsAsOffender ? undefined : offender?.teamHome ? '1' : '2'}>
@@ -134,7 +153,7 @@ export function ErrorEditor({
           {showBothTeamsAsOffender ? <Box /> : null}
         </>
       )}
-      <EditorLabel>{markerMode ? '' : 'Mistake'}</EditorLabel>
+      <EditorLabel>{markerMode ? '' : departureMode ? 'Reason' : 'Mistake'}</EditorLabel>
 
       {markerMode ? null : illegalBlock && !showIllegalBlockSides ? (
         <>
@@ -278,7 +297,7 @@ export function ErrorEditor({
         </>
       ) : null}
 
-      {!markerMode && !illegalBlock && showBothTeamsAsOffender ? (
+      {!markerMode && !illegalBlock && (showBothTeamsAsOffender || departureMode) ? (
         <>
           <EditorChoiceStack pending={pendingOffender}>
             {homePlayers.map((row) => (
@@ -323,7 +342,9 @@ export function ErrorEditor({
         </>
       ) : null}
 
-      {!markerMode && !illegalBlock && !showBothTeamsAsOffender ? (
+      {!markerMode &&
+      !illegalBlock &&
+      (departureMode ? Boolean(draft.offenderGamePlayerId) : !showBothTeamsAsOffender) ? (
         <>
           {offender?.teamHome ? (
             <EditorChoiceStack pending={pendingOffender}>

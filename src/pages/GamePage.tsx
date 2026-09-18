@@ -25,8 +25,13 @@ import {
   computeGameLiveState,
   eliminatedPlayerIdsFromLive,
   eliminationOrderByPlayerId,
-  sortRosterWithEliminations,
 } from '../domain/gameElimination';
+import {
+  departedPlayerIdsFromSoftExit,
+  isPlayerIneligibleForGame,
+  matchIneligiblePlayerIds,
+  sortRosterWithDepartures,
+} from '../domain/playerDeparture';
 import {
   addPlayerToGameSide,
   canNavigateToGameEvents,
@@ -92,6 +97,22 @@ export function GamePage() {
         : new Map<string, number>(),
     [data, matchId, gameId, live],
   );
+  const { departedIds, departureKindByPlayerId } = useMemo(
+    () =>
+      live
+        ? departedPlayerIdsFromSoftExit(
+            data,
+            matchId,
+            gameId,
+            live.softExitedGamePlayerIds,
+          )
+        : { departedIds: new Set<string>(), departureKindByPlayerId: new Map() },
+    [data, matchId, gameId, live],
+  );
+  const ineligibleIds = useMemo(
+    () => matchIneligiblePlayerIds(data, matchId, gameId),
+    [data, matchId, gameId],
+  );
 
   const homeRosterRaw = useMemo(() => {
     if (!match) return [];
@@ -104,13 +125,25 @@ export function GamePage() {
   }, [data, match, gameId]);
 
   const homeRoster = useMemo(
-    () => sortRosterWithEliminations(homeRosterRaw, eliminatedIds, eliminationOrder),
-    [homeRosterRaw, eliminatedIds, eliminationOrder],
+    () =>
+      sortRosterWithDepartures(
+        homeRosterRaw,
+        departedIds,
+        eliminatedIds,
+        eliminationOrder,
+      ),
+    [homeRosterRaw, departedIds, eliminatedIds, eliminationOrder],
   );
 
   const awayRoster = useMemo(
-    () => sortRosterWithEliminations(awayRosterRaw, eliminatedIds, eliminationOrder),
-    [awayRosterRaw, eliminatedIds, eliminationOrder],
+    () =>
+      sortRosterWithDepartures(
+        awayRosterRaw,
+        departedIds,
+        eliminatedIds,
+        eliminationOrder,
+      ),
+    [awayRosterRaw, departedIds, eliminatedIds, eliminationOrder],
   );
 
   const rosterHotkeys = useMemo(
@@ -129,6 +162,11 @@ export function GamePage() {
         homeRosterRaw.find((row) => row.player.Id === playerId)?.player.Name ??
         awayRosterRaw.find((row) => row.player.Id === playerId)?.player.Name ??
         'This player';
+
+      if (isPlayerIneligibleForGame(data, matchId, gameId, playerId)) {
+        setLimitMessage(`${name} left this match and cannot be added to this game.`);
+        return;
+      }
 
       if (isPlayerInGame(data, gameId, playerId, matchId)) {
         const preview = previewRemoveGamePlayer(data, matchId, gameId, playerId);
@@ -342,6 +380,9 @@ export function GamePage() {
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
           eliminationOrder={eliminationOrder}
+          departedPlayerIds={departedIds}
+          departureKindByPlayerId={departureKindByPlayerId}
+          ineligiblePlayerIds={ineligibleIds}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{
@@ -362,6 +403,9 @@ export function GamePage() {
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
           eliminationOrder={eliminationOrder}
+          departedPlayerIds={departedIds}
+          departureKindByPlayerId={departureKindByPlayerId}
+          ineligiblePlayerIds={ineligibleIds}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{

@@ -11,6 +11,7 @@ import {
   getGameEventsNewestFirst,
   getGameEventType,
   getGamePlayerInfos,
+  loadDepartureDraftFromEvent,
   loadErrorDraftFromEvent,
   loadFinishDraftFromEvent,
   loadThrowDraftsFromEvent,
@@ -22,6 +23,7 @@ import {
   type GamePlayerInfo,
   type ThrowDraft,
 } from './gameEvents';
+import { departureKindLabels } from './playerDeparture';
 import { displayDeflectionResultLabel, displayThrowResultLabel } from './throwResults';
 import {
   toneForDeflectionResult,
@@ -254,6 +256,29 @@ export function buildTimelineEntry(
               kind: 'text',
               text: type === 'timeout' ? TIMEOUT_LABEL : TIMEOUT_ENDS_LABEL,
             },
+          ],
+        },
+      ],
+    };
+  }
+  if (type === 'playerDeparture') {
+    const draft = loadDepartureDraftFromEvent(data, event.Id);
+    const reasonLabel = draft.departureKind
+      ? departureKindLabels[draft.departureKind]
+      : 'Departure';
+    return {
+      ...base,
+      rows: [
+        {
+          role: 'error',
+          tone: 'error',
+          actions: [{ kind: 'error' }],
+          segments: [
+            {
+              kind: 'player',
+              player: playerRef(players, draft.offenderGamePlayerId),
+            },
+            { kind: 'text', text: ` — ${reasonLabel}` },
           ],
         },
       ],

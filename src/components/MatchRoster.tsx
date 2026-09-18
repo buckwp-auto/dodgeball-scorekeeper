@@ -15,6 +15,8 @@ import {
 import type { ImageRef } from '../domain/imageRef';
 import type { PlayerMatchCandidate } from '../domain/playerMatch';
 import { formatEliminatedPlayerLabel } from '../domain/gameElimination';
+import { formatDepartedPlayerLabel } from '../domain/playerDeparture';
+import { GameEventPlayerDepartureKind } from '../domain/statistics/constants';
 import { HotkeyBadge } from './HotkeyBadge';
 import { EntityAvatar } from './EntityAvatar';
 import { TextButton } from './Ui';
@@ -28,6 +30,9 @@ export function PlayerRoster({
   hotkeyForPlayerId,
   eliminatedPlayerIds,
   eliminationOrder,
+  departedPlayerIds,
+  departureKindByPlayerId,
+  ineligiblePlayerIds,
   onToggleSubstitute,
   onRemove,
   canRemovePlayer,
@@ -45,6 +50,9 @@ export function PlayerRoster({
   hotkeyForPlayerId?: (playerId: string) => string | null;
   eliminatedPlayerIds?: ReadonlySet<string>;
   eliminationOrder?: ReadonlyMap<string, number>;
+  departedPlayerIds?: ReadonlySet<string>;
+  departureKindByPlayerId?: ReadonlyMap<string, GameEventPlayerDepartureKind>;
+  ineligiblePlayerIds?: ReadonlySet<string>;
   onToggleSubstitute?: (playerId: string) => void;
   onRemove?: (playerId: string) => void;
   canRemovePlayer?: (playerId: string) => boolean;
@@ -82,6 +90,9 @@ export function PlayerRoster({
       </Stack>
       {players.map(({ player, selected, substitute }) => {
         const eliminated = eliminatedPlayerIds?.has(player.Id) ?? false;
+        const departed = departedPlayerIds?.has(player.Id) ?? false;
+        const ineligible = ineligiblePlayerIds?.has(player.Id) ?? false;
+        const dimmed = eliminated || departed || ineligible;
         return (
           <Stack
             key={player.Id}
@@ -90,8 +101,8 @@ export function PlayerRoster({
             className="sk-player"
             sx={{
               alignItems: 'center',
-              opacity: eliminated ? 0.5 : 1,
-              order: eliminated ? 2 : 1,
+              opacity: dimmed ? 0.5 : 1,
+              order: dimmed ? 2 : 1,
             }}
           >
             <Typography aria-hidden>{selected ? '■' : '□'}</Typography>
@@ -99,12 +110,19 @@ export function PlayerRoster({
             <EntityAvatar name={player.Name} image={player.Image} size={24} />
             <Box sx={{ flex: 1 }}>
               <TextButton expand onClick={() => onToggle(player.Id)}>
-                {eliminated
-                  ? formatEliminatedPlayerLabel(
+                {departed
+                  ? formatDepartedPlayerLabel(
                       player.Name,
-                      eliminationOrder?.get(player.Id),
+                      departureKindByPlayerId?.get(player.Id),
                     )
-                  : player.Name}
+                  : ineligible
+                    ? `${player.Name} (left match)`
+                    : eliminated
+                      ? formatEliminatedPlayerLabel(
+                          player.Name,
+                          eliminationOrder?.get(player.Id),
+                        )
+                      : player.Name}
               </TextButton>
             </Box>
             {onToggleSubstitute && selected ? (

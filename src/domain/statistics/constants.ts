@@ -70,6 +70,14 @@ export enum GameEventTimeoutKind {
   End = 2,
 }
 
+/** Card / injury reason on `GameEventPlayerDeparture`. */
+export enum GameEventPlayerDepartureKind {
+  Yellow = 1,
+  SecondYellow = 2,
+  Red = 3,
+  Injury = 4,
+}
+
 export function invertCompetitionOutcome(
   outcome: ECompetitionOutcome,
 ): ECompetitionOutcome {
