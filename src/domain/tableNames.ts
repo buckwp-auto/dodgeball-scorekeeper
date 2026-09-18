@@ -6,6 +6,7 @@ export const ENTITY_TABLE_NAMES = [
   'GameEventError',
   'GameEventFinish',
   'GameEventNoBlocking',
+  'GameEventPlayerDeparture',
   'GameEventStart',
   'GameEventThrow',
   'GameEventTimeout',

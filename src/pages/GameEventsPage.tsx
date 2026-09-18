@@ -105,7 +105,12 @@ import { TrackGameHotkeyHints } from '../components/trackGame/TrackGameHotkeyHin
 type TabKey = TrackGameTab;
 
 function editorTabForEventType(type: GameEventType | null): TabKey | 'start' | null {
-  if (type === 'noBlocking' || type === 'timeout' || type === 'timeoutEnd') {
+  if (
+    type === 'noBlocking' ||
+    type === 'timeout' ||
+    type === 'timeoutEnd' ||
+    type === 'playerDeparture'
+  ) {
     return 'error';
   }
   if (type === 'start') return 'start';
@@ -663,7 +668,10 @@ export function GameEventsPage() {
     const rawType =
       lockedEventType && lockedEventType !== 'start' ? lockedEventType : activeTab;
     const type =
-      rawType === 'noBlocking' || rawType === 'timeout' || rawType === 'timeoutEnd'
+      rawType === 'noBlocking' ||
+      rawType === 'timeout' ||
+      rawType === 'timeoutEnd' ||
+      rawType === 'playerDeparture'
         ? 'error'
         : rawType;
     setActiveTab(type);
@@ -684,7 +692,10 @@ export function GameEventsPage() {
     const type = getGameEventType(data, eventId);
     if (type && type !== 'start') {
       setActiveTab(
-        type === 'noBlocking' || type === 'timeout' || type === 'timeoutEnd'
+        type === 'noBlocking' ||
+          type === 'timeout' ||
+          type === 'timeoutEnd' ||
+          type === 'playerDeparture'
           ? 'error'
           : type,
       );
@@ -894,7 +905,13 @@ export function GameEventsPage() {
         }
         const hotkeys = buildPermanentPlayerHotkeys(players);
         const gamePlayerId = findGamePlayerIdByHotkey(hotkeys, key);
-        if (!gamePlayerId || live.eliminatedGamePlayerIds.has(gamePlayerId)) return;
+        if (
+          !gamePlayerId ||
+          live.eliminatedGamePlayerIds.has(gamePlayerId) ||
+          live.softExitedGamePlayerIds.has(gamePlayerId)
+        ) {
+          return;
+        }
         const next = applyPlayerHotkeyToErrorDraft(errorDraft, players, key);
         if (next) setErrorDraft(next);
       }
@@ -1355,6 +1372,7 @@ export function GameEventsPage() {
                 awayTeamName={awayTeam?.Name ?? 'Away'}
                 liveElimination={{
                   eliminatedGamePlayerIds: live.eliminatedGamePlayerIds,
+                  softExitedGamePlayerIds: live.softExitedGamePlayerIds,
                   eliminationOrder: live.eliminationOrder,
                 }}
                 onChange={updateThrowDrafts}
@@ -1367,6 +1385,7 @@ export function GameEventsPage() {
                 homeTeamName={homeTeam?.Name ?? 'Home'}
                 awayTeamName={awayTeam?.Name ?? 'Away'}
                 eliminatedGamePlayerIds={live.eliminatedGamePlayerIds}
+                softExitedGamePlayerIds={live.softExitedGamePlayerIds}
                 eliminationOrder={live.eliminationOrder}
                 onChange={setErrorDraft}
               />

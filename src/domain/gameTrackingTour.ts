@@ -336,7 +336,8 @@ export function gameHasOtherEvent(data: DatabaseDto, gameId: Guid): boolean {
       type === 'error' ||
       type === 'noBlocking' ||
       type === 'timeout' ||
-      type === 'timeoutEnd'
+      type === 'timeoutEnd' ||
+      type === 'playerDeparture'
     );
   });
 }

@@ -1,4 +1,5 @@
 import { DEFAULT_PLAYERS_PER_SIDE, resolvePlayersPerSide } from './leagueSettings';
+import { matchIneligiblePlayerIds } from './playerDeparture';
 import type { DatabaseDto, Guid } from './types';
 import {
   addGame,
@@ -53,9 +54,10 @@ export function autoSelectGameRoster(
     const subs = side.filter((row) => row.IsSubstitute);
     return [...starters, ...subs].slice(0, resolvePlayersPerSide(data));
   };
-  const playerIds = [...startersThenSubs(true), ...startersThenSubs(false)].map(
-    (row) => row.PlayerId,
-  );
+  const ineligible = matchIneligiblePlayerIds(data, matchId, gameId);
+  const playerIds = [...startersThenSubs(true), ...startersThenSubs(false)]
+    .map((row) => row.PlayerId)
+    .filter((playerId) => !ineligible.has(playerId));
 
   let changed = false;
   for (const playerId of playerIds) {

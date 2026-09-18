@@ -37,6 +37,7 @@ import {
   setMatchPlayerSubstitute,
   toggleMatchPlayer as toggleMatchPlayerOp,
 } from '../domain/matchGame';
+import { matchDepartedPlayerIds } from '../domain/playerDeparture';
 import {
   suggestLinkedPlayers,
   type PlayerMatchCandidate,
@@ -78,6 +79,14 @@ export function MatchPage() {
 
   const homeRoster = match ? getMatchSidePlayersWithSelection(data, match, true) : [];
   const awayRoster = match ? getMatchSidePlayersWithSelection(data, match, false) : [];
+  const matchDeparted = useMemo(
+    () => (match ? matchDepartedPlayerIds(data, matchId) : new Map()),
+    [data, match, matchId],
+  );
+  const departedPlayerIds = useMemo(
+    () => new Set(matchDeparted.keys()),
+    [matchDeparted],
+  );
   const rosterHotkeys = useMemo(
     () =>
       buildPermanentRosterHotkeys(
@@ -404,6 +413,8 @@ export function MatchPage() {
               Boolean(homeRoster.find((row) => row.player.Id === playerId)?.substitute),
             )
           }
+          departedPlayerIds={departedPlayerIds}
+          departureKindByPlayerId={matchDeparted}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{
@@ -428,6 +439,8 @@ export function MatchPage() {
               Boolean(awayRoster.find((row) => row.player.Id === playerId)?.substitute),
             )
           }
+          departedPlayerIds={departedPlayerIds}
+          departureKindByPlayerId={matchDeparted}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{

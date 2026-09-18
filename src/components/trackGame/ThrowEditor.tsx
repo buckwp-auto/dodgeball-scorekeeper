@@ -31,8 +31,11 @@ import {
 import {
   defaultCatchRecoveredId,
   formatEliminatedPlayerLabel,
-  sortGamePlayerInfos,
 } from '../../domain/gameElimination';
+import {
+  formatDepartedPlayerLabel,
+  sortGamePlayerInfosWithDepartures,
+} from '../../domain/playerDeparture';
 import { getThrowResultIcon } from '../../domain/throwResultIcons';
 import {
   EditorChoiceButton,
@@ -51,11 +54,13 @@ const TEAM_THROW_HELP =
 
 export type ThrowLiveElimination = {
   eliminatedGamePlayerIds: ReadonlySet<string>;
+  softExitedGamePlayerIds?: ReadonlySet<string>;
   eliminationOrder: ReadonlyMap<string, number>;
 };
 
 const EMPTY_ELIMINATION: ThrowLiveElimination = {
   eliminatedGamePlayerIds: new Set(),
+  softExitedGamePlayerIds: new Set(),
   eliminationOrder: new Map(),
 };
 
@@ -127,6 +132,7 @@ function withDefaultRecoveredIfNeeded(
       live.eliminatedGamePlayerIds,
       live.eliminationOrder,
       recoveryExcludedIds(draft),
+      live.softExitedGamePlayerIds ?? new Set(),
     ),
   };
 }
@@ -259,35 +265,44 @@ function SingleThrowEditor({
   section?: 'all' | 'players' | 'actions';
   throwLabel?: string;
 }) {
-  const { eliminatedGamePlayerIds, eliminationOrder } = liveElimination;
-  const homePlayers = sortGamePlayerInfos(
-    players.filter((row) => row.teamHome),
+  const {
     eliminatedGamePlayerIds,
+    softExitedGamePlayerIds = new Set<string>(),
     eliminationOrder,
-  );
-  const awayPlayers = sortGamePlayerInfos(
-    players.filter((row) => !row.teamHome),
-    eliminatedGamePlayerIds,
-    eliminationOrder,
-  );
+  } = liveElimination;
+  const sortPlayers = (rows: GamePlayerInfo[]) =>
+    sortGamePlayerInfosWithDepartures(
+      rows,
+      softExitedGamePlayerIds,
+      eliminatedGamePlayerIds,
+      eliminationOrder,
+    );
+  const homePlayers = sortPlayers(players.filter((row) => row.teamHome));
+  const awayPlayers = sortPlayers(players.filter((row) => !row.teamHome));
   const throwingHome = groupThrowingHome ?? true;
   const defendingHome = !throwingHome;
-  const throwingPlayers = sortGamePlayerInfos(
+  const throwingPlayers = sortPlayers(
     players.filter((row) => row.teamHome === throwingHome),
-    eliminatedGamePlayerIds,
-    eliminationOrder,
   );
-  const defendingPlayers = sortGamePlayerInfos(
+  const defendingPlayers = sortPlayers(
     players.filter((row) => row.teamHome === defendingHome),
-    eliminatedGamePlayerIds,
-    eliminationOrder,
   );
   const showTarget = groupThrowingHome !== null;
-  const isOut = (gamePlayerId: string) => eliminatedGamePlayerIds.has(gamePlayerId);
-  const playerLabel = (row: GamePlayerInfo): string =>
-    isOut(row.gamePlayerId)
-      ? formatEliminatedPlayerLabel(row.playerName, eliminationOrder.get(row.gamePlayerId))
-      : row.playerName;
+  const isDeparted = (gamePlayerId: string) => softExitedGamePlayerIds.has(gamePlayerId);
+  const isOut = (gamePlayerId: string) =>
+    eliminatedGamePlayerIds.has(gamePlayerId) || isDeparted(gamePlayerId);
+  const playerLabel = (row: GamePlayerInfo): string => {
+    if (isDeparted(row.gamePlayerId)) {
+      return formatDepartedPlayerLabel(row.playerName, undefined);
+    }
+    if (eliminatedGamePlayerIds.has(row.gamePlayerId)) {
+      return formatEliminatedPlayerLabel(
+        row.playerName,
+        eliminationOrder.get(row.gamePlayerId),
+      );
+    }
+    return row.playerName;
+  };
   const chipLabel = (pool: GamePlayerInfo[], gamePlayerId: string): string => {
     const row = pool.find((entry) => entry.gamePlayerId === gamePlayerId);
     return row ? playerLabel(row) : '?';
@@ -297,12 +312,10 @@ function SingleThrowEditor({
     draft.throwerGamePlayerId,
     ...draft.deflections.map((row) => row.receiverGamePlayerId),
   ]);
-  const targetCandidates = sortGamePlayerInfos(
+  const targetCandidates = sortPlayers(
     defendingPlayers.filter(
       (row) => !excludedFromTarget.has(row.gamePlayerId) || row.gamePlayerId === draft.targetGamePlayerId,
     ),
-    eliminatedGamePlayerIds,
-    eliminationOrder,
   );
 
   const pendingThrower = !draft.throwerGamePlayerId;

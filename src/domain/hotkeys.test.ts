@@ -199,9 +199,9 @@ describe('track game tab hotkeys', () => {
 });
 
 describe('other tab offense hotkeys', () => {
-  it('maps 1-6 to fixed offense choices in UI order', () => {
-    expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4', '5', '6']);
-    expect(otherOffenseUiOrder).toHaveLength(6);
+  it('maps 1-0 to fixed Other choices in UI order', () => {
+    expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+    expect(otherOffenseUiOrder).toHaveLength(10);
     expect(hotkeyForOtherOffenseIndex(0)).toBe('1');
     const choice2 = getOtherOffenseChoiceForKey('2');
     expect(choice2?.kind).toBe('offense');
@@ -211,6 +211,8 @@ describe('other tab offense hotkeys', () => {
     expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
     expect(getOtherOffenseChoiceForKey('5')?.kind).toBe('timeout');
     expect(getOtherOffenseChoiceForKey('6')?.kind).toBe('timeoutEnd');
+    expect(getOtherOffenseChoiceForKey('7')?.kind).toBe('departure');
+    expect(getOtherOffenseChoiceForKey('0')?.kind).toBe('departure');
   });
 
   it('leaves no digit free (tab switch uses / \' \\ instead)', () => {
@@ -252,6 +254,7 @@ describe('other tab offense hotkeys', () => {
       noBlockingStarted: true,
       timeoutStarted: false,
       timeoutEnded: false,
+      departureKind: null,
     });
     const cleared = applyOtherOffenseHotkey(started, noBlocking);
     expect(cleared.noBlockingStarted).toBe(false);
