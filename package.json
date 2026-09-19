@@ -9,13 +9,15 @@
     "dev": "vite",
     "prebuild": "node scripts/sync-sample-fixture.mjs",
     "build": "tsc -b && vite build && node scripts/postbuild-spa-fallback.mjs",
+    "typecheck": "tsc -b",
     "preview": "vite preview",
     "build:gh-pages": "GITHUB_PAGES=true GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-willbuck/dodgeball-score} npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:interop": "npm run test && playwright test tests/interop-fixtures.spec.ts"
+    "test:interop": "npm run test && playwright test tests/interop-fixtures.spec.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -34,6 +36,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.4.0",
+    "husky": "^9.1.7",
     "typescript": "~5.8.3",
     "vite": "^6.3.0",
     "vitest": "^4.1.10"
