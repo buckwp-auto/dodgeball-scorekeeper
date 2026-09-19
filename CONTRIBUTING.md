@@ -13,10 +13,13 @@ npm install
 npx playwright install chromium
 
 npm run dev          # http://127.0.0.1:5173/
+npm run typecheck    # TypeScript
 npm test             # Vitest
 npm run test:e2e     # Playwright
 npm run test:interop # golden CSV + fixture e2e
 ```
+
+`npm install` configures a Husky pre-commit hook that runs `npm run typecheck`.
 
 See the [README](README.md) for layout, GitHub Pages, and data keys. You do not need Firebase for local scoring; without env vars the app stays on session storage + `.scrkpr` import/export.
 
