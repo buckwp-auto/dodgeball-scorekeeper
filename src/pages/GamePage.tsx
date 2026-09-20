@@ -11,7 +11,6 @@ import { getTeam } from '../domain/database';
 import {
   previewRemoveGamePlayer,
   previewRemovePlayerFromMatch,
-  removeGamePlayerFromRoster,
   removeMatchSidePlayerConfirmMessage,
   removePlayerFromMatchSide,
 } from '../domain/gameEvents';
@@ -23,14 +22,19 @@ import { resolvePlayersPerSide } from '../domain/leagueSettings';
 import { autoSelectGameRoster } from '../domain/rosterAutoSelect';
 import {
   computeGameLiveState,
+  departedPlayerIdsFromLive,
+  departureKindByPlayerIdFromLive,
   eliminatedPlayerIdsFromLive,
   eliminationOrderByPlayerId,
   sortRosterWithEliminations,
 } from '../domain/gameElimination';
 import {
+  countNonDepartedGameSidePlayers,
+  getMatchIneligiblePlayerIds,
+} from '../domain/gameLineup';
+import {
   addPlayerToGameSide,
   canNavigateToGameEvents,
-  countGameSidePlayers,
   getGameName,
   getGameSidePlayersWithSelection,
   getMatchById,
@@ -85,6 +89,27 @@ export function GamePage() {
         : new Set<string>(),
     [data, matchId, gameId, live],
   );
+  const departedIds = useMemo(
+    () =>
+      live
+        ? departedPlayerIdsFromLive(data, matchId, gameId, live)
+        : new Set<string>(),
+    [data, matchId, gameId, live],
+  );
+  const departureKindByPlayerId = useMemo(
+    () =>
+      live
+        ? departureKindByPlayerIdFromLive(data, matchId, gameId, live)
+        : new Map(),
+    [data, matchId, gameId, live],
+  );
+  const matchIneligibleIds = useMemo(
+    () =>
+      matchId && gameId
+        ? getMatchIneligiblePlayerIds(data, matchId, gameId)
+        : new Set<string>(),
+    [data, matchId, gameId],
+  );
   const eliminationOrder = useMemo(
     () =>
       live
@@ -104,13 +129,25 @@ export function GamePage() {
   }, [data, match, gameId]);
 
   const homeRoster = useMemo(
-    () => sortRosterWithEliminations(homeRosterRaw, eliminatedIds, eliminationOrder),
-    [homeRosterRaw, eliminatedIds, eliminationOrder],
+    () =>
+      sortRosterWithEliminations(
+        homeRosterRaw,
+        eliminatedIds,
+        eliminationOrder,
+        departedIds,
+      ),
+    [homeRosterRaw, eliminatedIds, eliminationOrder, departedIds],
   );
 
   const awayRoster = useMemo(
-    () => sortRosterWithEliminations(awayRosterRaw, eliminatedIds, eliminationOrder),
-    [awayRosterRaw, eliminatedIds, eliminationOrder],
+    () =>
+      sortRosterWithEliminations(
+        awayRosterRaw,
+        eliminatedIds,
+        eliminationOrder,
+        departedIds,
+      ),
+    [awayRosterRaw, eliminatedIds, eliminationOrder, departedIds],
   );
 
   const rosterHotkeys = useMemo(
@@ -131,18 +168,17 @@ export function GamePage() {
         'This player';
 
       if (isPlayerInGame(data, gameId, playerId, matchId)) {
+        if (departedIds.has(playerId)) {
+          setLimitMessage(
+            `${name} already left this game — their events stay on the timeline. Optionally check a bench player (unchecked) as a replacement, or use Add player below.`,
+          );
+          return;
+        }
         const preview = previewRemoveGamePlayer(data, matchId, gameId, playerId);
         if (preview && preview.eventCount > 0) {
-          const plural = preview.eventCount === 1 ? '' : 's';
-          const ok = window.confirm(
-            `${name} appears in recorded events. Removing them will delete ${preview.eventCount} event${plural} from this game, back to the earliest event they were in. Continue?`,
+          setLimitMessage(
+            `Can't take ${name} off the roster after they've appeared in events — that erases the timeline. To bench them mid-game, record Injury / Yellow / Red / etc. on the Other tab, then optionally add a replacement here.`,
           );
-          if (!ok) return;
-          mutate((draft) => {
-            removeGamePlayerFromRoster(draft, matchId, gameId, playerId, {
-              rollbackEvents: true,
-            });
-          }, `Removed ${name} from the game roster.`);
           return;
         }
         mutate((draft) => {
@@ -151,17 +187,32 @@ export function GamePage() {
         return;
       }
 
-      const teamHome = homeRosterRaw.some((row) => row.player.Id === playerId);
-      const limit = resolvePlayersPerSide(data);
-      if (countGameSidePlayers(data, matchId, gameId, teamHome) >= limit) {
-        setLimitMessage(`Each team can have at most ${limit} players in a game.`);
+      if (matchIneligibleIds.has(playerId)) {
+        setLimitMessage(`${name} is out of this match and cannot join this game.`);
         return;
       }
-      mutate((draft) => {
-        toggleGamePlayerOp(draft, matchId, gameId, playerId);
-      }, '');
+
+      const teamHome = homeRosterRaw.some((row) => row.player.Id === playerId);
+      const limit = resolvePlayersPerSide(data);
+      const changed = mutate(
+        (draft) => toggleGamePlayerOp(draft, matchId, gameId, playerId),
+        '',
+      );
+      if (!changed) {
+        const occupied = countNonDepartedGameSidePlayers(
+          data,
+          matchId,
+          gameId,
+          teamHome,
+        );
+        setLimitMessage(
+          occupied >= limit
+            ? `Each team can have at most ${limit} active players in a game.`
+            : `${name} could not be added to this game.`,
+        );
+      }
     },
-    [awayRosterRaw, data, gameId, homeRosterRaw, matchId, mutate],
+    [awayRosterRaw, data, departedIds, gameId, homeRosterRaw, matchId, matchIneligibleIds, mutate],
   );
 
   const onPlayerHotkey = useCallback(
@@ -207,7 +258,7 @@ export function GamePage() {
     const name = (candidate?.playerName ?? (teamHome ? homeAddName : awayAddName)).trim();
     if (!name || !match) return;
     const limit = resolvePlayersPerSide(data);
-    const atLimit = countGameSidePlayers(data, matchId, gameId, teamHome) >= limit;
+    let addedToGame = false;
     mutate((draft) => {
       if (candidate?.sameTeam) {
         if (!isPlayerInMatch(draft, matchId, candidate.playerId)) {
@@ -217,7 +268,7 @@ export function GamePage() {
         } else if (asSub) {
           setMatchPlayerSubstitute(draft, matchId, candidate.playerId, true);
         }
-        toggleGamePlayerOp(draft, matchId, gameId, candidate.playerId);
+        addedToGame = toggleGamePlayerOp(draft, matchId, gameId, candidate.playerId);
         return candidate.playerName;
       }
       const player = addPlayerToGameSide(
@@ -229,6 +280,7 @@ export function GamePage() {
         asSub,
         candidate?.playerId,
       );
+      addedToGame = isPlayerInGame(draft, gameId, player.Id, matchId);
       return player.Name;
     }, (playerName) => `Added player (${playerName}) to game.`);
     if (teamHome) {
@@ -238,15 +290,17 @@ export function GamePage() {
       setAwayAddName('');
       setAwayAddAsSub(false);
     }
-    if (atLimit) {
+    if (!addedToGame) {
       setLimitMessage(
-        `Added to the match roster. Each team can have at most ${limit} players in a game.`,
+        `Added to the match roster, but this game already has ${limit} active players. Soft-exits free a slot — if someone just left, try checking them again.`,
       );
     }
   };
 
-  const canRemovePlayer = (playerId: string) =>
-    previewRemovePlayerFromMatch(data, matchId, playerId).canRemove;
+  const canRemovePlayer = (playerId: string) => {
+    if (departedIds.has(playerId)) return false;
+    return previewRemovePlayerFromMatch(data, matchId, playerId).canRemove;
+  };
 
   const removeSidePlayer = (playerId: string) => {
     const name =
@@ -281,8 +335,12 @@ export function GamePage() {
   const canTrack = canNavigateToGameEvents(data, matchId, gameId);
   const gameTitle = getGameName(data, matchId, gameId);
   const playersPerSide = resolvePlayersPerSide(data);
-  const homeSelected = homeRosterRaw.filter((row) => row.selected).length;
-  const awaySelected = awayRosterRaw.filter((row) => row.selected).length;
+  const homeSelected = homeRosterRaw.filter(
+    (row) => row.selected && !departedIds.has(row.player.Id),
+  ).length;
+  const awaySelected = awayRosterRaw.filter(
+    (row) => row.selected && !departedIds.has(row.player.Id),
+  ).length;
 
   return (
     <>
@@ -296,6 +354,14 @@ export function GamePage() {
             ? ` · Home ${live.activeHomeCount} / Away ${live.activeAwayCount} active`
             : ''}
       </Typography>
+      {departedIds.size > 0 ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {departedIds.size === 1 ? 'A player has' : `${departedIds.size} players have`}{' '}
+          left this game (still on the timeline/stats). Check an unchecked bench
+          player as a replacement, or use Add player — left players do not count
+          toward the {playersPerSide}-per-side limit.
+        </Alert>
+      ) : null}
       {limitMessage ? (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setLimitMessage(null)}>
           {limitMessage}
@@ -342,6 +408,9 @@ export function GamePage() {
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
           eliminationOrder={eliminationOrder}
+          departedPlayerIds={departedIds}
+          departureKindByPlayerId={departureKindByPlayerId}
+          matchIneligiblePlayerIds={matchIneligibleIds}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{
@@ -362,6 +431,9 @@ export function GamePage() {
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
           eliminatedPlayerIds={eliminatedIds}
           eliminationOrder={eliminationOrder}
+          departedPlayerIds={departedIds}
+          departureKindByPlayerId={departureKindByPlayerId}
+          matchIneligiblePlayerIds={matchIneligibleIds}
           onRemove={removeSidePlayer}
           canRemovePlayer={canRemovePlayer}
           addPlayer={{

@@ -79,6 +79,10 @@ export function extractMatchTables(
     data,
     'GameEventTimeout',
   ).filter((row) => gameEventIds.has(row.GameEventId));
+  const gameEventPlayerDepartures = tableRows<{ GameEventId: Guid }>(
+    data,
+    'GameEventPlayerDeparture',
+  ).filter((row) => gameEventIds.has(row.GameEventId));
   const gameEventFinishes = tableRows<{ GameEventId: Guid }>(
     data,
     'GameEventFinish',
@@ -113,6 +117,7 @@ export function extractMatchTables(
     GameEventError: structuredClone(gameEventErrors),
     GameEventNoBlocking: structuredClone(gameEventNoBlocking),
     GameEventTimeout: structuredClone(gameEventTimeouts),
+    GameEventPlayerDeparture: structuredClone(gameEventPlayerDepartures),
     GameEventFinish: structuredClone(gameEventFinishes),
     GameEventStart: structuredClone(gameEventStarts),
     Throw: structuredClone(throws),

@@ -14,7 +14,11 @@ import {
 } from '@mui/material';
 import type { ImageRef } from '../domain/imageRef';
 import type { PlayerMatchCandidate } from '../domain/playerMatch';
-import { formatEliminatedPlayerLabel } from '../domain/gameElimination';
+import {
+  formatDepartedPlayerLabel,
+  formatEliminatedPlayerLabel,
+} from '../domain/gameElimination';
+import type { GameEventPlayerDepartureKind } from '../domain/statistics/constants';
 import { HotkeyBadge } from './HotkeyBadge';
 import { EntityAvatar } from './EntityAvatar';
 import { TextButton } from './Ui';
@@ -28,6 +32,9 @@ export function PlayerRoster({
   hotkeyForPlayerId,
   eliminatedPlayerIds,
   eliminationOrder,
+  departedPlayerIds,
+  departureKindByPlayerId,
+  matchIneligiblePlayerIds,
   onToggleSubstitute,
   onRemove,
   canRemovePlayer,
@@ -45,6 +52,10 @@ export function PlayerRoster({
   hotkeyForPlayerId?: (playerId: string) => string | null;
   eliminatedPlayerIds?: ReadonlySet<string>;
   eliminationOrder?: ReadonlyMap<string, number>;
+  departedPlayerIds?: ReadonlySet<string>;
+  departureKindByPlayerId?: ReadonlyMap<string, GameEventPlayerDepartureKind>;
+  /** Soft-exited earlier in this match — cannot join later games. */
+  matchIneligiblePlayerIds?: ReadonlySet<string>;
   onToggleSubstitute?: (playerId: string) => void;
   onRemove?: (playerId: string) => void;
   canRemovePlayer?: (playerId: string) => boolean;
@@ -82,6 +93,23 @@ export function PlayerRoster({
       </Stack>
       {players.map(({ player, selected, substitute }) => {
         const eliminated = eliminatedPlayerIds?.has(player.Id) ?? false;
+        const departed = departedPlayerIds?.has(player.Id) ?? false;
+        const matchIneligible = matchIneligiblePlayerIds?.has(player.Id) ?? false;
+        const dimmed = eliminated || departed || matchIneligible;
+        const displayName = departed
+          ? formatDepartedPlayerLabel(
+              player.Name,
+              departureKindByPlayerId?.get(player.Id),
+            )
+          : matchIneligible
+            ? `${player.Name} (out of match)`
+            : eliminated
+              ? formatEliminatedPlayerLabel(
+                  player.Name,
+                  eliminationOrder?.get(player.Id),
+                )
+              : player.Name;
+        const toggle = () => onToggle(player.Id);
         return (
           <Stack
             key={player.Id}
@@ -90,24 +118,31 @@ export function PlayerRoster({
             className="sk-player"
             sx={{
               alignItems: 'center',
-              opacity: eliminated ? 0.5 : 1,
-              order: eliminated ? 2 : 1,
+              opacity: dimmed ? 0.5 : 1,
+              order: dimmed ? 2 : 1,
             }}
           >
-            <Typography aria-hidden>{selected ? '■' : '□'}</Typography>
+            <Checkbox
+              className="sk-player-check"
+              size="small"
+              checked={Boolean(selected || departed)}
+              indeterminate={departed}
+              onChange={toggle}
+              slotProps={{
+                input: {
+                  'aria-label': `${selected || departed ? 'Remove' : 'Add'} ${player.Name}`,
+                },
+              }}
+              sx={{ p: 0.5 }}
+            />
             <HotkeyBadge hotkey={hotkeyForPlayerId?.(player.Id) ?? null} />
             <EntityAvatar name={player.Name} image={player.Image} size={24} />
             <Box sx={{ flex: 1 }}>
-              <TextButton expand onClick={() => onToggle(player.Id)}>
-                {eliminated
-                  ? formatEliminatedPlayerLabel(
-                      player.Name,
-                      eliminationOrder?.get(player.Id),
-                    )
-                  : player.Name}
+              <TextButton expand onClick={toggle}>
+                {displayName}
               </TextButton>
             </Box>
-            {onToggleSubstitute && selected ? (
+            {onToggleSubstitute && selected && !departed ? (
               <Chip
                 size="small"
                 label="Sub"

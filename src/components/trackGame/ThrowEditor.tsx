@@ -31,6 +31,7 @@ import {
 import {
   defaultCatchRecoveredId,
   formatEliminatedPlayerLabel,
+  formatDepartedPlayerLabel,
   sortGamePlayerInfos,
 } from '../../domain/gameElimination';
 import { getThrowResultIcon } from '../../domain/throwResultIcons';
@@ -52,11 +53,15 @@ const TEAM_THROW_HELP =
 export type ThrowLiveElimination = {
   eliminatedGamePlayerIds: ReadonlySet<string>;
   eliminationOrder: ReadonlyMap<string, number>;
+  departedGamePlayerIds?: ReadonlySet<string>;
+  departureKindByGamePlayerId?: ReadonlyMap<string, import('../../domain/statistics/constants').GameEventPlayerDepartureKind>;
 };
 
 const EMPTY_ELIMINATION: ThrowLiveElimination = {
   eliminatedGamePlayerIds: new Set(),
   eliminationOrder: new Map(),
+  departedGamePlayerIds: new Set(),
+  departureKindByGamePlayerId: new Map(),
 };
 
 /**
@@ -127,6 +132,7 @@ function withDefaultRecoveredIfNeeded(
       live.eliminatedGamePlayerIds,
       live.eliminationOrder,
       recoveryExcludedIds(draft),
+      live.departedGamePlayerIds ?? new Set(),
     ),
   };
 }
@@ -260,15 +266,20 @@ function SingleThrowEditor({
   throwLabel?: string;
 }) {
   const { eliminatedGamePlayerIds, eliminationOrder } = liveElimination;
+  const departedGamePlayerIds = liveElimination.departedGamePlayerIds ?? new Set<string>();
+  const departureKindByGamePlayerId =
+    liveElimination.departureKindByGamePlayerId ?? new Map();
   const homePlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome),
     eliminatedGamePlayerIds,
     eliminationOrder,
+    departedGamePlayerIds,
   );
   const awayPlayers = sortGamePlayerInfos(
     players.filter((row) => !row.teamHome),
     eliminatedGamePlayerIds,
     eliminationOrder,
+    departedGamePlayerIds,
   );
   const throwingHome = groupThrowingHome ?? true;
   const defendingHome = !throwingHome;
@@ -276,18 +287,29 @@ function SingleThrowEditor({
     players.filter((row) => row.teamHome === throwingHome),
     eliminatedGamePlayerIds,
     eliminationOrder,
+    departedGamePlayerIds,
   );
   const defendingPlayers = sortGamePlayerInfos(
     players.filter((row) => row.teamHome === defendingHome),
     eliminatedGamePlayerIds,
     eliminationOrder,
+    departedGamePlayerIds,
   );
   const showTarget = groupThrowingHome !== null;
+  const isLeft = (gamePlayerId: string) => departedGamePlayerIds.has(gamePlayerId);
   const isOut = (gamePlayerId: string) => eliminatedGamePlayerIds.has(gamePlayerId);
-  const playerLabel = (row: GamePlayerInfo): string =>
-    isOut(row.gamePlayerId)
+  const isInactive = (gamePlayerId: string) => isOut(gamePlayerId) || isLeft(gamePlayerId);
+  const playerLabel = (row: GamePlayerInfo): string => {
+    if (isLeft(row.gamePlayerId)) {
+      return formatDepartedPlayerLabel(
+        row.playerName,
+        departureKindByGamePlayerId.get(row.gamePlayerId),
+      );
+    }
+    return isOut(row.gamePlayerId)
       ? formatEliminatedPlayerLabel(row.playerName, eliminationOrder.get(row.gamePlayerId))
       : row.playerName;
+  };
   const chipLabel = (pool: GamePlayerInfo[], gamePlayerId: string): string => {
     const row = pool.find((entry) => entry.gamePlayerId === gamePlayerId);
     return row ? playerLabel(row) : '?';
@@ -299,10 +321,14 @@ function SingleThrowEditor({
   ]);
   const targetCandidates = sortGamePlayerInfos(
     defendingPlayers.filter(
-      (row) => !excludedFromTarget.has(row.gamePlayerId) || row.gamePlayerId === draft.targetGamePlayerId,
+      (row) =>
+        (!excludedFromTarget.has(row.gamePlayerId) ||
+          row.gamePlayerId === draft.targetGamePlayerId) &&
+        !isLeft(row.gamePlayerId),
     ),
     eliminatedGamePlayerIds,
     eliminationOrder,
+    departedGamePlayerIds,
   );
 
   const pendingThrower = !draft.throwerGamePlayerId;
@@ -311,10 +337,12 @@ function SingleThrowEditor({
   const deflectionFocusIndex = focusedDeflectionIndex(draft);
 
   const setThrower = (gamePlayerId: string) => {
+    if (isLeft(gamePlayerId)) return;
     onChange(withThrower(draft, gamePlayerId, players, liveElimination));
   };
 
   const setTarget = (gamePlayerId: string) => {
+    if (isLeft(gamePlayerId)) return;
     onChange(withTarget(draft, gamePlayerId, players, liveElimination));
   };
 
@@ -347,6 +375,7 @@ function SingleThrowEditor({
   const recoveredCandidates = [...defendingPlayers]
     .filter(
       (row) =>
+        !isLeft(row.gamePlayerId) &&
         row.gamePlayerId !== draft.targetGamePlayerId &&
         !draft.deflections.some((d) => d.receiverGamePlayerId === row.gamePlayerId),
     )
@@ -465,7 +494,7 @@ function SingleThrowEditor({
                     <EditorChoiceButton
                       key={row.gamePlayerId}
                       hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                      eliminated={isOut(row.gamePlayerId)}
+                      eliminated={isInactive(row.gamePlayerId)}
                       playerId={row.playerId}
                       teamHome={row.teamHome}
                       onClick={() => updateDeflection(index, { receiverGamePlayerId: row.gamePlayerId })}
@@ -614,7 +643,7 @@ function SingleThrowEditor({
                 <EditorChoiceButton
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                  eliminated={isOut(row.gamePlayerId)}
+                  eliminated={isInactive(row.gamePlayerId)}
                   playerId={row.playerId}
                   teamHome={row.teamHome}
                   onClick={() =>
@@ -632,7 +661,7 @@ function SingleThrowEditor({
                 <EditorChoiceButton
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                  eliminated={isOut(row.gamePlayerId)}
+                  eliminated={isInactive(row.gamePlayerId)}
                   playerId={row.playerId}
                   teamHome={row.teamHome}
                   onClick={() =>
@@ -669,7 +698,7 @@ function SingleThrowEditor({
                   <EditorChoiceButton
                     key={row.gamePlayerId}
                     hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                    eliminated={isOut(row.gamePlayerId)}
+                    eliminated={isInactive(row.gamePlayerId)}
                     playerId={row.playerId}
                     teamHome={row.teamHome}
                     onClick={() => setThrower(row.gamePlayerId)}
@@ -700,7 +729,7 @@ function SingleThrowEditor({
                   <EditorChoiceButton
                     key={row.gamePlayerId}
                     hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                    eliminated={isOut(row.gamePlayerId)}
+                    eliminated={isInactive(row.gamePlayerId)}
                     playerId={row.playerId}
                     teamHome={row.teamHome}
                     onClick={() => setTarget(row.gamePlayerId)}
@@ -764,7 +793,7 @@ function SingleThrowEditor({
                 <EditorChoiceButton
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                  eliminated={isOut(row.gamePlayerId)}
+                  eliminated={isInactive(row.gamePlayerId)}
                   playerId={row.playerId}
                   teamHome={row.teamHome}
                   onClick={() =>
@@ -782,7 +811,7 @@ function SingleThrowEditor({
                 <EditorChoiceButton
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                  eliminated={isOut(row.gamePlayerId)}
+                  eliminated={isInactive(row.gamePlayerId)}
                   playerId={row.playerId}
                   teamHome={row.teamHome}
                   onClick={() =>
@@ -821,7 +850,7 @@ function SingleThrowEditor({
                   <EditorChoiceButton
                     key={row.gamePlayerId}
                     hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                    eliminated={isOut(row.gamePlayerId)}
+                    eliminated={isInactive(row.gamePlayerId)}
                     playerId={row.playerId}
                     teamHome={row.teamHome}
                     onClick={() => setThrower(row.gamePlayerId)}
@@ -853,7 +882,7 @@ function SingleThrowEditor({
                   <EditorChoiceButton
                     key={row.gamePlayerId}
                     hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                    eliminated={isOut(row.gamePlayerId)}
+                    eliminated={isInactive(row.gamePlayerId)}
                     playerId={row.playerId}
                     teamHome={row.teamHome}
                     onClick={() => setTarget(row.gamePlayerId)}
@@ -1054,6 +1083,7 @@ export function applyPlayerHotkeyToThrowDrafts(
   if (!gamePlayerId) return null;
   const hit = players.find((row) => row.gamePlayerId === gamePlayerId);
   if (!hit) return null;
+  if (liveElimination.departedGamePlayerIds?.has(hit.gamePlayerId)) return null;
 
   const pendingDeflection =
     deflectionIndex >= 0 && !draft.deflections[deflectionIndex].receiverGamePlayerId;

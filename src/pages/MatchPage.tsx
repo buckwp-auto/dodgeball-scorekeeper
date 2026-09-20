@@ -28,6 +28,7 @@ import {
 } from '../domain/hotkeys';
 import { parseYoutubeVideoId } from '../domain/youtube';
 import { autoSelectMatchRoster } from '../domain/rosterAutoSelect';
+import { getMatchIneligiblePlayerIds } from '../domain/gameLineup';
 import {
   addPlayerToMatchSide,
   canNavigateToMatchPage,
@@ -78,6 +79,10 @@ export function MatchPage() {
 
   const homeRoster = match ? getMatchSidePlayersWithSelection(data, match, true) : [];
   const awayRoster = match ? getMatchSidePlayersWithSelection(data, match, false) : [];
+  const matchIneligibleIds = useMemo(
+    () => (matchId ? getMatchIneligiblePlayerIds(data, matchId) : new Set<string>()),
+    [data, matchId],
+  );
   const rosterHotkeys = useMemo(
     () =>
       buildPermanentRosterHotkeys(
@@ -398,6 +403,7 @@ export function MatchPage() {
           players={homeRoster}
           onToggle={(playerId) => toggleMatchPlayer(matchId, playerId, true)}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
+          matchIneligiblePlayerIds={matchIneligibleIds}
           onToggleSubstitute={(playerId) =>
             toggleSubstitute(
               playerId,
@@ -422,6 +428,7 @@ export function MatchPage() {
           players={awayRoster}
           onToggle={(playerId) => toggleMatchPlayer(matchId, playerId, false)}
           hotkeyForPlayerId={(playerId) => rosterHotkeys.get(playerId) ?? null}
+          matchIneligiblePlayerIds={matchIneligibleIds}
           onToggleSubstitute={(playerId) =>
             toggleSubstitute(
               playerId,

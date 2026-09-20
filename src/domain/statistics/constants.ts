@@ -70,6 +70,15 @@ export enum GameEventTimeoutKind {
   End = 2,
 }
 
+/** Kind on `GameEventPlayerDeparture` (cards / injury). */
+export enum GameEventPlayerDepartureKind {
+  Yellow = 1,
+  SecondYellow = 2,
+  Red = 3,
+  Injury = 4,
+  Blue = 5,
+}
+
 export function invertCompetitionOutcome(
   outcome: ECompetitionOutcome,
 ): ECompetitionOutcome {

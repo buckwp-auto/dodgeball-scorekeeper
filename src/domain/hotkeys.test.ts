@@ -32,7 +32,7 @@ import {
   TRACK_GAME_TAB_HOTKEYS,
   type OtherTabDraft,
 } from './hotkeys';
-import { DeflectionResult, GameEventErrorOffense, ThrowResult } from './statistics/constants';
+import { DeflectionResult, GameEventErrorOffense, GameEventPlayerDepartureKind, ThrowResult } from './statistics/constants';
 import { throwResultUiOrder } from './gameEvents';
 
 describe('permanent player hotkeys', () => {
@@ -199,10 +199,22 @@ describe('track game tab hotkeys', () => {
 });
 
 describe('other tab offense hotkeys', () => {
-  it('maps 1-6 to fixed offense choices in UI order', () => {
-    expect(OTHER_OFFENSE_HOTKEYS).toEqual(['1', '2', '3', '4', '5', '6']);
-    expect(otherOffenseUiOrder).toHaveLength(6);
+  it('maps 1-0 to fixed offense choices in UI order', () => {
+    expect(OTHER_OFFENSE_HOTKEYS).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '0',
+    ]);
+    expect(otherOffenseUiOrder).toHaveLength(11);
     expect(hotkeyForOtherOffenseIndex(0)).toBe('1');
+    expect(hotkeyForOtherOffenseIndex(10)).toBeNull();
     const choice2 = getOtherOffenseChoiceForKey('2');
     expect(choice2?.kind).toBe('offense');
     expect(choice2?.kind === 'offense' ? choice2.offenseId : null).toBe(
@@ -211,6 +223,19 @@ describe('other tab offense hotkeys', () => {
     expect(getOtherOffenseChoiceForKey('4')?.kind).toBe('noBlocking');
     expect(getOtherOffenseChoiceForKey('5')?.kind).toBe('timeout');
     expect(getOtherOffenseChoiceForKey('6')?.kind).toBe('timeoutEnd');
+    const yellow = getOtherOffenseChoiceForKey('7');
+    expect(yellow?.kind).toBe('departure');
+    expect(yellow?.kind === 'departure' ? yellow.departureKind : null).toBe(
+      GameEventPlayerDepartureKind.Yellow,
+    );
+    const blue = getOtherOffenseChoiceForKey('8');
+    expect(blue?.kind === 'departure' ? blue.departureKind : null).toBe(
+      GameEventPlayerDepartureKind.Blue,
+    );
+    const red = getOtherOffenseChoiceForKey('0');
+    expect(red?.kind === 'departure' ? red.departureKind : null).toBe(
+      GameEventPlayerDepartureKind.Red,
+    );
   });
 
   it('leaves no digit free (tab switch uses / \' \\ instead)', () => {
@@ -249,6 +274,7 @@ describe('other tab offense hotkeys', () => {
       offenderGamePlayerId: '',
       throwerGamePlayerId: '',
       offenseId: null,
+      departureKind: null,
       noBlockingStarted: true,
       timeoutStarted: false,
       timeoutEnded: false,
@@ -270,6 +296,18 @@ describe('other tab offense hotkeys', () => {
     const ends = applyOtherOffenseHotkey(started, otherOffenseUiOrder[5]!);
     expect(ends.timeoutEnded).toBe(true);
     expect(ends.timeoutStarted).toBe(false);
+  });
+
+  it('toggles departure kinds and clears offense fields', () => {
+    const draft = {
+      offenderGamePlayerId: 'gp-1',
+      offenseId: GameEventErrorOffense.LineOut,
+    };
+    const injury = otherOffenseUiOrder[10]!;
+    const next = applyOtherOffenseHotkey(draft, injury);
+    expect(next.departureKind).toBe(GameEventPlayerDepartureKind.Injury);
+    expect(next.offenseId).toBeNull();
+    expect(isOtherOffenseChoiceActive(next, injury)).toBe(true);
   });
 
   it('clears thrower when leaving illegal block', () => {

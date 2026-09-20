@@ -3,6 +3,7 @@ import {
   DeflectionResult,
   GameEventErrorOffense,
   GameEventFinishResult,
+  GameEventPlayerDepartureKind,
   ThrowResult,
 } from './statistics/constants';
 import {
@@ -21,12 +22,22 @@ import {
   type GamePlayerInfo,
   type ThrowDraft,
 } from './gameEvents';
+import {
+  formatDepartedPlayerLabel,
+  getDepartedGamePlayerIds,
+  getDepartureKindByGamePlayerId,
+  playerDepartureKindEliminatesRecoverable,
+  playerDepartureKindSoftExits,
+} from './gameLineup';
 import { AUTO_SELECT_PLAYER_LIMIT } from './rosterAutoSelect';
 
-export { AUTO_SELECT_PLAYER_LIMIT };
+export { AUTO_SELECT_PLAYER_LIMIT, formatDepartedPlayerLabel };
 
 export type GameLiveState = {
   eliminatedGamePlayerIds: ReadonlySet<Guid>;
+  /** Soft-exited via injury / second yellow / red (still on GamePlayer). */
+  departedGamePlayerIds: ReadonlySet<Guid>;
+  departureKindByGamePlayerId: ReadonlyMap<Guid, GameEventPlayerDepartureKind>;
   /** Video offset of the event that put each out player out; null when untimed. */
   eliminatedAtSeconds: ReadonlyMap<Guid, number | null>;
   /**
@@ -167,6 +178,7 @@ export function defaultCatchRecoveredId(
   eliminatedGamePlayerIds: ReadonlySet<Guid>,
   eliminationOrder: ReadonlyMap<Guid, number>,
   excludedGamePlayerIds: ReadonlySet<Guid>,
+  departedGamePlayerIds: ReadonlySet<Guid> = new Set(),
 ): Guid | null {
   let bestId: Guid | null = null;
   let bestOrder = Number.POSITIVE_INFINITY;
@@ -174,6 +186,7 @@ export function defaultCatchRecoveredId(
     if (player.teamHome !== defendingTeamHome) continue;
     if (!eliminatedGamePlayerIds.has(player.gamePlayerId)) continue;
     if (excludedGamePlayerIds.has(player.gamePlayerId)) continue;
+    if (departedGamePlayerIds.has(player.gamePlayerId)) continue;
     const order = eliminationOrder.get(player.gamePlayerId);
     if (order === undefined || order >= bestOrder) continue;
     bestOrder = order;
@@ -185,11 +198,13 @@ export function defaultCatchRecoveredId(
 function countActiveBySide(
   roster: GamePlayerInfo[],
   eliminated: ReadonlySet<Guid>,
+  departed: ReadonlySet<Guid> = new Set(),
 ): { activeHome: number; activeAway: number } {
   let activeHome = 0;
   let activeAway = 0;
   for (const player of roster) {
     if (eliminated.has(player.gamePlayerId)) continue;
+    if (departed.has(player.gamePlayerId)) continue;
     if (player.teamHome) activeHome += 1;
     else activeAway += 1;
   }
@@ -226,6 +241,12 @@ export function buildEliminationTimeline(
     },
   ];
   const outSequence: Guid[] = [];
+  const departed = new Set<Guid>();
+  const departureByEvent = new Map(
+    tableDepartureRows(data)
+      .filter((row) => gameEvents.some((event) => event.Id === row.GameEventId))
+      .map((row) => [row.GameEventId, row] as const),
+  );
   for (const event of gameEvents) {
     applyGameEventEliminations(
       eliminated,
@@ -234,7 +255,16 @@ export function buildEliminationTimeline(
       throwsByEvent,
       errorsByEvent,
     );
-    const counts = countActiveBySide(roster, eliminated);
+    const departure = departureByEvent.get(event.Id);
+    if (departure) {
+      if (playerDepartureKindSoftExits(departure.Kind)) {
+        departed.add(departure.PlayerGamePlayerId);
+        markIn(eliminated, outSequence, departure.PlayerGamePlayerId);
+      } else if (playerDepartureKindEliminatesRecoverable(departure.Kind)) {
+        markOut(eliminated, outSequence, departure.PlayerGamePlayerId);
+      }
+    }
+    const counts = countActiveBySide(roster, eliminated, departed);
     points.push({
       ordinal: event.Ordinal,
       eventId: event.Id,
@@ -244,6 +274,18 @@ export function buildEliminationTimeline(
     });
   }
   return points;
+}
+
+function tableDepartureRows(data: DatabaseDto): {
+  GameEventId: Guid;
+  PlayerGamePlayerId: Guid;
+  Kind: number;
+}[] {
+  return (data.Tables.GameEventPlayerDeparture ?? []) as {
+    GameEventId: Guid;
+    PlayerGamePlayerId: Guid;
+    Kind: number;
+  }[];
 }
 
 function applyThrowEliminations(
@@ -305,6 +347,8 @@ export function computeGameLiveState(
   const throwsByEvent = buildThrowsDetail(data);
   const errorsByEvent = indexGameEventErrors(data);
   const gameEvents = getGameEvents(data, gameId);
+  const departed = getDepartedGamePlayerIds(data, gameId);
+  const departureKinds = getDepartureKindByGamePlayerId(data, gameId);
 
   for (const event of gameEvents) {
     const before = new Set(eliminated);
@@ -315,6 +359,10 @@ export function computeGameLiveState(
       throwsByEvent,
       errorsByEvent,
     );
+    const departure = tableDepartureRows(data).find((row) => row.GameEventId === event.Id);
+    if (departure && playerDepartureKindEliminatesRecoverable(departure.Kind)) {
+      markOut(eliminated, outSequence, departure.PlayerGamePlayerId);
+    }
     for (const gamePlayerId of eliminated) {
       if (!before.has(gamePlayerId)) {
         eliminatedAt.set(gamePlayerId, event.VideoOffsetSeconds ?? null);
@@ -325,20 +373,24 @@ export function computeGameLiveState(
     }
   }
 
+  // Soft-exits clear elimination so UI shows "left" instead of "out".
+  for (const gamePlayerId of departed) {
+    markIn(eliminated, outSequence, gamePlayerId);
+    eliminatedAt.delete(gamePlayerId);
+  }
+
   const finishExists = (data.Tables.GameEventFinish as { GameEventId: Guid }[]).some(
     (row) => gameEvents.some((event) => event.Id === row.GameEventId),
   );
 
-  let activeHome = 0;
-  let activeAway = 0;
-  for (const player of roster) {
-    if (eliminated.has(player.gamePlayerId)) continue;
-    if (player.teamHome) activeHome++;
-    else activeAway++;
-  }
+  const { activeHome, activeAway } = countActiveBySide(roster, eliminated, departed);
 
-  const homeRosterSize = roster.filter((row) => row.teamHome).length;
-  const awayRosterSize = roster.filter((row) => !row.teamHome).length;
+  const homeRosterSize = roster.filter(
+    (row) => row.teamHome && !departed.has(row.gamePlayerId),
+  ).length;
+  const awayRosterSize = roster.filter(
+    (row) => !row.teamHome && !departed.has(row.gamePlayerId),
+  ).length;
 
   let isGameOver = false;
   let winningTeamHome: boolean | null = null;
@@ -352,6 +404,8 @@ export function computeGameLiveState(
 
   return {
     eliminatedGamePlayerIds: eliminated,
+    departedGamePlayerIds: departed,
+    departureKindByGamePlayerId: departureKinds,
     eliminatedAtSeconds: eliminatedAt,
     eliminationOrder: eliminationOrderFromSequence(outSequence, roster),
     activeHomeCount: activeHome,
@@ -430,8 +484,12 @@ export function sortRosterWithEliminations<T extends RosterRow>(
   rows: T[],
   eliminatedPlayerIds: ReadonlySet<string>,
   eliminationOrder?: ReadonlyMap<string, number>,
+  departedPlayerIds: ReadonlySet<string> = new Set(),
 ): T[] {
   return [...rows].sort((a, b) => {
+    const aLeft = departedPlayerIds.has(a.player.Id);
+    const bLeft = departedPlayerIds.has(b.player.Id);
+    if (aLeft !== bLeft) return aLeft ? 1 : -1;
     const aOut = eliminatedPlayerIds.has(a.player.Id);
     const bOut = eliminatedPlayerIds.has(b.player.Id);
     if (aOut !== bOut) return aOut ? 1 : -1;
@@ -463,6 +521,38 @@ export function eliminatedPlayerIdsFromLive(
   return ids;
 }
 
+export function departedPlayerIdsFromLive(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  live: GameLiveState,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const gamePlayerId of live.departedGamePlayerIds) {
+    const info = getGamePlayerInfos(data, matchId, gameId).find(
+      (row) => row.gamePlayerId === gamePlayerId,
+    );
+    if (info) ids.add(info.playerId);
+  }
+  return ids;
+}
+
+export function departureKindByPlayerIdFromLive(
+  data: DatabaseDto,
+  matchId: Guid,
+  gameId: Guid,
+  live: GameLiveState,
+): Map<string, GameEventPlayerDepartureKind> {
+  const byPlayerId = new Map<string, GameEventPlayerDepartureKind>();
+  for (const [gamePlayerId, kind] of live.departureKindByGamePlayerId) {
+    const info = getGamePlayerInfos(data, matchId, gameId).find(
+      (row) => row.gamePlayerId === gamePlayerId,
+    );
+    if (info) byPlayerId.set(info.playerId, kind);
+  }
+  return byPlayerId;
+}
+
 /** Player-id → return-queue rank for roster screens that key by `Player.Id`. */
 export function eliminationOrderByPlayerId(
   data: DatabaseDto,
@@ -484,8 +574,12 @@ export function sortGamePlayerInfos(
   players: GamePlayerInfo[],
   eliminatedGamePlayerIds: ReadonlySet<Guid>,
   eliminationOrder?: ReadonlyMap<Guid, number>,
+  departedGamePlayerIds: ReadonlySet<Guid> = new Set(),
 ): GamePlayerInfo[] {
   return [...players].sort((a, b) => {
+    const aLeft = departedGamePlayerIds.has(a.gamePlayerId);
+    const bLeft = departedGamePlayerIds.has(b.gamePlayerId);
+    if (aLeft !== bLeft) return aLeft ? 1 : -1;
     const aOut = eliminatedGamePlayerIds.has(a.gamePlayerId);
     const bOut = eliminatedGamePlayerIds.has(b.gamePlayerId);
     if (aOut !== bOut) return aOut ? 1 : -1;

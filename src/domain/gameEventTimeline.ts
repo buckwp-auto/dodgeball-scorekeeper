@@ -13,8 +13,10 @@ import {
   getGamePlayerInfos,
   loadErrorDraftFromEvent,
   loadFinishDraftFromEvent,
+  loadOtherDraftFromEvent,
   loadThrowDraftsFromEvent,
   NO_BLOCKING_STARTED_LABEL,
+  playerDepartureKindLabels,
   TIMEOUT_ENDS_LABEL,
   TIMEOUT_LABEL,
   type GameEventRow,
@@ -254,6 +256,30 @@ export function buildTimelineEntry(
               kind: 'text',
               text: type === 'timeout' ? TIMEOUT_LABEL : TIMEOUT_ENDS_LABEL,
             },
+          ],
+        },
+      ],
+    };
+  }
+  if (type === 'playerDeparture') {
+    const draft = loadOtherDraftFromEvent(data, event.Id);
+    const kindLabel =
+      draft.departureKind != null
+        ? playerDepartureKindLabels[draft.departureKind]
+        : 'Left game';
+    return {
+      ...base,
+      rows: [
+        {
+          role: 'error',
+          tone: 'error',
+          actions: [{ kind: 'error' }],
+          segments: [
+            {
+              kind: 'player',
+              player: playerRef(players, draft.offenderGamePlayerId),
+            },
+            { kind: 'text', text: ` — ${kindLabel}` },
           ],
         },
       ],

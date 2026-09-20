@@ -1,4 +1,8 @@
 import { newIdTimestamp } from './id';
+import {
+  countNonDepartedGameSidePlayers,
+  isPlayerMatchIneligible,
+} from './gameLineup';
 import { resolvePlayersPerSide } from './leagueSettings';
 import { linkPlayer } from './playerMatch';
 import type { DatabaseDto, Guid, MatchPlayerRow, MatchRow, PlayerRow } from './types';
@@ -309,6 +313,15 @@ function removeGameScopedRows(data: DatabaseDto, gameId: Guid): void {
   data.Tables.GameEventError = table(data, 'GameEventError').filter(
     (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
   );
+  data.Tables.GameEventNoBlocking = table(data, 'GameEventNoBlocking').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
+  data.Tables.GameEventTimeout = table(data, 'GameEventTimeout').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
+  data.Tables.GameEventPlayerDeparture = table(data, 'GameEventPlayerDeparture').filter(
+    (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
+  );
   data.Tables.GameEventFinish = table(data, 'GameEventFinish').filter(
     (row) => !gameEventIds.has((row as { GameEventId: Guid }).GameEventId),
   );
@@ -460,8 +473,14 @@ export function toggleGamePlayer(
     rows.splice(index, 1);
     return true;
   }
+  if (isPlayerMatchIneligible(data, matchId, playerId, gameId)) {
+    return false;
+  }
   const limit = resolvePlayersPerSide(data);
-  if (countGameSidePlayers(data, matchId, gameId, matchPlayer.TeamHome) >= limit) {
+  if (
+    countNonDepartedGameSidePlayers(data, matchId, gameId, matchPlayer.TeamHome) >=
+    limit
+  ) {
     return false;
   }
   pushRow(data, 'GamePlayer', {

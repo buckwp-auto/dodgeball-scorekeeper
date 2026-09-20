@@ -27,10 +27,11 @@
 
 - **Match & game roster selection** with home/away columns; game roster heading is **Game N**; team logos on banners and player photos on rows; optional tall YouTube VOD on both roster screens; roster hotkeys match Track Game for the first 6 per side, then `Q 1 2 3 4 5` / `P 0 9 8 7 6` for players 7–12, assigned in on-screen order (starters then subs; reassigned when sub status changes)
 - **Add / remove players on Match and Game roster screens** (creates a team player and includes them on the match, and on this game when added from Game); mark **Sub** officially instead of a “(sub)” name suffix; typing a name suggests other league players to **link** by any part of the name (first, last, or substring; picking another team auto-checks Sub; same-team hits select the existing roster row); **Remove** is only for players added from those screens, not the core team roster; it confirms, rolls back any events they appear in, drops them from this match’s games, and deletes them from the team if they aren’t on another match
-- **Players per team per game** (League Stat Settings, default 6) caps who can be on court; match roster can still include extra subs
-- **Auto-select** up to that limit per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed
-- **Edit roster** from Track Game returns to that game’s player selection (not Teams). Removing someone who already appears in events warns, then after confirm deletes every event from their first involvement onward (Game start is kept)
-- **Live elimination on Game page** — outs grayed, sorted to bottom by return-queue order, labeled “(out 1st)” / “(out 2nd)”, active counts, game-over hint; subs sort below starters; roster hotkeys follow that order
+- **Players per team per game** (League Stat Settings, default 6) caps who can be on court (soft-exited players no longer count toward the cap, so a replacement can join as the Nth active body while the left player stays logged for stats); match roster can still include extra subs
+- **Auto-select** up to that limit per side when a match is opened, or when a **new empty** game is created (does not overwrite an existing game roster); game auto-select prefers non-subs, then fills with subs if needed; skips players banned for that game (yellow = next game only; second yellow / red / injury = rest of match)
+- **Edit roster** from Track Game returns to that game’s player selection (not Teams). Soft-exited players stay on the game roster (checked, indeterminate + “(left — …)”) so the timeline is preserved; optionally check a bench player or use Add player as a replacement (they do not count toward the on-court limit). Toggling off a player who already appears in events is blocked — that path used to erase the timeline. Use Other-tab Injury/cards to take someone out mid-game instead. Mistaken **Remove** (X) for match-added guests still confirms and can roll back events when they are not soft-exited
+- **Live elimination on Game page** — outs grayed, sorted to bottom by return-queue order, labeled “(out 1st)” / “(out 2nd)”; soft-exits labeled “(left — …)” and sorted after outs; active counts, game-over hint; subs sort below starters; roster hotkeys follow that order
+- **Match roster** shows soft-exited / banned players as **(out of match)** when they cannot join remaining games
 
 ## Track Game
 
@@ -41,7 +42,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 | Tab | Purpose |
 |-----|---------|
 | **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional continuations, catch recovery |
-| **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), **No Blocking Started** (player-less game marker), or **Timeout** / **Timeout ends** (player-less markers that pause match and game clocks) |
+| **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), **No Blocking Started** (player-less game marker), **Timeout** / **Timeout ends**, or cards/injury: **Yellow** (soft-exit this game + sit the next), **Blue** (out now, can return on a catch), **Second yellow** / **Red** / **Injury** (soft-exit this game + rest of match). Soft-exits keep prior stats and free an on-court slot for a replacement via **Edit active players** |
 | **Finish** | Winner (home / away / tie) |
 
 ### Editor UX
@@ -66,8 +67,13 @@ Derived from persisted events (not a separate toggle):
 - **Illegal block** (Other tab only) → offender out; requires a thrower on the opposite team. Still an error event (not a Throw Hit). Old saves without `ThrowerId` still load and still out the offender.
 - **No Blocking Started** — manual game marker on **Other**; no live elimination effect
 - **Timeout** / **Timeout ends** — player-less markers on **Other**; pause match and game running times until Timeout ends (VOD may keep playing; clocks subtract the pause). Other scoring events can still be recorded while a timeout is open. No live elimination or stats credit
-- **Recovered** player on a catch is removed from the eliminated set
-- Outs sort to the bottom (by return-queue order within the out group) and show “(out 1st)”, “(out 2nd)”, …
+- **Yellow / Blue / Second yellow / Red / Injury** — timed Other events:
+  - **Yellow** — soft-exit this game (not catch-recoverable; frees a roster slot) and ban from the **next** game only
+  - **Blue** — immediate out like a line-out; **can** return on a catch; does not free a slot or ban later games
+  - **Second yellow / Red / Injury** — soft-exit this game and ban for the **rest of the match**
+  - After a soft-exit, Track Game shows an info alert with **Edit active players** so you can add a replacement (soft-exits do not count toward the players-per-side cap). Undo of a soft-exit is refused if a replacement already filled the side’s cap
+- **Recovered** player on a catch is removed from the eliminated set (not available for soft-exits)
+- Outs sort to the bottom (by return-queue order within the out group) and show “(out 1st)”, “(out 2nd)”, …; soft-exits sort after outs as “(left — yellow)” / “(left — injury)” / …
 - Return-queue order is per team and derived from elimination chronology (FIFO); scorers can still pick a different recovered player when someone stepped off earlier than the hit order
 - When one side has **zero active players**, the game is live-over
 
@@ -103,7 +109,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | Match / Game roster 7–12 (home) | `Q 1 2 3 4 5` |
 | Match / Game roster 7–12 (away) | `P 0 9 8 7 6` |
 | Throw results | `R T Y U G H` |
-| Other tab (line-out, wasted ball, illegal block, no blocking started, timeout, timeout ends) | `1 2 3 4 5 6` (fixed order; re-press toggles off). Player keys pick the offender; for illegal block they pick thrower then offender by team, same as Throw |
+| Other tab (line-out, wasted ball, illegal block, no blocking started, timeout, timeout ends, yellow, blue, second yellow, red; injury is click-only) | `1 2 3 4 5 6 7 8 9 0` (fixed order; re-press toggles off). Player keys pick the offender; for illegal block they pick thrower then offender by team, same as Throw |
 | Editor tabs | `/` Throw, `'` Other, `\` Finish |
 | Continuation (after `Z`) | receiver = defending player keys; result = `R T Y U G` (no Miss) |
 | Recovered None | `M` |
@@ -115,7 +121,7 @@ Permanent bindings for the life of a game (by team + stable name order), not rem
 | YouTube playback | `Space` play/pause, `←`/`→` ±5s (tall view: keyboard tooltip on the player bar) |
 | YouTube frame (paused) | `,` back, `.` forward |
 
-Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable. Switch editor tabs with `/` (Throw), `'` (Other), and `\` (Finish) — digits stay bound to Other offenses (`1–6`) and roster overflow (`Q 1 2 3 4 5` / `P 0 9 8 7 6`). `Enter` in a timestamp or other text field still commits that field (document hotkeys ignore focused inputs).
+Match / Game roster keys follow on-screen order (starters, then subs; outs last on the game roster) and are reassigned when that order changes. Track Game throw/error keeps a stable name-order map. Slots 7–12 on roster select use the overflow keys. Re-pressing a player/result key toggles the selection off where applicable. Switch editor tabs with `/` (Throw), `'` (Other), and `\` (Finish) — digits stay bound to Other offenses (`1–0`) on Track Game and roster overflow (`Q 1 2 3 4 5` / `P 0 9 8 7 6`) on Match/Game roster. `Enter` in a timestamp or other text field still commits that field (document hotkeys ignore focused inputs).
 
 ## Statistics & interop
 
