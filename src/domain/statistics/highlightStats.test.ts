@@ -42,6 +42,8 @@ function stub(partial: Partial<DisplayPlayerStats> & { playerId: string; playerN
     throws: 10,
     throwHits: 0,
     throwCounts: {},
+    throwTagsThrown: {},
+    throwTagsTaken: {},
     targets: 10,
     targetHits: 0,
     catches: 0,

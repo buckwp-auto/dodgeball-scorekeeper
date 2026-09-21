@@ -1,7 +1,8 @@
-import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { useState } from 'react';
 import {
   DeflectionResult,
   ThrowResult,
@@ -18,6 +19,13 @@ import {
   throwResultUiOrder,
   throwDraftNeedsRecovered,
 } from '../../domain/gameEvents';
+import {
+  normalizeThrowTags,
+  throwTagGroups,
+  throwTagLabels,
+  toggleThrowTag,
+  type ThrowTagId,
+} from '../../domain/throwTags';
 import {
   buildPermanentPlayerHotkeys,
   findGamePlayerIdByHotkey,
@@ -178,13 +186,16 @@ function withResult(
   live: ThrowLiveElimination,
 ): ThrowDraft {
   if (resultId === null) {
+    const tags = normalizeThrowTags(draft.tags, null);
     return {
       ...draft,
       resultId: null,
       deflections: [],
       recoveredId: undefined,
+      tags: tags.length > 0 ? tags : undefined,
     };
   }
+  const tags = normalizeThrowTags(draft.tags, resultId);
   const next: ThrowDraft = {
     ...draft,
     resultId,
@@ -192,6 +203,7 @@ function withResult(
       ? draft.deflections
       : [],
     recoveredId: resultId === ThrowResult.Catch ? draft.recoveredId : undefined,
+    tags: tags.length > 0 ? tags : undefined,
   };
   return withDefaultRecoveredIfNeeded(next, players, live, null);
 }
@@ -265,6 +277,7 @@ function SingleThrowEditor({
   section?: 'all' | 'players' | 'actions';
   throwLabel?: string;
 }) {
+  const [tagsOpen, setTagsOpen] = useState(false);
   const { eliminatedGamePlayerIds, eliminationOrder } = liveElimination;
   const departedGamePlayerIds = liveElimination.departedGamePlayerIds ?? new Set<string>();
   const departureKindByGamePlayerId =
@@ -370,6 +383,11 @@ function SingleThrowEditor({
 
   const removeDeflection = (index: number) => {
     onChange({ ...draft, deflections: draft.deflections.filter((_, i) => i !== index) });
+  };
+
+  const setTag = (tag: ThrowTagId) => {
+    const tags = toggleThrowTag(draft.tags, tag, draft.resultId);
+    onChange({ ...draft, tags: tags.length > 0 ? tags : undefined });
   };
 
   const recoveredCandidates = [...defendingPlayers]
@@ -566,6 +584,69 @@ function SingleThrowEditor({
       </Box>
     ) : null;
 
+  const selectedTags = normalizeThrowTags(draft.tags, draft.resultId);
+  const tagsExpanded = tagsOpen || selectedTags.length > 0;
+  const killTagsAllowed =
+    draft.resultId === ThrowResult.Hit || draft.resultId === ThrowResult.Disarm;
+
+  const tagsBlock = (
+    <Box className="sk-throw-tags" sx={{ mt: stacked ? 1 : 2 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+        <Typography variant={stacked ? 'caption' : 'subtitle2'} sx={{ fontWeight: 700 }}>
+          Tags
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          optional
+        </Typography>
+        {!tagsExpanded ? (
+          <Button
+            size="small"
+            className="bw-button bw-button--text"
+            onClick={() => setTagsOpen(true)}
+          >
+            Add
+          </Button>
+        ) : null}
+      </Stack>
+      {tagsExpanded
+        ? throwTagGroups.map((group) => {
+            const groupDisabled =
+              (group.id === 'contact' || group.id === 'defensiveFailure') && !killTagsAllowed;
+            return (
+              <Box key={group.id} sx={{ mb: 0.75 }}>
+                <Typography
+                  variant="caption"
+                  color={groupDisabled ? 'text.disabled' : 'text.secondary'}
+                  sx={{ display: 'block', mb: 0.25 }}
+                >
+                  {group.label}
+                  {groupDisabled ? ' (Hit / Disarm)' : ''}
+                </Typography>
+                <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                  {group.tags.map((tag) => {
+                    const selected = selectedTags.includes(tag);
+                    return (
+                      <Chip
+                        key={tag}
+                        size="small"
+                        label={throwTagLabels[tag]}
+                        color={selected ? 'primary' : 'default'}
+                        variant={selected ? 'filled' : 'outlined'}
+                        disabled={groupDisabled}
+                        onClick={() => setTag(tag)}
+                        className="sk-throw-tag"
+                        data-tag={tag}
+                      />
+                    );
+                  })}
+                </Stack>
+              </Box>
+            );
+          })
+        : null}
+    </Box>
+  );
+
   if (section === 'actions') {
     return (
       <Box sx={{ mb: 1, position: 'relative' }}>
@@ -589,6 +670,7 @@ function SingleThrowEditor({
         </EditorStackedActions>
         {deflectionBlock}
         {recoveredBlock}
+        {tagsBlock}
       </Box>
     );
   }
@@ -899,6 +981,7 @@ function SingleThrowEditor({
 
       {showActions ? deflectionBlock : null}
       {showActions ? recoveredBlock : null}
+      {showActions ? tagsBlock : null}
     </Box>
   );
 }

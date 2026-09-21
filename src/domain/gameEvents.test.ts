@@ -928,6 +928,56 @@ describe('undo / redo game events', () => {
     ).toBe(true);
   });
 
+  it('persists optional throw tags through load and undo/redo', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const eventId = persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+        tags: ['CounterRush', 'Headshot', 'FailedDodge', 'bogus'],
+      },
+    ]);
+
+    const throwRow = (
+      data.Tables.Throw as { GameEventThrowId: string; Tags?: string[] }[]
+    ).find((row) => row.GameEventThrowId === eventId);
+    expect(throwRow?.Tags).toEqual(['CounterRush', 'Headshot', 'FailedDodge']);
+
+    const drafts = loadThrowDraftsFromEvent(data, eventId);
+    expect(drafts[0].tags).toEqual(['CounterRush', 'Headshot', 'FailedDodge']);
+
+    const snapshot = undoLastGameEvent(data, gameId);
+    expect(snapshot?.throws?.[0].Tags).toEqual([
+      'CounterRush',
+      'Headshot',
+      'FailedDodge',
+    ]);
+    const restoredId = restoreGameEventSnapshot(data, snapshot!);
+    expect(loadThrowDraftsFromEvent(data, restoredId)[0].tags).toEqual([
+      'CounterRush',
+      'Headshot',
+      'FailedDodge',
+    ]);
+  });
+
+  it('strips kill-only tags when the result is not a hit or disarm', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupOneGameMatch();
+    const eventId = persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Miss,
+        deflections: [],
+        recoveredId: undefined,
+        tags: ['InvalidHigh', 'Headshot', 'FailedCatch'],
+      },
+    ]);
+    expect(loadThrowDraftsFromEvent(data, eventId)[0].tags).toEqual(['InvalidHigh']);
+  });
+
   it('undoes a finish event', () => {
     const { data, gameId } = setupOneGameMatch();
     persistFinishGameEvent(data, gameId, {

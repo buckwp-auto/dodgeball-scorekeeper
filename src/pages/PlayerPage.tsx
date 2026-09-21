@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { EntityAvatar } from '../components/EntityAvatar';
 import { StatsPlayerTable } from '../components/stats/StatsPlayerTable';
+import { ThrowTagsSummary } from '../components/stats/ThrowTagsSummary';
 import { GameEventsTimeline } from '../components/trackGame/GameEventsTimeline';
 import { PageHeader, TextButton } from '../components/Ui';
 import { getPlayer, getTeamForPlayer } from '../domain/database';
@@ -269,6 +270,7 @@ export function PlayerPage() {
             showDeflectionCatches={showDeflectionCatches}
             hideFilters
           />
+          <ThrowTagsSummary stats={stats} />
         </>
       ) : null}
 

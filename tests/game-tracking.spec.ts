@@ -286,4 +286,44 @@ test.describe('Game tracking (full roster)', () => {
       stats.locator('tbody tr').filter({ hasText: 'A1' }).locator('td').nth(killsIndex),
     ).toHaveText('0');
   });
+
+  test('optional throw tags appear on the timeline and player page', async ({ page }) => {
+    const data = createEmptyDatabase();
+    const home = addTeamRow(data, 'Home Hawks');
+    const away = addTeamRow(data, 'Away Owls');
+    const h1 = addPlayerRow(data, home.Id, 'H1');
+    const a1 = addPlayerRow(data, away.Id, 'A1');
+    const match = addMatch(data, home.Id, away.Id);
+    toggleMatchPlayer(data, match.Id, h1.Id, true);
+    toggleMatchPlayer(data, match.Id, a1.Id, false);
+    const gameId = addGameRow(data, match.Id);
+    toggleGamePlayer(data, match.Id, gameId, h1.Id);
+    toggleGamePlayer(data, match.Id, gameId, a1.Id);
+
+    const infos = getGamePlayerInfos(data, match.Id, gameId);
+    const gp = (name: string) => infos.find((row) => row.playerName === name)!.gamePlayerId;
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: gp('H1'),
+        targetGamePlayerId: gp('A1'),
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+        tags: ['CounterRush', 'Headshot'],
+      },
+    ]);
+
+    await page.addInitScript(
+      ({ key, value }) => sessionStorage.setItem(key, value),
+      { key: STORAGE_KEY, value: serializeDatabase(data) },
+    );
+    await page.goto(`/matches/${match.Id}/games/${gameId}/events`);
+    const timeline = page.locator('.sk-game-timeline');
+    await expect(timeline).toContainText('Rush counter');
+    await expect(timeline).toContainText('Headshot');
+
+    await page.goto(`/players/${h1.Id}`);
+    await expect(page.locator('.sk-throw-tags-summary')).toContainText('Rush counter 1');
+    await expect(page.locator('.sk-throw-tags-summary')).toContainText('Headshot 1');
+  });
 });
