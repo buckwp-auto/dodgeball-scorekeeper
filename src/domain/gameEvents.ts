@@ -28,6 +28,7 @@ import {
   toggleGamePlayer,
   toggleMatchPlayer,
 } from './matchGame';
+import { normalizeThrowTags, throwTagsForPersist } from './throwTags';
 
 function table<T>(data: DatabaseDto, name: string): T[] {
   return data.Tables[name] as T[];
@@ -76,6 +77,8 @@ export type ThrowDraft = {
   deflections: DeflectionDraft[];
   /** `undefined` = user has not chosen recovered yet */
   recoveredId: Guid | null | undefined;
+  /** Optional controlled annotations (counter / invalid / headshot / how-out). */
+  tags?: string[];
 };
 
 export type ErrorDraft = {
@@ -169,6 +172,7 @@ export function emptyThrowDraft(): ThrowDraft {
     resultId: null,
     deflections: [],
     recoveredId: undefined,
+    tags: undefined,
   };
 }
 
@@ -632,6 +636,7 @@ function writeThrowsToEvent(
   }
   throws.forEach((throwDraft, throwIndex) => {
     const throwId = newIdTimestamp();
+    const tags = throwTagsForPersist(throwDraft.tags, throwDraft.resultId);
     pushRow(data, 'Throw', {
       Id: throwId,
       GameEventThrowId: gameEventId,
@@ -640,6 +645,7 @@ function writeThrowsToEvent(
       TargetId: throwDraft.targetGamePlayerId,
       RecoveredId: throwDraft.recoveredId ?? null,
       ResultId: throwDraft.resultId!,
+      ...(tags ? { Tags: tags } : {}),
     });
     throwDraft.deflections.forEach((deflection, deflectionIndex) => {
       pushRow(data, 'Deflection', {
@@ -691,6 +697,7 @@ export function loadThrowDraftsFromEvent(data: DatabaseDto, gameEventId: Guid): 
     ResultId: number;
     RecoveredId?: Guid | null;
     Ordinal: number;
+    Tags?: string[];
   }>(data, 'Throw')
     .filter((row) => row.GameEventThrowId === gameEventId)
     .sort((a, b) => a.Ordinal - b.Ordinal);
@@ -710,20 +717,23 @@ export function loadThrowDraftsFromEvent(data: DatabaseDto, gameEventId: Guid): 
       }));
     const recoveredId =
       throwRow.RecoveredId === undefined ? undefined : throwRow.RecoveredId;
+    const resultId = throwRow.ResultId as ThrowResult;
+    const tags = normalizeThrowTags(throwRow.Tags, resultId);
     return {
       throwerGamePlayerId: throwRow.ThrowerId,
       targetGamePlayerId: throwRow.TargetId,
-      resultId: throwRow.ResultId as ThrowResult,
+      resultId,
       deflections,
       recoveredId: throwDraftNeedsRecovered({
         throwerGamePlayerId: throwRow.ThrowerId,
         targetGamePlayerId: throwRow.TargetId,
-        resultId: throwRow.ResultId as ThrowResult,
+        resultId,
         deflections,
         recoveredId: undefined,
       })
         ? recoveredId ?? null
         : undefined,
+      ...(tags.length > 0 ? { tags } : {}),
     };
   });
 }
@@ -1557,6 +1567,7 @@ export type ThrowSnapshot = {
   TargetId: Guid;
   RecoveredId: Guid | null;
   ResultId: number;
+  Tags?: string[];
   deflections: Array<{
     Id: Guid;
     Ordinal: number;
@@ -1660,33 +1671,38 @@ export function snapshotGameEvent(
     ResultId: number;
     RecoveredId?: Guid | null;
     Ordinal: number;
+    Tags?: string[];
   }>(data, 'Throw')
     .filter((row) => row.GameEventThrowId === gameEventId)
     .sort((a, b) => a.Ordinal - b.Ordinal);
 
-  const throws: ThrowSnapshot[] = throwRows.map((throwRow) => ({
-    Id: throwRow.Id,
-    Ordinal: throwRow.Ordinal,
-    ThrowerId: throwRow.ThrowerId,
-    TargetId: throwRow.TargetId,
-    RecoveredId: throwRow.RecoveredId ?? null,
-    ResultId: throwRow.ResultId,
-    deflections: table<{
-      Id: Guid;
-      ThrowId: Guid;
-      ReceiverId: Guid;
-      ResultId: number;
-      Ordinal: number;
-    }>(data, 'Deflection')
-      .filter((row) => row.ThrowId === throwRow.Id)
-      .sort((a, b) => a.Ordinal - b.Ordinal)
-      .map((row) => ({
-        Id: row.Id,
-        Ordinal: row.Ordinal,
-        ReceiverId: row.ReceiverId,
-        ResultId: row.ResultId,
-      })),
-  }));
+  const throws: ThrowSnapshot[] = throwRows.map((throwRow) => {
+    const tags = normalizeThrowTags(throwRow.Tags, throwRow.ResultId as ThrowResult);
+    return {
+      Id: throwRow.Id,
+      Ordinal: throwRow.Ordinal,
+      ThrowerId: throwRow.ThrowerId,
+      TargetId: throwRow.TargetId,
+      RecoveredId: throwRow.RecoveredId ?? null,
+      ResultId: throwRow.ResultId,
+      ...(tags.length > 0 ? { Tags: tags } : {}),
+      deflections: table<{
+        Id: Guid;
+        ThrowId: Guid;
+        ReceiverId: Guid;
+        ResultId: number;
+        Ordinal: number;
+      }>(data, 'Deflection')
+        .filter((row) => row.ThrowId === throwRow.Id)
+        .sort((a, b) => a.Ordinal - b.Ordinal)
+        .map((row) => ({
+          Id: row.Id,
+          Ordinal: row.Ordinal,
+          ReceiverId: row.ReceiverId,
+          ResultId: row.ResultId,
+        })),
+    };
+  });
 
   return { ...base, throws };
 }
@@ -1767,6 +1783,7 @@ export function restoreGameEventSnapshot(
 
   pushRow(data, 'GameEventThrow', { GameEventId: event.Id });
   for (const throwSnap of snapshot.throws ?? []) {
+    const tags = throwTagsForPersist(throwSnap.Tags, throwSnap.ResultId as ThrowResult);
     pushRow(data, 'Throw', {
       Id: throwSnap.Id,
       GameEventThrowId: event.Id,
@@ -1775,6 +1792,7 @@ export function restoreGameEventSnapshot(
       TargetId: throwSnap.TargetId,
       RecoveredId: throwSnap.RecoveredId,
       ResultId: throwSnap.ResultId,
+      ...(tags ? { Tags: tags } : {}),
     });
     for (const deflection of throwSnap.deflections) {
       pushRow(data, 'Deflection', {

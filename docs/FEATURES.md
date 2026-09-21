@@ -41,7 +41,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 
 | Tab | Purpose |
 |-----|---------|
-| **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional continuations, catch recovery |
+| **Throw** | Thrower, target, result (Hit, Dodge, Block, Disarm, Catch, Miss), optional continuations, catch recovery, optional **tags** (counter kind, invalid form, headshot, how-out) |
 | **Other** | Offender + mistake (line-out, wasted ball), **illegal block** (thrower + offender; counts as one kill), **No Blocking Started** (player-less game marker), **Timeout** / **Timeout ends**, or cards/injury: **Yellow** (soft-exit this game + sit the next), **Blue** (out now, can return on a catch), **Second yellow** / **Red** / **Injury** (soft-exit this game + rest of match). Soft-exits keep prior stats and free an on-court slot for a replacement via **Edit active players** |
 | **Finish** | Winner (home / away / tie) |
 
@@ -51,6 +51,7 @@ Main scoring surface: optional **YouTube player** (tall / small-docked / hide) w
 - Throw results shown with **MUI icons**; result can be chosen before thrower
 - **Continuations** (persisted as Deflection rows) chain on any primary result except Catch; `Z` focuses the new row so player keys pick the receiver and `R T Y U G` set the continuation result (Hit, Dodge, Block, Disarm, Catch). A continuation **Catch** ends the chain (no further rows) and shows Recovered under that catch. **Miss** stays on the throw only (intent vs the initial target). Continuations credit every receiver for Elu% while Hit% still counts one throw
 - **Catch recovery** — defaults to the defending team’s first-out (`(out 1st)`); pick another teammate (including later outs) or **None** (`M`) when return order differs from elimination order
+- **Optional throw tags** — collapsed “Tags” control under the result; chip toggles for counter (Rush / Pre-throw / Wave / Regular), invalid form (Grounded / High / Invalid counter), Headshot, and how-out (Failed dodge / block / catch). Tags never block auto-commit, do not change live elimination, and are omitted from Legacy CSV. Headshot / how-out only apply on Hit or Disarm. Timeline appends selected tag labels after the result
 - Auto-commit when a draft is complete and dirty; **Done / Restore / Insert below / Delete**
 - **Undo / Redo** (`-` / `+`) remove or restore the last entered event (session redo stack; cleared when a new event is committed). Distinct from `N` (delete selected) and `V` (restore draft from saved selection)
 - **Game Complete** idle state after a finish is recorded (undo/redo still work); **Edit roster** still available there; **Enter** goes to **Next game**
@@ -136,6 +137,7 @@ Match / Game roster keys follow on-screen order (starters, then subs; outs last 
 - **Team standings** (game W-L-T + match W-L from finished games) and match series scoreboard
 - Charts (`@mui/x-charts`): throw-result mix, top-N bars, home vs away, game elimination timeline; thrower→target heatmap on match/game
 - Display metrics (catches, recoveries, rates, VOR/WAR) sit on top of the engine — **golden CSV unchanged** under the default Legacy policy
+- **Throw tags** (optional Track Game annotations): player page shows thrown/taken tallies (counters, invalid form, headshots, how-out). Display-only — not in Legacy CSV or kill credit
 - Highlight formulas: **Caught%** = catches thrown / throws (lower is better); **Catch%** = catches / times targeted; **Elusiveness%** = (targeted − hit) / targeted (targeted includes primary targets and continuation receivers; hit = incoming Hit, Disarm, or legacy failed block); **Efficiency%** = kills / throws; **Net** = 2×catches + kills − hit/error deaths − 2×times caught (Deaths exclude catch-outs; times caught is separate); **VOR** = equal-weight average of z-scores vs the median of those five among qualifier-eligible players (Caught% inverted); **WAR** = VOR / 6
 - **Legacy CSV export** keeps Disarm and deprecated failed block/catch folded into **Hit**; `BlockFailed` / `CatchFailed` columns emit **0**; continuation **Dodge** is an explicit column under Throws/Targeted (Deflection)
 - Match statistics **CSV download / copy** (TSV for spreadsheet paste); league/match CSV also from the Stats page

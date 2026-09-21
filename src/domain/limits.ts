@@ -7,6 +7,9 @@ export const MAX_DISPLAY_NAME = 80;
 export const MAX_NOTES = 500;
 export const MAX_MATCH_LABEL = 40;
 export const MAX_MATCH_LABELS = 8;
+/** Controlled throw-tag ids (CounterRush, Headshot, …); keep in sync with throwTags.ts. */
+export const MAX_THROW_TAG = 32;
+export const MAX_THROW_TAGS = 8;
 export const MAX_EMAIL = 254;
 export const MAX_AUTH_UID = 128;
 export const MAX_IMAGE_URL = 2048;

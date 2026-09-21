@@ -6,6 +6,12 @@ import {
   isIncomingEluHitDeflectionResult,
   isIncomingEluHitThrowResult,
 } from '../throwResults';
+import {
+  isKnownThrowTag,
+  throwTagGroupOf,
+  throwTagLabels,
+  type ThrowTagId,
+} from '../throwTags';
 import type { DatabaseDto, Guid, PlayerRow } from '../types';
 import {
   DeflectionResult,
@@ -124,6 +130,10 @@ export type DisplayPlayerStats = {
   wastedBalls: number;
   lineOuts: number;
   illegalBlocks: number;
+  /** Optional throw-tag counts on throws this player made. */
+  throwTagsThrown: Partial<Record<ThrowTagId, number>>;
+  /** Headshot / how-out tags when this player was the target. */
+  throwTagsTaken: Partial<Record<ThrowTagId, number>>;
   kd: number | null;
   kdCredit: number | null;
   hitRate: number | null;
@@ -190,6 +200,7 @@ export function buildDisplayStats(
   if (scope.kind !== 'league') {
     const summary = createStatisticsSummary(data, matchIds, gameIds);
     const extras = countCatchesAndRecoveries(data, matchIds, gameIds);
+    const tagTallies = countThrowTagTallies(data, matchIds, gameIds, false);
     const sideByPlayer = teamHomeByPlayer(data, scope.matchId);
     const subByPlayer = substituteByPlayer(data, scope.matchId);
     return summary.map((row) => {
@@ -197,6 +208,7 @@ export function buildDisplayStats(
         row,
         extras.get(row.playerId)?.recoveries ?? 0,
         sideByPlayer,
+        tagTallies.get(row.playerId),
       );
       display.isSubstitute = subByPlayer.get(row.playerId) ?? false;
       display.hasSubStats = display.isSubstitute;
@@ -213,6 +225,7 @@ export function buildDisplayStats(
   const includeSubStats = options?.includeSubStats ?? true;
   const { split } = createSplitStatisticsSummary(data, matchIds, gameIds);
   const extrasSplit = countCatchesAndRecoveriesSplit(data, matchIds, gameIds);
+  const tagTallies = countThrowTagTallies(data, matchIds, gameIds, true);
   const overviews = buildPlayerOverviews(data);
   const groups = new Map<Guid, { starter: DisplayPlayerStats[]; sub: DisplayPlayerStats[] }>();
 
@@ -246,6 +259,7 @@ export function buildDisplayStats(
         : (starterSum ?? subSum)
       : starterSum;
     if (!base) continue;
+    const tags = tagTallies.get(canonicalId);
     rows.push({
       ...base,
       playerId: canonicalId,
@@ -257,6 +271,8 @@ export function buildDisplayStats(
       subGamesPlayed: includeSubStats ? (subSum?.gamesPlayed ?? 0) : 0,
       subKills: includeSubStats ? (subSum?.kills ?? 0) : 0,
       isSubstitute: false,
+      throwTagsThrown: tags?.thrown ?? {},
+      throwTagsTaken: tags?.taken ?? {},
     });
   }
 
@@ -454,10 +470,16 @@ export const LEADERBOARD_METRICS: { id: LeaderboardMetric; label: string }[] = [
   { id: 'gamesWon', label: 'Games won' },
 ];
 
+export type ThrowTagTallies = {
+  thrown: Partial<Record<ThrowTagId, number>>;
+  taken: Partial<Record<ThrowTagId, number>>;
+};
+
 function toDisplayPlayer(
   row: PlayerStatistics,
   recoveries: number,
   sideByPlayer: Map<Guid, boolean> | null,
+  tagTallies?: ThrowTagTallies,
 ): DisplayPlayerStats {
   const gamesWon = countOutcome(row.games, ECompetitionOutcome.Win);
   const gamesLost = countOutcome(row.games, ECompetitionOutcome.Loss);
@@ -546,6 +568,8 @@ function toDisplayPlayer(
     wastedBalls: row.offenseErrors.get(EThrowError.WastedBall) ?? 0,
     lineOuts: row.deathsErrors.get(EDeathError.LineOut) ?? 0,
     illegalBlocks: row.deathsErrors.get(EDeathError.BlockIllegal) ?? 0,
+    throwTagsThrown: tagTallies?.thrown ?? {},
+    throwTagsTaken: tagTallies?.taken ?? {},
     kd: rateOrInfinite(kills, deaths),
     kdCredit: rateOrInfinite(killsCredit, deathsCredit),
     hitRate: throws > 0 ? throwHits / throws : null,
@@ -583,6 +607,8 @@ export function addDisplayStats(
     if (!extra) continue;
     throwCounts[resultId] = (throwCounts[resultId] ?? 0) + extra;
   }
+  const throwTagsThrown = addTagCounts(a.throwTagsThrown, b.throwTagsThrown);
+  const throwTagsTaken = addTagCounts(a.throwTagsTaken, b.throwTagsTaken);
   const gamesWon = a.gamesWon + b.gamesWon;
   const gamesLost = a.gamesLost + b.gamesLost;
   const gamesTied = a.gamesTied + b.gamesTied;
@@ -635,6 +661,8 @@ export function addDisplayStats(
     wastedBalls: a.wastedBalls + b.wastedBalls,
     lineOuts: a.lineOuts + b.lineOuts,
     illegalBlocks: a.illegalBlocks + b.illegalBlocks,
+    throwTagsThrown,
+    throwTagsTaken,
     kd: rateOrInfinite(kills, deaths),
     kdCredit: rateOrInfinite(killsCredit, deathsCredit),
     hitRate: throws > 0 ? throwHits / throws : null,
@@ -734,6 +762,92 @@ function substituteByPlayer(data: DatabaseDto, matchId: Guid): Map<Guid, boolean
 }
 
 type RecoveryCounts = { recoveries: number };
+
+function addTagCounts(
+  a: Partial<Record<ThrowTagId, number>>,
+  b: Partial<Record<ThrowTagId, number>>,
+): Partial<Record<ThrowTagId, number>> {
+  const out: Partial<Record<ThrowTagId, number>> = { ...a };
+  for (const [key, value] of Object.entries(b) as [ThrowTagId, number][]) {
+    if (!value) continue;
+    out[key] = (out[key] ?? 0) + value;
+  }
+  return out;
+}
+
+function bumpTagCount(
+  bag: Partial<Record<ThrowTagId, number>>,
+  tag: ThrowTagId,
+): void {
+  bag[tag] = (bag[tag] ?? 0) + 1;
+}
+
+/**
+ * Display-only tag tallies (not Legacy CSV). When `resolveCanonical` is true,
+ * guest/linked rows roll into the canonical player id.
+ */
+export function countThrowTagTallies(
+  data: DatabaseDto,
+  matchIds: Guid[],
+  gameIds: Set<Guid> | undefined,
+  resolveCanonical: boolean,
+): Map<Guid, ThrowTagTallies> {
+  const counts = new Map<Guid, ThrowTagTallies>();
+  const ensure = (playerId: Guid): ThrowTagTallies => {
+    let row = counts.get(playerId);
+    if (!row) {
+      row = { thrown: {}, taken: {} };
+      counts.set(playerId, row);
+    }
+    return row;
+  };
+  const resolvePlayer = (playerId: Guid): Guid => {
+    if (!resolveCanonical) return playerId;
+    const player = getPlayer(data, playerId);
+    return player ? resolveDisplayCanonicalId(data, player) : playerId;
+  };
+
+  const playerIdByGamePlayer = playerIdByGamePlayerId(data);
+  iterateScopedThrows(data, matchIds, gameIds, (detail) => {
+    const throwerGp = detail.throwRow.ThrowerId;
+    const targetGp = detail.throwRow.TargetId;
+    const throwerPlayerId = playerIdByGamePlayer.get(throwerGp);
+    const targetPlayerId = playerIdByGamePlayer.get(targetGp);
+    const tags = (detail.throwRow.Tags ?? []).filter(isKnownThrowTag);
+    if (tags.length === 0) return;
+
+    if (throwerPlayerId) {
+      const thrown = ensure(resolvePlayer(throwerPlayerId)).thrown;
+      for (const tag of tags) bumpTagCount(thrown, tag);
+    }
+    if (targetPlayerId) {
+      const taken = ensure(resolvePlayer(targetPlayerId)).taken;
+      for (const tag of tags) {
+        const group = throwTagGroupOf(tag);
+        if (group === 'contact' || group === 'defensiveFailure') {
+          bumpTagCount(taken, tag);
+        }
+      }
+    }
+  });
+
+  return counts;
+}
+
+export function throwTagTallyTotal(
+  counts: Partial<Record<ThrowTagId, number>>,
+): number {
+  return Object.values(counts).reduce((sum, n) => sum + (n ?? 0), 0);
+}
+
+export function formatThrowTagMix(
+  counts: Partial<Record<ThrowTagId, number>>,
+): { tag: ThrowTagId; label: string; count: number }[] {
+  return (Object.entries(counts) as [ThrowTagId, number][])
+    .filter(([, count]) => count > 0)
+    .map(([tag, count]) => ({ tag, label: throwTagLabels[tag], count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
 
 function countCatchesAndRecoveries(
   data: DatabaseDto,

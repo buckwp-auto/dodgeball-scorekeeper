@@ -25,6 +25,7 @@ import {
   type ThrowDraft,
 } from './gameEvents';
 import { displayDeflectionResultLabel, displayThrowResultLabel } from './throwResults';
+import { isKnownThrowTag, throwTagLabels } from './throwTags';
 import {
   toneForDeflectionResult,
   toneForThrowResult,
@@ -112,6 +113,16 @@ export function buildThrowTimelineRows(
       text: `, resulting in ${articleForResult(resultLabel)} ${resultLabel}`,
     },
   ];
+
+  const tagLabels = (draft.tags ?? [])
+    .map((tag) => (isKnownThrowTag(tag) ? throwTagLabels[tag] : null))
+    .filter((label): label is string => Boolean(label));
+  if (tagLabels.length > 0) {
+    throwSegments.push({
+      kind: 'text',
+      text: ` · ${tagLabels.join(', ')}`,
+    });
+  }
 
   // Recovered belongs with the Catch — primary Catch on the throw row, else the
   // continuation Catch row (not earlier chain results like Dodge/Block).

@@ -45,6 +45,8 @@ export type ThrowRow = {
   TargetId: Guid;
   RecoveredId?: Guid | null;
   ResultId: number;
+  /** Optional controlled annotations (see throwTags.ts). */
+  Tags?: string[];
 };
 export type DeflectionRow = {
   Id: Guid;

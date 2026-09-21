@@ -132,6 +132,37 @@ describe('buildDisplayStats', () => {
     expect(casey.teamHome).toBe(false);
   });
 
+  it('tallies optional throw tags for thrower and target without changing kills', () => {
+    const { data, match, gameId, homeGp, awayGp } = setupMatch();
+    persistThrowGameEvent(data, gameId, match.Id, [
+      {
+        throwerGamePlayerId: homeGp.Id,
+        targetGamePlayerId: awayGp.Id,
+        resultId: ThrowResult.Hit,
+        deflections: [],
+        recoveredId: undefined,
+        tags: ['CounterRush', 'Headshot', 'FailedDodge'],
+      },
+    ]);
+
+    const rows = buildDisplayStats(data, { kind: 'game', matchId: match.Id, gameId });
+    const alex = byName(rows, 'Alex')!;
+    const casey = byName(rows, 'Casey')!;
+
+    expect(alex.kills).toBe(1);
+    expect(alex.throwTagsThrown).toEqual({
+      CounterRush: 1,
+      Headshot: 1,
+      FailedDodge: 1,
+    });
+    expect(alex.throwTagsTaken).toEqual({});
+    expect(casey.throwTagsTaken).toEqual({
+      Headshot: 1,
+      FailedDodge: 1,
+    });
+    expect(casey.throwTagsThrown).toEqual({});
+  });
+
   it('credits an illegal-block thrower a kill and the offender an error death', () => {
     const { data, match, gameId, homeGp, awayGp } = setupMatch();
     persistErrorGameEvent(data, gameId, match.Id, {
