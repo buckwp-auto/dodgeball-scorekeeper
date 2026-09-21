@@ -70,6 +70,7 @@ import {
   type ThrowDraft,
 } from '../domain/gameEvents';
 import { buildTimelineEntries } from '../domain/gameEventTimeline';
+import { playerDepartureKindNeedsReplacementHint } from '../domain/gameLineup';
 import { rememberLastGame, rememberLastMatch } from '../domain/lastScoring';
 import {
   collectTimeoutPauseIntervals,
@@ -105,7 +106,12 @@ import { TrackGameHotkeyHints } from '../components/trackGame/TrackGameHotkeyHin
 type TabKey = TrackGameTab;
 
 function editorTabForEventType(type: GameEventType | null): TabKey | 'start' | null {
-  if (type === 'noBlocking' || type === 'timeout' || type === 'timeoutEnd') {
+  if (
+    type === 'noBlocking' ||
+    type === 'timeout' ||
+    type === 'timeoutEnd' ||
+    type === 'playerDeparture'
+  ) {
     return 'error';
   }
   if (type === 'start') return 'start';
@@ -162,6 +168,7 @@ export function GameEventsPage() {
   const [savedSnapshot, setSavedSnapshot] = useState(emptyThrowSnapshot);
 
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [rosterHint, setRosterHint] = useState<string | null>(null);
   /** Player position when the throw drafts were last touched, for out-player warnings. */
   const [editVideoOffsetSeconds, setEditVideoOffsetSeconds] = useState<number | null>(null);
   const [inPageVideoNow, setInPageVideoNow] = useState<number | null>(null);
@@ -582,25 +589,33 @@ export function GameEventsPage() {
   const handleDelete = useCallback(() => {
     if (!effectiveSelectedId) return;
     if (getGameEventType(data, effectiveSelectedId) === 'start') return;
-    mutate(
-      (draft) => {
-        deleteGameEvent(draft, effectiveSelectedId);
-        return null;
-      },
-      'Deleted game event.',
-    );
-    logDeleteItem('game_event');
-    resetNewEventMode();
+    try {
+      mutate(
+        (draft) => {
+          deleteGameEvent(draft, effectiveSelectedId);
+          return null;
+        },
+        'Deleted game event.',
+      );
+      logDeleteItem('game_event');
+      resetNewEventMode();
+    } catch (error) {
+      setCommitError(error instanceof Error ? error.message : 'Could not delete event');
+    }
   }, [effectiveSelectedId, mutate, resetNewEventMode, data]);
 
   const handleUndo = useCallback(() => {
-    const snapshot = mutate(
-      (draft) => undoLastGameEvent(draft, gameId),
-      (removed) => (removed ? 'Undid last game event.' : ''),
-    );
-    if (!snapshot) return;
-    redoStackRef.current = [...redoStackRef.current, snapshot];
-    resetNewEventMode();
+    try {
+      const snapshot = mutate(
+        (draft) => undoLastGameEvent(draft, gameId),
+        (removed) => (removed ? 'Undid last game event.' : ''),
+      );
+      if (!snapshot) return;
+      redoStackRef.current = [...redoStackRef.current, snapshot];
+      resetNewEventMode();
+    } catch (error) {
+      setCommitError(error instanceof Error ? error.message : 'Could not undo event');
+    }
   }, [mutate, gameId, resetNewEventMode]);
 
   const handleRedo = useCallback(() => {
@@ -663,7 +678,10 @@ export function GameEventsPage() {
     const rawType =
       lockedEventType && lockedEventType !== 'start' ? lockedEventType : activeTab;
     const type =
-      rawType === 'noBlocking' || rawType === 'timeout' || rawType === 'timeoutEnd'
+      rawType === 'noBlocking' ||
+      rawType === 'timeout' ||
+      rawType === 'timeoutEnd' ||
+      rawType === 'playerDeparture'
         ? 'error'
         : rawType;
     setActiveTab(type);
@@ -684,7 +702,10 @@ export function GameEventsPage() {
     const type = getGameEventType(data, eventId);
     if (type && type !== 'start') {
       setActiveTab(
-        type === 'noBlocking' || type === 'timeout' || type === 'timeoutEnd'
+        type === 'noBlocking' ||
+          type === 'timeout' ||
+          type === 'timeoutEnd' ||
+          type === 'playerDeparture'
           ? 'error'
           : type,
       );
@@ -765,6 +786,16 @@ export function GameEventsPage() {
       setPendingWipeFinish(false);
       setSavedSnapshot(JSON.stringify(currentDraftPayload));
       setCommitError(null);
+      if (
+        !effectiveSelectedId &&
+        visibleTab === 'error' &&
+        errorDraft.departureKind != null &&
+        playerDepartureKindNeedsReplacementHint(errorDraft.departureKind)
+      ) {
+        setRosterHint(
+          'Player left the game. Open Edit active players to add a replacement — they do not count toward the on-court limit.',
+        );
+      }
     } catch (error) {
       // Keep the draft on screen so the tracker can correct it instead of losing the event
       setCommitError(error instanceof Error ? error.message : String(error));
@@ -874,6 +905,8 @@ export function GameEventsPage() {
         const next = applyPlayerHotkeyToThrowDrafts(throwDrafts, players, key, {
           eliminatedGamePlayerIds: live.eliminatedGamePlayerIds,
           eliminationOrder: live.eliminationOrder,
+          departedGamePlayerIds: live.departedGamePlayerIds,
+          departureKindByGamePlayerId: live.departureKindByGamePlayerId,
         });
         if (next) updateThrowDrafts(next);
         return;
@@ -895,6 +928,7 @@ export function GameEventsPage() {
         const hotkeys = buildPermanentPlayerHotkeys(players);
         const gamePlayerId = findGamePlayerIdByHotkey(hotkeys, key);
         if (!gamePlayerId || live.eliminatedGamePlayerIds.has(gamePlayerId)) return;
+        if (live.departedGamePlayerIds.has(gamePlayerId)) return;
         const next = applyPlayerHotkeyToErrorDraft(errorDraft, players, key);
         if (next) setErrorDraft(next);
       }
@@ -1332,8 +1366,22 @@ export function GameEventsPage() {
               </Box>
             ) : null}
             {commitError ? (
-              <Alert severity="error" sx={{ mb: 1 }}>
+              <Alert severity="error" sx={{ mb: 1 }} onClose={() => setCommitError(null)}>
                 {commitError}
+              </Alert>
+            ) : null}
+            {rosterHint ? (
+              <Alert
+                severity="info"
+                sx={{ mb: 1 }}
+                onClose={() => setRosterHint(null)}
+                action={
+                  <Button color="inherit" size="small" onClick={() => goToGameRoster(gameId)}>
+                    Edit active players
+                  </Button>
+                }
+              >
+                {rosterHint}
               </Alert>
             ) : null}
             {staleEliminatedSelections.length > 0 ? (
@@ -1356,6 +1404,8 @@ export function GameEventsPage() {
                 liveElimination={{
                   eliminatedGamePlayerIds: live.eliminatedGamePlayerIds,
                   eliminationOrder: live.eliminationOrder,
+                  departedGamePlayerIds: live.departedGamePlayerIds,
+                  departureKindByGamePlayerId: live.departureKindByGamePlayerId,
                 }}
                 onChange={updateThrowDrafts}
               />
@@ -1368,6 +1418,8 @@ export function GameEventsPage() {
                 awayTeamName={awayTeam?.Name ?? 'Away'}
                 eliminatedGamePlayerIds={live.eliminatedGamePlayerIds}
                 eliminationOrder={live.eliminationOrder}
+                departedGamePlayerIds={live.departedGamePlayerIds}
+                departureKindByGamePlayerId={live.departureKindByGamePlayerId}
                 onChange={setErrorDraft}
               />
             ) : null}

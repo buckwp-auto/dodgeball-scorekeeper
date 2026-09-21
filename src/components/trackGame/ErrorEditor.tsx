@@ -6,7 +6,12 @@ import {
   type ErrorDraft,
   type GamePlayerInfo,
 } from '../../domain/gameEvents';
-import { sortGamePlayerInfos, formatEliminatedPlayerLabel } from '../../domain/gameElimination';
+import {
+  sortGamePlayerInfos,
+  formatEliminatedPlayerLabel,
+  formatDepartedPlayerLabel,
+} from '../../domain/gameElimination';
+import type { GameEventPlayerDepartureKind } from '../../domain/statistics/constants';
 import {
   applyOtherOffenseHotkey,
   buildPermanentPlayerHotkeys,
@@ -33,6 +38,8 @@ export function ErrorEditor({
   awayTeamName,
   eliminatedGamePlayerIds,
   eliminationOrder = new Map(),
+  departedGamePlayerIds = new Set(),
+  departureKindByGamePlayerId = new Map(),
   onChange,
 }: {
   draft: ErrorDraft;
@@ -41,6 +48,8 @@ export function ErrorEditor({
   awayTeamName: string;
   eliminatedGamePlayerIds: ReadonlySet<string>;
   eliminationOrder?: ReadonlyMap<string, number>;
+  departedGamePlayerIds?: ReadonlySet<string>;
+  departureKindByGamePlayerId?: ReadonlyMap<string, GameEventPlayerDepartureKind>;
   onChange: (draft: ErrorDraft) => void;
 }) {
   const hotkeys = buildPermanentPlayerHotkeys(players);
@@ -55,6 +64,7 @@ export function ErrorEditor({
   const pendingMistake =
     !markerMode &&
     draft.offenseId === null &&
+    draft.departureKind == null &&
     !draft.noBlockingStarted &&
     !draft.timeoutStarted &&
     !draft.timeoutEnded;
@@ -63,19 +73,30 @@ export function ErrorEditor({
     players.filter((row) => row.teamHome),
     eliminatedGamePlayerIds,
     eliminationOrder,
+    departedGamePlayerIds,
   );
   const awayPlayers = sortGamePlayerInfos(
     players.filter((row) => !row.teamHome),
     eliminatedGamePlayerIds,
     eliminationOrder,
+    departedGamePlayerIds,
   );
 
+  const isLeft = (id: string) => departedGamePlayerIds.has(id);
   const isOut = (id: string) => eliminatedGamePlayerIds.has(id);
+  const isInactive = (id: string) => isOut(id) || isLeft(id);
 
-  const label = (row: GamePlayerInfo) =>
-    isOut(row.gamePlayerId)
+  const label = (row: GamePlayerInfo) => {
+    if (isLeft(row.gamePlayerId)) {
+      return formatDepartedPlayerLabel(
+        row.playerName,
+        departureKindByGamePlayerId.get(row.gamePlayerId),
+      );
+    }
+    return isOut(row.gamePlayerId)
       ? formatEliminatedPlayerLabel(row.playerName, eliminationOrder.get(row.gamePlayerId))
       : row.playerName;
+  };
 
   const chipLabel = (row: GamePlayerInfo | undefined) =>
     row ? label(row) : '?';
@@ -87,10 +108,12 @@ export function ErrorEditor({
   };
 
   const setThrower = (gamePlayerId: string) => {
+    if (gamePlayerId && isLeft(gamePlayerId)) return;
     onChange({ ...draft, throwerGamePlayerId: gamePlayerId });
   };
 
   const setOffender = (gamePlayerId: string) => {
+    if (gamePlayerId && isLeft(gamePlayerId)) return;
     onChange({ ...draft, offenderGamePlayerId: gamePlayerId });
   };
 
@@ -103,6 +126,8 @@ export function ErrorEditor({
       : sortGamePlayerInfos(
           players.filter((row) => row.teamHome === throwingHome),
           eliminatedGamePlayerIds,
+          undefined,
+          departedGamePlayerIds,
         );
   const defendingHome = throwingHome === null ? null : !throwingHome;
   const defendingPlayers =
@@ -111,6 +136,8 @@ export function ErrorEditor({
       : sortGamePlayerInfos(
           players.filter((row) => row.teamHome === defendingHome),
           eliminatedGamePlayerIds,
+          undefined,
+          departedGamePlayerIds,
         );
 
   return (
@@ -181,7 +208,7 @@ export function ErrorEditor({
               <EditorChoiceButton
                 key={row.gamePlayerId}
                 hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                eliminated={isOut(row.gamePlayerId)}
+                eliminated={isInactive(row.gamePlayerId)}
                 playerId={row.playerId}
                 teamHome={row.teamHome}
                 onClick={() =>
@@ -199,7 +226,7 @@ export function ErrorEditor({
               <EditorChoiceButton
                 key={row.gamePlayerId}
                 hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                eliminated={isOut(row.gamePlayerId)}
+                eliminated={isInactive(row.gamePlayerId)}
                 playerId={row.playerId}
                 teamHome={row.teamHome}
                 onClick={() =>
@@ -236,7 +263,7 @@ export function ErrorEditor({
                 <EditorChoiceButton
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                  eliminated={isOut(row.gamePlayerId)}
+                  eliminated={isInactive(row.gamePlayerId)}
                   playerId={row.playerId}
                   teamHome={row.teamHome}
                   onClick={() => setThrower(row.gamePlayerId)}
@@ -265,7 +292,7 @@ export function ErrorEditor({
                 <EditorChoiceButton
                   key={row.gamePlayerId}
                   hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                  eliminated={isOut(row.gamePlayerId)}
+                  eliminated={isInactive(row.gamePlayerId)}
                   playerId={row.playerId}
                   teamHome={row.teamHome}
                   onClick={() => setOffender(row.gamePlayerId)}
@@ -285,7 +312,7 @@ export function ErrorEditor({
               <EditorChoiceButton
                 key={row.gamePlayerId}
                 hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                eliminated={isOut(row.gamePlayerId)}
+                eliminated={isInactive(row.gamePlayerId)}
                 playerId={row.playerId}
                 teamHome={row.teamHome}
                 onClick={() =>
@@ -305,7 +332,7 @@ export function ErrorEditor({
               <EditorChoiceButton
                 key={row.gamePlayerId}
                 hotkey={hotkeyForGamePlayer(hotkeys, row.gamePlayerId)}
-                eliminated={isOut(row.gamePlayerId)}
+                eliminated={isInactive(row.gamePlayerId)}
                 playerId={row.playerId}
                 teamHome={row.teamHome}
                 onClick={() =>
@@ -379,7 +406,11 @@ export function ErrorEditor({
         {otherOffenseUiOrder.map((choice, index) => (
           <EditorChoiceButton
             key={
-              choice.kind === 'offense' ? choice.offenseId : choice.kind
+              choice.kind === 'offense'
+                ? choice.offenseId
+                : choice.kind === 'departure'
+                  ? `departure-${choice.departureKind}`
+                  : choice.kind
             }
             hotkey={hotkeyForOtherOffenseIndex(index)}
             selected={isOtherOffenseChoiceActive(draft, choice)}

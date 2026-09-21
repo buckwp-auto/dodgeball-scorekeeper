@@ -1,8 +1,14 @@
-import { GameEventErrorOffense, DeflectionResult, ThrowResult } from './statistics/constants';
+import {
+  GameEventErrorOffense,
+  GameEventPlayerDepartureKind,
+  DeflectionResult,
+  ThrowResult,
+} from './statistics/constants';
 import {
   deflectionResultUiOrder,
   errorOffenseLabels,
   NO_BLOCKING_STARTED_LABEL,
+  playerDepartureKindLabels,
   TIMEOUT_ENDS_LABEL,
   TIMEOUT_LABEL,
   throwResultUiOrder,
@@ -33,11 +39,22 @@ export const RECOVERED_NONE_HOTKEY = 'm';
 
 /**
  * Fixed Other-tab offense keys (stable layout; do not overlap player/result keys).
- * Digits are not used to *switch* tabs — they are bound here (1–6) and as Match/Game
- * roster overflow (home `Q 1 2 3 4 5`, away `P 0 9 8 7 6`). Tab switch keys are
- * {@link TRACK_GAME_TAB_HOTKEYS} (`/` `'` `\`).
+ * Digits 1–6 are offenses/markers; 7–9 and 0 are yellow / blue / second yellow / red.
+ * Injury is click-only (no digit left). Digits also appear as Match/Game roster overflow.
+ * Tab switch keys are {@link TRACK_GAME_TAB_HOTKEYS} (`/` `'` `\`).
  */
-export const OTHER_OFFENSE_HOTKEYS = ['1', '2', '3', '4', '5', '6'] as const;
+export const OTHER_OFFENSE_HOTKEYS = [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '0',
+] as const;
 
 /** Track Game editor tabs — Throw / Other / Finish. */
 export type TrackGameTab = 'throw' | 'error' | 'finish';
@@ -74,7 +91,8 @@ export type OtherOffenseChoice =
   | { kind: 'offense'; offenseId: GameEventErrorOffense }
   | { kind: 'noBlocking' }
   | { kind: 'timeout' }
-  | { kind: 'timeoutEnd' };
+  | { kind: 'timeoutEnd' }
+  | { kind: 'departure'; departureKind: GameEventPlayerDepartureKind };
 
 export const otherOffenseUiOrder: OtherOffenseChoice[] = [
   { kind: 'offense', offenseId: GameEventErrorOffense.LineOut },
@@ -83,12 +101,18 @@ export const otherOffenseUiOrder: OtherOffenseChoice[] = [
   { kind: 'noBlocking' },
   { kind: 'timeout' },
   { kind: 'timeoutEnd' },
+  { kind: 'departure', departureKind: GameEventPlayerDepartureKind.Yellow },
+  { kind: 'departure', departureKind: GameEventPlayerDepartureKind.Blue },
+  { kind: 'departure', departureKind: GameEventPlayerDepartureKind.SecondYellow },
+  { kind: 'departure', departureKind: GameEventPlayerDepartureKind.Red },
+  { kind: 'departure', departureKind: GameEventPlayerDepartureKind.Injury },
 ];
 
 export function labelForOtherOffenseChoice(choice: OtherOffenseChoice): string {
   if (choice.kind === 'noBlocking') return NO_BLOCKING_STARTED_LABEL;
   if (choice.kind === 'timeout') return TIMEOUT_LABEL;
   if (choice.kind === 'timeoutEnd') return TIMEOUT_ENDS_LABEL;
+  if (choice.kind === 'departure') return playerDepartureKindLabels[choice.departureKind];
   return errorOffenseLabels[choice.offenseId];
 }
 
@@ -108,6 +132,7 @@ export function getOtherOffenseChoiceForKey(key: string): OtherOffenseChoice | n
 export function isOtherOffenseChoiceActive(
   draft: {
     offenseId: GameEventErrorOffense | null;
+    departureKind?: GameEventPlayerDepartureKind | null;
     noBlockingStarted?: boolean;
     timeoutStarted?: boolean;
     timeoutEnded?: boolean;
@@ -117,10 +142,19 @@ export function isOtherOffenseChoiceActive(
   if (choice.kind === 'noBlocking') return Boolean(draft.noBlockingStarted);
   if (choice.kind === 'timeout') return Boolean(draft.timeoutStarted);
   if (choice.kind === 'timeoutEnd') return Boolean(draft.timeoutEnded);
+  if (choice.kind === 'departure') {
+    return (
+      !draft.noBlockingStarted &&
+      !draft.timeoutStarted &&
+      !draft.timeoutEnded &&
+      draft.departureKind === choice.departureKind
+    );
+  }
   return (
     !draft.noBlockingStarted &&
     !draft.timeoutStarted &&
     !draft.timeoutEnded &&
+    draft.departureKind == null &&
     draft.offenseId === choice.offenseId
   );
 }
@@ -129,6 +163,7 @@ export type OtherTabDraft = {
   offenderGamePlayerId: string;
   throwerGamePlayerId?: string;
   offenseId: GameEventErrorOffense | null;
+  departureKind?: GameEventPlayerDepartureKind | null;
   noBlockingStarted?: boolean;
   timeoutStarted?: boolean;
   timeoutEnded?: boolean;
@@ -141,6 +176,7 @@ function markerDraft(
     offenderGamePlayerId: '',
     throwerGamePlayerId: '',
     offenseId: null,
+    departureKind: null,
     noBlockingStarted: false,
     timeoutStarted: false,
     timeoutEnded: false,
@@ -167,6 +203,19 @@ export function applyOtherOffenseHotkey(
       ? markerDraft({})
       : markerDraft({ timeoutEnded: true });
   }
+  if (choice.kind === 'departure') {
+    const nextKind =
+      draft.departureKind === choice.departureKind ? null : choice.departureKind;
+    return {
+      ...draft,
+      noBlockingStarted: false,
+      timeoutStarted: false,
+      timeoutEnded: false,
+      offenseId: null,
+      departureKind: nextKind,
+      throwerGamePlayerId: '',
+    };
+  }
   const nextOffense = draft.offenseId === choice.offenseId ? null : choice.offenseId;
   const keepThrower = nextOffense === GameEventErrorOffense.BlockIllegal;
   return {
@@ -174,6 +223,7 @@ export function applyOtherOffenseHotkey(
     noBlockingStarted: false,
     timeoutStarted: false,
     timeoutEnded: false,
+    departureKind: null,
     offenseId: nextOffense,
     throwerGamePlayerId: keepThrower ? draft.throwerGamePlayerId ?? '' : '',
   };

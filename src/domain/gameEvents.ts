@@ -3,10 +3,19 @@ import {
   DeflectionResult,
   GameEventErrorOffense,
   GameEventFinishResult,
+  GameEventPlayerDepartureKind,
   GameEventTimeoutKind,
   ThrowResult,
 } from './statistics/constants';
 import { deletePlayer, getPlayer, playerIsUsedInMatches } from './database';
+import {
+  canDeletePlayerDepartureEvent,
+  getDepartedGamePlayerIds,
+  playerDepartureKindExits,
+  playerDepartureKindLabels,
+  type GameEventPlayerDepartureRow,
+} from './gameLineup';
+import { resolvePlayersPerSide } from './leagueSettings';
 import type { DatabaseDto, Guid } from './types';
 import {
   getAdjacentGameId,
@@ -45,6 +54,7 @@ export type GameEventType =
   | 'noBlocking'
   | 'timeout'
   | 'timeoutEnd'
+  | 'playerDeparture'
   | 'finish';
 
 export type GamePlayerInfo = {
@@ -77,6 +87,8 @@ export type ErrorDraft = {
    */
   throwerGamePlayerId?: Guid;
   offenseId: GameEventErrorOffense | null;
+  /** Card / injury on the Other tab (mutually exclusive with offenseId / markers). */
+  departureKind?: GameEventPlayerDepartureKind | null;
   /** Player-less game marker on the Other tab. */
   noBlockingStarted?: boolean;
   /** Player-less timeout start marker on the Other tab. */
@@ -133,6 +145,8 @@ export const errorOffenseLabels: Record<GameEventErrorOffense, string> = {
   [GameEventErrorOffense.BlockIllegal]: 'Illegal Block (No Blocking)',
 };
 
+export { playerDepartureKindLabels };
+
 export const NO_BLOCKING_STARTED_LABEL = 'No Blocking Started';
 export const TIMEOUT_LABEL = 'Timeout';
 export const TIMEOUT_ENDS_LABEL = 'Timeout ends';
@@ -163,6 +177,7 @@ export function emptyErrorDraft(): ErrorDraft {
     offenderGamePlayerId: '',
     throwerGamePlayerId: '',
     offenseId: null,
+    departureKind: null,
     noBlockingStarted: false,
     timeoutStarted: false,
     timeoutEnded: false,
@@ -176,10 +191,17 @@ export function errorDraftIsMarker(draft: ErrorDraft): boolean {
   );
 }
 
+/** True when the Other draft is a card/injury departure. */
+export function errorDraftIsDeparture(draft: ErrorDraft): boolean {
+  return draft.departureKind != null;
+}
+
 /** Illegal block is an Other-tab error that also names the thrower. */
 export function errorDraftNeedsThrower(draft: ErrorDraft): boolean {
   return (
-    !errorDraftIsMarker(draft) && draft.offenseId === GameEventErrorOffense.BlockIllegal
+    !errorDraftIsMarker(draft) &&
+    !errorDraftIsDeparture(draft) &&
+    draft.offenseId === GameEventErrorOffense.BlockIllegal
   );
 }
 
@@ -249,6 +271,13 @@ export function getGameEventType(data: DatabaseDto, gameEventId: Guid): GameEven
   );
   if (timeout) {
     return timeout.Kind === GameEventTimeoutKind.End ? 'timeoutEnd' : 'timeout';
+  }
+  if (
+    table(data, 'GameEventPlayerDeparture').some(
+      (row) => (row as { GameEventId: Guid }).GameEventId === gameEventId,
+    )
+  ) {
+    return 'playerDeparture';
   }
   if (table(data, 'GameEventFinish').some((row) => (row as { GameEventId: Guid }).GameEventId === gameEventId)) {
     return 'finish';
@@ -482,6 +511,9 @@ export function isErrorDraftComplete(draft: ErrorDraft): boolean {
   if (draft.noBlockingStarted || draft.timeoutStarted || draft.timeoutEnded) {
     return true;
   }
+  if (draft.departureKind != null) {
+    return Boolean(draft.offenderGamePlayerId);
+  }
   if (!draft.offenderGamePlayerId || draft.offenseId === null) return false;
   if (errorDraftNeedsThrower(draft) && !draft.throwerGamePlayerId) return false;
   return true;
@@ -624,6 +656,7 @@ function writeThrowsToEvent(
 function validateThrows(data: DatabaseDto, matchId: Guid, gameId: Guid, throws: ThrowDraft[]): void {
   if (!areThrowDraftsComplete(throws)) throw new Error('Incomplete throw event');
   const infos = getGamePlayerInfos(data, matchId, gameId);
+  const departed = getDepartedGamePlayerIds(data, gameId);
   const throwerIds = throws.map((row) => row.throwerGamePlayerId);
   const sides = new Set(
     throwerIds.map((id) => infos.find((row) => row.gamePlayerId === id)?.teamHome),
@@ -634,6 +667,17 @@ function validateThrows(data: DatabaseDto, matchId: Guid, gameId: Guid, throws: 
     const target = infos.find((row) => row.gamePlayerId === throwDraft.targetGamePlayerId);
     if (!thrower || !target || thrower.teamHome === target.teamHome) {
       throw new Error('Invalid thrower/target');
+    }
+    if (departed.has(thrower.gamePlayerId) || departed.has(target.gamePlayerId)) {
+      throw new Error('Player has left the game');
+    }
+    for (const deflection of throwDraft.deflections) {
+      if (departed.has(deflection.receiverGamePlayerId)) {
+        throw new Error('Player has left the game');
+      }
+    }
+    if (throwDraft.recoveredId && departed.has(throwDraft.recoveredId)) {
+      throw new Error('Player has left the game');
     }
   }
 }
@@ -700,6 +744,26 @@ export function loadErrorDraftFromEvent(data: DatabaseDto, gameEventId: Guid): E
     offenderGamePlayerId: row.OffenderId,
     throwerGamePlayerId: row.ThrowerId ?? '',
     offenseId: row.OffenseId as GameEventErrorOffense,
+    departureKind: null,
+    noBlockingStarted: false,
+    timeoutStarted: false,
+    timeoutEnded: false,
+  };
+}
+
+export function loadPlayerDepartureDraftFromEvent(
+  data: DatabaseDto,
+  gameEventId: Guid,
+): ErrorDraft {
+  const row = table<GameEventPlayerDepartureRow>(data, 'GameEventPlayerDeparture').find(
+    (entry) => entry.GameEventId === gameEventId,
+  );
+  if (!row) return emptyErrorDraft();
+  return {
+    offenderGamePlayerId: row.PlayerGamePlayerId,
+    throwerGamePlayerId: '',
+    offenseId: null,
+    departureKind: row.Kind,
     noBlockingStarted: false,
     timeoutStarted: false,
     timeoutEnded: false,
@@ -713,6 +777,7 @@ export function loadOtherDraftFromEvent(data: DatabaseDto, gameEventId: Guid): E
       offenderGamePlayerId: '',
       throwerGamePlayerId: '',
       offenseId: null,
+      departureKind: null,
       noBlockingStarted: true,
       timeoutStarted: false,
       timeoutEnded: false,
@@ -723,6 +788,7 @@ export function loadOtherDraftFromEvent(data: DatabaseDto, gameEventId: Guid): E
       offenderGamePlayerId: '',
       throwerGamePlayerId: '',
       offenseId: null,
+      departureKind: null,
       noBlockingStarted: false,
       timeoutStarted: true,
       timeoutEnded: false,
@@ -733,10 +799,14 @@ export function loadOtherDraftFromEvent(data: DatabaseDto, gameEventId: Guid): E
       offenderGamePlayerId: '',
       throwerGamePlayerId: '',
       offenseId: null,
+      departureKind: null,
       noBlockingStarted: false,
       timeoutStarted: false,
       timeoutEnded: true,
     };
+  }
+  if (type === 'playerDeparture') {
+    return loadPlayerDepartureDraftFromEvent(data, gameEventId);
   }
   return loadErrorDraftFromEvent(data, gameEventId);
 }
@@ -814,13 +884,20 @@ function applyErrorDraftToRow(row: GameEventErrorPersistRow, draft: ErrorDraft):
 function validateErrorDraftPlayers(
   infos: GamePlayerInfo[],
   draft: ErrorDraft,
+  departed: ReadonlySet<Guid>,
 ): void {
   const offender = infos.find((row) => row.gamePlayerId === draft.offenderGamePlayerId);
   if (!offender) throw new Error('Invalid offender');
+  if (departed.has(offender.gamePlayerId) && !errorDraftIsDeparture(draft)) {
+    throw new Error('Player has left the game');
+  }
   if (!errorDraftNeedsThrower(draft)) return;
   const thrower = infos.find((row) => row.gamePlayerId === draft.throwerGamePlayerId);
   if (!thrower || thrower.teamHome === offender.teamHome) {
     throw new Error('Invalid thrower');
+  }
+  if (departed.has(thrower.gamePlayerId)) {
+    throw new Error('Player has left the game');
   }
 }
 
@@ -837,7 +914,17 @@ export function persistErrorGameEvent(
     throw new Error('Cannot add events after the game is finished');
   }
   const infos = getGamePlayerInfos(data, matchId, gameId);
-  validateErrorDraftPlayers(infos, draft);
+  const departed = getDepartedGamePlayerIds(data, gameId);
+  // When editing an exiting departure for this player, they are already departed.
+  if (editing && getGameEventType(data, editing) === 'playerDeparture') {
+    const prior = table<GameEventPlayerDepartureRow>(data, 'GameEventPlayerDeparture').find(
+      (row) => row.GameEventId === editing,
+    );
+    if (prior && playerDepartureKindExits(prior.Kind)) {
+      departed.delete(prior.PlayerGamePlayerId);
+    }
+  }
+  validateErrorDraftPlayers(infos, draft, departed);
 
   if (editing) {
     const rows = table<GameEventErrorPersistRow>(data, 'GameEventError');
@@ -877,6 +964,82 @@ export function persistErrorGameEvent(
   return gameEventId;
 }
 
+export function persistPlayerDepartureGameEvent(
+  data: DatabaseDto,
+  gameId: Guid,
+  matchId: Guid,
+  draft: ErrorDraft,
+  options?: PersistGameEventOptions,
+): Guid {
+  if (!isErrorDraftComplete(draft) || draft.departureKind == null) {
+    throw new Error('Incomplete departure event');
+  }
+  const editing = options?.gameEventId;
+  if (!editing && gameHasFinishEvent(data, gameId)) {
+    throw new Error('Cannot add events after the game is finished');
+  }
+  const infos = getGamePlayerInfos(data, matchId, gameId);
+  const departed = getDepartedGamePlayerIds(data, gameId);
+  if (editing && getGameEventType(data, editing) === 'playerDeparture') {
+    const prior = table<GameEventPlayerDepartureRow>(data, 'GameEventPlayerDeparture').find(
+      (row) => row.GameEventId === editing,
+    );
+    if (prior && playerDepartureKindExits(prior.Kind)) {
+      departed.delete(prior.PlayerGamePlayerId);
+    }
+  }
+  const offender = infos.find((row) => row.gamePlayerId === draft.offenderGamePlayerId);
+  if (!offender) throw new Error('Invalid offender');
+  if (departed.has(offender.gamePlayerId)) {
+    throw new Error('Player has left the game');
+  }
+
+  if (editing) {
+    const type = getGameEventType(data, editing);
+    if (
+      type === 'error' ||
+      type === 'noBlocking' ||
+      type === 'timeout' ||
+      type === 'timeoutEnd'
+    ) {
+      removeOtherSubtypeRows(data, editing);
+    }
+    const rows = table<GameEventPlayerDepartureRow>(data, 'GameEventPlayerDeparture');
+    const row = rows.find((entry) => entry.GameEventId === editing);
+    if (row) {
+      row.PlayerGamePlayerId = draft.offenderGamePlayerId;
+      row.Kind = Number(draft.departureKind) as GameEventPlayerDepartureKind;
+    } else {
+      pushRow(data, 'GameEventPlayerDeparture', {
+        GameEventId: editing,
+        PlayerGamePlayerId: draft.offenderGamePlayerId,
+        Kind: Number(draft.departureKind) as GameEventPlayerDepartureKind,
+      });
+    }
+    applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
+    return editing;
+  }
+
+  const gameEventId = newIdTimestamp();
+  pushRow(data, 'GameEvent', {
+    Id: gameEventId,
+    GameId: gameId,
+    Ordinal: allocateOrdinal(
+      data,
+      gameId,
+      options?.insertBeforeEventId,
+      options?.videoOffsetSeconds,
+    ),
+    VideoOffsetSeconds: options?.videoOffsetSeconds ?? null,
+  });
+  pushRow(data, 'GameEventPlayerDeparture', {
+    GameEventId: gameEventId,
+    PlayerGamePlayerId: draft.offenderGamePlayerId,
+    Kind: Number(draft.departureKind) as GameEventPlayerDepartureKind,
+  });
+  return gameEventId;
+}
+
 function removeNoBlockingRow(data: DatabaseDto, gameEventId: Guid): void {
   data.Tables.GameEventNoBlocking = table(data, 'GameEventNoBlocking').filter(
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
@@ -895,10 +1058,17 @@ function removeErrorRow(data: DatabaseDto, gameEventId: Guid): void {
   );
 }
 
+function removePlayerDepartureRow(data: DatabaseDto, gameEventId: Guid): void {
+  data.Tables.GameEventPlayerDeparture = table(data, 'GameEventPlayerDeparture').filter(
+    (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
+  );
+}
+
 function removeOtherSubtypeRows(data: DatabaseDto, gameEventId: Guid): void {
   removeErrorRow(data, gameEventId);
   removeNoBlockingRow(data, gameEventId);
   removeTimeoutRow(data, gameEventId);
+  removePlayerDepartureRow(data, gameEventId);
 }
 
 /** Whether this game currently has an unmatched Timeout (no Timeout ends after it). */
@@ -928,7 +1098,7 @@ export function persistNoBlockingGameEvent(
       applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
       return editing;
     }
-    if (type === 'error' || type === 'timeout' || type === 'timeoutEnd') {
+    if (type === 'error' || type === 'timeout' || type === 'timeoutEnd' || type === 'playerDeparture') {
       removeOtherSubtypeRows(data, editing);
       pushRow(data, 'GameEventNoBlocking', { GameEventId: editing });
       applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
@@ -974,7 +1144,7 @@ export function persistTimeoutGameEvent(
       applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
       return editing;
     }
-    if (type === 'error' || type === 'noBlocking') {
+    if (type === 'error' || type === 'noBlocking' || type === 'playerDeparture') {
       removeOtherSubtypeRows(data, editing);
       pushRow(data, 'GameEventTimeout', { GameEventId: editing, Kind: kind });
       applyVideoOffsetToEvent(data, editing, options?.videoOffsetSeconds);
@@ -999,7 +1169,7 @@ export function persistTimeoutGameEvent(
   return gameEventId;
 }
 
-/** Persist an Other-tab draft (player offense, no blocking, or timeout markers). */
+/** Persist an Other-tab draft (player offense, departure, no blocking, or timeout markers). */
 export function persistOtherGameEvent(
   data: DatabaseDto,
   gameId: Guid,
@@ -1017,11 +1187,19 @@ export function persistOtherGameEvent(
   if (draft.timeoutEnded) {
     return persistTimeoutGameEvent(data, gameId, GameEventTimeoutKind.End, options);
   }
+  if (draft.departureKind != null) {
+    return persistPlayerDepartureGameEvent(data, gameId, matchId, draft, options);
+  }
 
   const editing = options?.gameEventId;
   if (editing) {
     const type = getGameEventType(data, editing);
-    if (type === 'noBlocking' || type === 'timeout' || type === 'timeoutEnd') {
+    if (
+      type === 'noBlocking' ||
+      type === 'timeout' ||
+      type === 'timeoutEnd' ||
+      type === 'playerDeparture'
+    ) {
       removeOtherSubtypeRows(data, editing);
     }
   }
@@ -1077,6 +1255,11 @@ export function gameEventIncludesGamePlayer(
     (row) => row.GameEventId === gameEventId,
   );
   if (error?.OffenderId === gamePlayerId || error?.ThrowerId === gamePlayerId) return true;
+
+  const departure = table<GameEventPlayerDepartureRow>(data, 'GameEventPlayerDeparture').find(
+    (row) => row.GameEventId === gameEventId,
+  );
+  if (departure?.PlayerGamePlayerId === gamePlayerId) return true;
 
   const throwRows = table<{
     Id: Guid;
@@ -1176,6 +1359,12 @@ export function removeGamePlayerFromRoster(
   );
   if (!info) return { removed: false, rolledBackEvents: 0 };
 
+  if (getDepartedGamePlayerIds(data, gameId).has(info.gamePlayerId)) {
+    throw new Error(
+      'Cannot remove a soft-exited player from the game roster — that would drop their timeline events. Leave them on the roster and add a replacement instead.',
+    );
+  }
+
   const preview = previewGamePlayerEventRollback(data, gameId, info.gamePlayerId);
   if (preview && !options?.rollbackEvents) {
     throw new Error('Player appears in recorded events');
@@ -1260,6 +1449,14 @@ export function removePlayerFromMatchSide(
   if (onThisMatch) {
     for (const { gameId } of getMatchGames(data, matchId)) {
       if (!isPlayerInGame(data, gameId, playerId, matchId)) continue;
+      const info = getGamePlayerInfos(data, matchId, gameId).find(
+        (row) => row.playerId === playerId,
+      );
+      if (info && getDepartedGamePlayerIds(data, gameId).has(info.gamePlayerId)) {
+        throw new Error(
+          'Cannot remove a soft-exited player from the match — that would drop their timeline events.',
+        );
+      }
       const preview = previewRemoveGamePlayer(data, matchId, gameId, playerId);
       if (preview && preview.eventCount > 0) {
         if (!options?.rollbackEvents) {
@@ -1302,6 +1499,24 @@ export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {
   );
   if (!gameEvent) return;
 
+  if (getGameEventType(data, gameEventId) === 'playerDeparture') {
+    const matchId = getMatchIdForGame(data, gameEvent.GameId);
+    if (matchId) {
+      const allowed = canDeletePlayerDepartureEvent(
+        data,
+        matchId,
+        gameEvent.GameId,
+        gameEventId,
+        resolvePlayersPerSide(data),
+      );
+      if (!allowed) {
+        throw new Error(
+          'Cannot undo departure: a replacement already fills the players-per-side limit',
+        );
+      }
+    }
+  }
+
   removeThrowChildren(data, gameEventId);
   data.Tables.GameEventThrow = table(data, 'GameEventThrow').filter(
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
@@ -1313,6 +1528,9 @@ export function deleteGameEvent(data: DatabaseDto, gameEventId: Guid): void {
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
   );
   data.Tables.GameEventTimeout = table(data, 'GameEventTimeout').filter(
+    (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
+  );
+  data.Tables.GameEventPlayerDeparture = table(data, 'GameEventPlayerDeparture').filter(
     (row) => (row as { GameEventId: Guid }).GameEventId !== gameEventId,
   );
   data.Tables.GameEventFinish = table(data, 'GameEventFinish').filter(
@@ -1353,6 +1571,7 @@ export type GameEventSnapshot = {
   error?: { OffenderId: Guid; OffenseId: number; ThrowerId?: Guid | null };
   noBlocking?: true;
   timeoutKind?: GameEventTimeoutKind;
+  departure?: { PlayerGamePlayerId: Guid; Kind: GameEventPlayerDepartureKind };
   finish?: { ResultId: number };
   throws?: ThrowSnapshot[];
 };
@@ -1411,6 +1630,17 @@ export function snapshotGameEvent(
     );
     if (!row) return null;
     return { ...base, timeoutKind: row.Kind };
+  }
+
+  if (type === 'playerDeparture') {
+    const row = table<GameEventPlayerDepartureRow>(data, 'GameEventPlayerDeparture').find(
+      (entry) => entry.GameEventId === gameEventId,
+    );
+    if (!row) return null;
+    return {
+      ...base,
+      departure: { PlayerGamePlayerId: row.PlayerGamePlayerId, Kind: row.Kind },
+    };
   }
 
   if (type === 'finish') {
@@ -1513,6 +1743,16 @@ export function restoreGameEventSnapshot(
       snapshot.timeoutKind ??
       (type === 'timeoutEnd' ? GameEventTimeoutKind.End : GameEventTimeoutKind.Start);
     pushRow(data, 'GameEventTimeout', { GameEventId: event.Id, Kind: kind });
+    return event.Id;
+  }
+
+  if (type === 'playerDeparture') {
+    if (!snapshot.departure) throw new Error('Missing departure snapshot');
+    pushRow(data, 'GameEventPlayerDeparture', {
+      GameEventId: event.Id,
+      PlayerGamePlayerId: snapshot.departure.PlayerGamePlayerId,
+      Kind: snapshot.departure.Kind,
+    });
     return event.Id;
   }
 
