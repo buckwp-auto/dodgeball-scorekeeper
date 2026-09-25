@@ -11,7 +11,7 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router';
 import { HelpPage } from './pages/HelpPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -67,7 +67,9 @@ import { CloudSyncBar } from './components/CloudSyncBar';
 import { ColorModeToggle } from './components/ColorModeToggle';
 import { ImportedMatchStatsGuard } from './components/ImportedMatchStatsGuard';
 import { MadeByFooter } from './components/MadeByFooter';
+import { MatchNavSubmenu } from './components/MatchNavSubmenu';
 import { ResumeScoringNavItem } from './components/ResumeScoringButton';
+import { matchIdFromPath } from './domain/youtubePopout';
 import { useAppRole } from './state/AppRoleContext';
 
 const drawerWidth = 200;
@@ -95,6 +97,7 @@ const viewerNavItems: {
 
 function AppNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
+  const activeMatchId = matchIdFromPath(location.pathname);
   const { isAppAdmin } = useAppRole();
   const { isViewer } = useViewerMode();
 
@@ -147,23 +150,27 @@ function AppNav({ onNavigate }: { onNavigate?: () => void }) {
             ? location.pathname === '/'
             : location.pathname.startsWith(item.to);
         return (
-          <ListItemButton
-            key={item.to}
-            component={Link}
-            to={item.to}
-            selected={selected}
-            onClick={onNavigate}
-            data-onboarding={item.onboarding}
-            className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}${item.to === '/admin' ? ' sk-app-admin-nav' : ''}`}
-            sx={{ py: 0.75 }}
-          >
-            <ListItemText
-              primary={item.label}
-              slotProps={{
-                primary: { sx: { fontWeight: selected ? 600 : 400 } },
-              }}
-            />
-          </ListItemButton>
+          <Fragment key={item.to}>
+            <ListItemButton
+              component={Link}
+              to={item.to}
+              selected={selected}
+              onClick={onNavigate}
+              data-onboarding={item.onboarding}
+              className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}${item.to === '/admin' ? ' sk-app-admin-nav' : ''}`}
+              sx={{ py: 0.75 }}
+            >
+              <ListItemText
+                primary={item.label}
+                slotProps={{
+                  primary: { sx: { fontWeight: selected ? 600 : 400 } },
+                }}
+              />
+            </ListItemButton>
+            {item.to === '/matches' && activeMatchId ? (
+              <MatchNavSubmenu matchId={activeMatchId} onNavigate={onNavigate} />
+            ) : null}
+          </Fragment>
         );
       })}
     </List>
