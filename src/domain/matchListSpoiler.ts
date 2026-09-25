@@ -5,6 +5,7 @@ import {
   getGameStartEvent,
   lastStampedVideoOffsetInGame,
 } from './gameEvents';
+import { isMatchEnded } from './matchEnd';
 import { getMatchById, getMatchGames } from './matchGame';
 import {
   collectTimeoutPauseIntervals,
@@ -60,9 +61,9 @@ export function buildMatchListSpoiler(
       : 'statsImported'
     : games.length === 0
       ? 'notStarted'
-      : active
-        ? 'inProgress'
-        : 'finished';
+      : isMatchEnded(match)
+        ? 'finished'
+        : 'inProgress';
 
   return {
     matchId,
