@@ -1228,6 +1228,15 @@ export function GameEventsPage() {
           </Stack>
         ) : (
           <EditorDensityProvider density={editorCompact ? 'compact' : 'comfortable'}>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
             <Stack
               direction="row"
               spacing={1}
@@ -1435,13 +1444,14 @@ export function GameEventsPage() {
                 confirmHint={awaitingFinishConfirm}
               />
             ) : null}
-
-            {!editorCompact ? (
-              <TrackGameHotkeyHints hasYoutube={hasYoutube} />
-            ) : null}
+            </Box>
             </Box>
           </EditorDensityProvider>
         )}
+
+        {!gameCompleteIdle ? (
+          <TrackGameHotkeyHints hasYoutube={hasYoutube} compact={editorCompact} />
+        ) : null}
       </Box>
 
       <Box
