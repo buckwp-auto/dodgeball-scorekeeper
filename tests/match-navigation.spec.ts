@@ -28,7 +28,8 @@ test.describe('match navigation submenu', () => {
     await expect(page.locator('.sk-match-nav-goToMatch')).toBeVisible();
     await expect(page.locator('.sk-match-nav-copy-stats')).toBeVisible();
     await expect(page.locator('.sk-match-nav-trackGame')).toBeVisible();
-    await expect(page.locator('.sk-match-nav-continueGame')).toBeVisible();
+    await expect(page.locator('.sk-match-nav-continueGame')).toHaveCount(0);
+    await expect(page.locator('.sk-match-nav-trackGame')).toContainText(/Track Game \d+/);
   });
 
   test('go to match returns from track match to match roster', async ({ page }) => {
@@ -46,5 +47,8 @@ test.describe('match navigation submenu', () => {
     await page.locator('.sk-match-nav-copy-stats').click();
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toContain('********** Matches');
+    await expect(page.locator('.sk-match-nav-copy-stats-toast')).toHaveText(
+      'Match statistics copied',
+    );
   });
 });

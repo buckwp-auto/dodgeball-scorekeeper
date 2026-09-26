@@ -1,6 +1,7 @@
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {
+  Alert,
   Box,
   Divider,
   Drawer,
@@ -8,6 +9,7 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  Snackbar,
   Toolbar,
   Typography,
 } from '@mui/material';
@@ -74,6 +76,12 @@ import { useAppRole } from './state/AppRoleContext';
 
 const drawerWidth = 200;
 
+type AppToast = {
+  open: boolean;
+  message: string;
+  severity: 'success' | 'error';
+};
+
 const navItems: { to: string; label: string; onboarding?: OnboardingAnchor }[] = [
   { to: '/', label: 'Overview' },
   { to: '/teams', label: 'Teams', onboarding: 'nav-teams' },
@@ -95,7 +103,13 @@ const viewerNavItems: {
   { to: viewerPlayersHref(), label: 'Players', onboarding: 'viewer-nav-players' },
 ];
 
-function AppNav({ onNavigate }: { onNavigate?: () => void }) {
+function AppNav({
+  onNavigate,
+  onToast,
+}: {
+  onNavigate?: () => void;
+  onToast?: (toast: Omit<AppToast, 'open'>) => void;
+}) {
   const location = useLocation();
   const activeMatchId = matchIdFromPath(location.pathname);
   const { isAppAdmin } = useAppRole();
@@ -168,7 +182,11 @@ function AppNav({ onNavigate }: { onNavigate?: () => void }) {
               />
             </ListItemButton>
             {item.to === '/matches' && activeMatchId ? (
-              <MatchNavSubmenu matchId={activeMatchId} onNavigate={onNavigate} />
+              <MatchNavSubmenu
+                matchId={activeMatchId}
+                onNavigate={onNavigate}
+                onToast={onToast}
+              />
             ) : null}
           </Fragment>
         );
@@ -181,8 +199,14 @@ function AppShell() {
   const immersive = useTrackGameImmersive();
   const { isViewer } = useViewerMode();
   const [navOpen, setNavOpen] = useState(false);
+  const [toast, setToast] = useState<AppToast>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
   const closeNav = () => setNavOpen(false);
   const toggleNav = () => setNavOpen((open) => !open);
+  const closeToast = () => setToast((prev) => ({ ...prev, open: false }));
   const showImmersiveNav = immersive && !isViewer;
 
   return (
@@ -250,7 +274,10 @@ function AppShell() {
           }}
         >
           <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-            <AppNav onNavigate={showImmersiveNav ? closeNav : undefined} />
+            <AppNav
+              onNavigate={showImmersiveNav ? closeNav : undefined}
+              onToast={(next) => setToast({ ...next, open: true })}
+            />
             {isViewer ? null : <ResumeScoringNavItem />}
           </Box>
           <CloudSyncBar />
@@ -331,6 +358,22 @@ function AppShell() {
           />
         </Routes>
       </Box>
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={3000}
+        onClose={closeToast}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
+      >
+        <Alert
+          severity={toast.severity}
+          variant="filled"
+          className="sk-match-nav-copy-stats-toast"
+          onClose={closeToast}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
       {isViewer ? (
         <ViewerOnboardingTour />
       ) : (

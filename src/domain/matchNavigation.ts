@@ -1,3 +1,4 @@
+import type { LastScoringStored } from './lastScoring';
 import { buildStatisticsCsvText } from './statisticsCsv';
 import { isStatsImportedMatchId } from './importedMatch';
 import {
@@ -15,8 +16,7 @@ export type MatchNavAction = {
 
 export type MatchNavTargets = {
   goToMatch: MatchNavAction;
-  trackGame: MatchNavAction;
-  continueGame: MatchNavAction;
+  trackGame: MatchNavAction & { label: string };
   copyStatsEnabled: boolean;
 };
 
@@ -40,8 +40,33 @@ export function gameTrackHref(
   return `/matches/${matchId}/games/${gameId}`;
 }
 
-export function activeMatchGameId(data: DatabaseDto, matchId: Guid): Guid | null {
-  return getMatchGames(data, matchId).find((game) => !game.scoringComplete)?.gameId ?? null;
+/**
+ * Prefer the game currently in the URL, then the last game opened for this
+ * match, then the match’s last game.
+ */
+export function resolveMatchTrackGameId(
+  data: DatabaseDto,
+  matchId: Guid,
+  pathname: string,
+  lastScoring: LastScoringStored | null,
+): Guid | null {
+  const games = getMatchGames(data, matchId);
+  if (games.length === 0) return null;
+
+  const gameFromUrl = gameIdFromPath(pathname);
+  if (gameFromUrl != null && games.some((game) => game.gameId === gameFromUrl)) {
+    return gameFromUrl;
+  }
+
+  if (
+    lastScoring?.target === 'game' &&
+    lastScoring.matchId === matchId &&
+    games.some((game) => game.gameId === lastScoring.gameId)
+  ) {
+    return lastScoring.gameId;
+  }
+
+  return games.at(-1)?.gameId ?? null;
 }
 
 export function formatStatisticsCsvForClipboard(text: string): string {
@@ -72,29 +97,24 @@ export function resolveMatchNavTargets(
   data: DatabaseDto,
   matchId: Guid,
   pathname: string,
+  lastScoring: LastScoringStored | null = null,
 ): MatchNavTargets | null {
   if (!getMatchById(data, matchId)) return null;
 
   const statsImported = isStatsImportedMatchId(data, matchId);
   const games = getMatchGames(data, matchId);
-  const gameFromUrl = gameIdFromPath(pathname);
-  const activeGameId = activeMatchGameId(data, matchId);
-  const lastGameId = games.at(-1)?.gameId ?? null;
+  const trackGameId = resolveMatchTrackGameId(data, matchId, pathname, lastScoring);
+  const trackGame = trackGameId != null
+    ? games.find((game) => game.gameId === trackGameId) ?? null
+    : null;
 
   const goToMatchHref = statsImported
     ? `/matches/${matchId}/stats`
     : `/matches/${matchId}`;
 
-  const trackGameId = gameFromUrl ?? activeGameId ?? lastGameId;
   const trackGameHref =
-    trackGameId != null
-      ? gameTrackHref(data, matchId, trackGameId)
-      : `/matches/${matchId}/events`;
-  const trackGameDisabled = statsImported || (trackGameId == null && games.length === 0);
-
-  const continueGameHref =
-    activeGameId != null ? gameTrackHref(data, matchId, activeGameId) : '';
-  const continueGameDisabled = statsImported || activeGameId == null;
+    trackGameId != null ? gameTrackHref(data, matchId, trackGameId) : '';
+  const trackGameDisabled = statsImported || trackGameId == null;
 
   return {
     goToMatch: {
@@ -105,13 +125,8 @@ export function resolveMatchNavTargets(
     trackGame: {
       href: trackGameHref,
       disabled: trackGameDisabled,
-      current: pathsEqual(pathname, trackGameHref),
-    },
-    continueGame: {
-      href: continueGameHref,
-      disabled: continueGameDisabled,
-      current:
-        continueGameHref !== '' && pathsEqual(pathname, continueGameHref),
+      current: trackGameHref !== '' && pathsEqual(pathname, trackGameHref),
+      label: trackGame != null ? `Track ${trackGame.label}` : 'Track Game',
     },
     copyStatsEnabled: true,
   };

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase, normalizeDatabase } from './database';
 import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import {
-  activeMatchGameId,
   gameIdFromPath,
   gameTrackHref,
   resolveMatchNavTargets,
+  resolveMatchTrackGameId,
 } from './matchNavigation';
 
 const fixturePath = path.join(
@@ -16,7 +16,7 @@ const fixturePath = path.join(
 );
 const sample = normalizeDatabase(JSON.parse(readFileSync(fixturePath, 'utf-8')));
 
-function databaseWithOpenGame() {
+function databaseWithGames(count: number) {
   const data = createEmptyDatabase();
   const home = addTeam(data, 'Home');
   const away = addTeam(data, 'Away');
@@ -25,10 +25,14 @@ function databaseWithOpenGame() {
   const match = addMatch(data, home.Id, away.Id);
   toggleMatchPlayer(data, match.Id, homePlayer.Id, true);
   toggleMatchPlayer(data, match.Id, awayPlayer.Id, false);
-  const gameId = addGame(data, match.Id);
-  toggleGamePlayer(data, match.Id, gameId, homePlayer.Id);
-  toggleGamePlayer(data, match.Id, gameId, awayPlayer.Id);
-  return { data, matchId: match.Id, gameId };
+  const gameIds: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const gameId = addGame(data, match.Id);
+    toggleGamePlayer(data, match.Id, gameId, homePlayer.Id);
+    toggleGamePlayer(data, match.Id, gameId, awayPlayer.Id);
+    gameIds.push(gameId);
+  }
+  return { data, matchId: match.Id, gameIds };
 }
 
 describe('matchNavigation', () => {
@@ -48,11 +52,52 @@ describe('matchNavigation', () => {
     expect(nav?.goToMatch.disabled).toBe(false);
   });
 
-  it('points continue game at the first unfinished game', () => {
-    const { data, matchId, gameId } = databaseWithOpenGame();
-    expect(activeMatchGameId(data, matchId)).toBe(gameId);
-    const nav = resolveMatchNavTargets(data, matchId, `/matches/${matchId}/events`);
-    expect(nav?.continueGame.href).toBe(gameTrackHref(data, matchId, gameId));
-    expect(nav?.continueGame.disabled).toBe(false);
+  it('defaults track game to the last game in the match', () => {
+    const { data, matchId, gameIds } = databaseWithGames(2);
+    const lastId = gameIds[1]!;
+    expect(resolveMatchTrackGameId(data, matchId, `/matches/${matchId}`, null)).toBe(
+      lastId,
+    );
+    const nav = resolveMatchNavTargets(data, matchId, `/matches/${matchId}`, null);
+    expect(nav?.trackGame.href).toBe(gameTrackHref(data, matchId, lastId));
+    expect(nav?.trackGame.label).toBe('Track Game 2');
+    expect(nav?.trackGame.disabled).toBe(false);
+  });
+
+  it('prefers the last opened game for this match over the last game', () => {
+    const { data, matchId, gameIds } = databaseWithGames(2);
+    const firstId = gameIds[0]!;
+    const nav = resolveMatchNavTargets(data, matchId, `/matches/${matchId}`, {
+      target: 'game',
+      matchId,
+      gameId: firstId,
+    });
+    expect(nav?.trackGame.href).toBe(gameTrackHref(data, matchId, firstId));
+    expect(nav?.trackGame.label).toBe('Track Game 1');
+  });
+
+  it('prefers the game in the URL over last-scoring memory', () => {
+    const { data, matchId, gameIds } = databaseWithGames(2);
+    const firstId = gameIds[0]!;
+    const secondId = gameIds[1]!;
+    expect(
+      resolveMatchTrackGameId(data, matchId, `/matches/${matchId}/games/${secondId}`, {
+        target: 'game',
+        matchId,
+        gameId: firstId,
+      }),
+    ).toBe(secondId);
+  });
+
+  it('ignores last-scoring memory from a different match', () => {
+    const { data, matchId, gameIds } = databaseWithGames(2);
+    const lastId = gameIds[1]!;
+    expect(
+      resolveMatchTrackGameId(data, matchId, `/matches/${matchId}`, {
+        target: 'game',
+        matchId: 'other-match',
+        gameId: gameIds[0]!,
+      }),
+    ).toBe(lastId);
   });
 });
