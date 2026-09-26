@@ -42,7 +42,7 @@ test.describe('Match list score spoilers', () => {
     await expect(page.getByRole('heading', { name: 'Matches' })).toBeVisible();
 
     const row = page.locator('.sk-match-row').first();
-    await expect(row.locator('.sk-match-progress')).toHaveText('Finished');
+    await expect(row.locator('.sk-match-progress')).toHaveText('In progress');
     await expect(row.locator('.sk-match-list-score')).toHaveCount(0);
 
     await row.getByRole('button', { name: /Show score for / }).click();
@@ -142,7 +142,7 @@ test.describe('Match list score spoilers', () => {
     const doneRow = page.locator('.sk-match-row').filter({
       has: page.getByRole('button', { name: 'Home Hawks vs. Away Owls', exact: true }),
     });
-    await expect(doneRow.locator('.sk-match-progress')).toHaveText('Finished');
+    await expect(doneRow.locator('.sk-match-progress')).toHaveText('In progress');
     await doneRow
       .getByRole('button', { name: 'Show score for Home Hawks vs. Away Owls' })
       .click();

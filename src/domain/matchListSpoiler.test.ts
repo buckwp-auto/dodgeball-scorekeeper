@@ -6,6 +6,7 @@ import {
   persistThrowGameEvent,
   setGameEventVideoOffset,
 } from './gameEvents';
+import { endMatch } from './matchEnd';
 import { addGame, toggleGamePlayer, toggleMatchPlayer } from './matchGame';
 import {
   buildMatchListSpoiler,
@@ -85,17 +86,28 @@ describe('buildMatchListSpoiler', () => {
     expect(spoiler.gameClockText).toBeNull();
   });
 
-  it('marks a fully finished series as finished with game wins', () => {
+  it('keeps match in progress after the last game finish until End Match', () => {
     const { data, match, h1, a1 } = setupTwoTeamLeague();
     const gameId = addGameWithRoster(data, match.Id, h1.Id, a1.Id);
     persistFinishGameEvent(data, gameId, { resultId: GameEventFinishResult.WinHome });
 
     const spoiler = buildMatchListSpoiler(data, match.Id)!;
-    expect(spoiler.progress).toBe('finished');
-    expect(spoiler.progressLabel).toBe('Finished');
+    expect(spoiler.progress).toBe('inProgress');
+    expect(spoiler.progressLabel).toBe('In progress');
     expect(spoiler.scoreText).toBe('Home Hawks 1–0 Away Owls');
     expect(spoiler.activeGameLabel).toBeNull();
     expect(spoiler.gameClockText).toBeNull();
+  });
+
+  it('marks an ended match as finished with game wins', () => {
+    const { data, match, h1, a1 } = setupTwoTeamLeague();
+    const gameId = addGameWithRoster(data, match.Id, h1.Id, a1.Id);
+    persistFinishGameEvent(data, gameId, { resultId: GameEventFinishResult.WinHome });
+    endMatch(data, match.Id);
+
+    const spoiler = buildMatchListSpoiler(data, match.Id)!;
+    expect(spoiler.progress).toBe('finished');
+    expect(spoiler.progressLabel).toBe('Finished');
   });
 
   it('marks an unfinished game as in progress without inventing a clock', () => {
