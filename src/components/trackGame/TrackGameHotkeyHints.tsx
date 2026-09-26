@@ -63,20 +63,24 @@ function PlaybackHints() {
 
 export function TrackGameHotkeyHints({
   hasYoutube,
+  compact = false,
 }: {
   hasYoutube: boolean;
+  compact?: boolean;
 }) {
   return (
     <Stack
       direction="row"
-      spacing={1}
+      spacing={compact ? 0.75 : 1}
       className="sk-action-hotkeys"
       sx={{
         flexWrap: 'wrap',
-        mt: 3,
-        pt: 2,
+        flexShrink: 0,
+        mt: compact ? 0.75 : 3,
+        pt: compact ? 0.75 : 2,
         borderTop: 1,
         borderColor: 'divider',
+        rowGap: compact ? 0.5 : 1,
       }}
     >
       <ActionHints />

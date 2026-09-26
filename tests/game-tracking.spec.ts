@@ -6,6 +6,9 @@ import {
   clearScorekeeperStorage,
   createMatch,
   gotoScorekeeper,
+  loadSampleLeague,
+  navigateMenu,
+  ONBOARDING_COMPLETE_KEY,
   openTeam,
   selectMatchRoster,
   selectGameRoster,
@@ -325,5 +328,28 @@ test.describe('Game tracking (full roster)', () => {
     await page.goto(`/players/${h1.Id}`);
     await expect(page.locator('.sk-throw-tags-summary')).toContainText('Rush counter 1');
     await expect(page.locator('.sk-throw-tags-summary')).toContainText('Headshot 1');
+  });
+
+  test('shows action hotkey footer in tall YouTube layout', async ({ page }) => {
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
+    await loadSampleLeague(page);
+    await navigateMenu(page, 'Matches');
+    await page.getByRole('button', { name: / vs\. / }).first().click();
+    await page.getByRole('button', { name: 'Track Match' }).click();
+    await page.getByRole('button', { name: 'Add Game' }).click();
+    await selectGameRoster(page, 'Steve Rogers', 'Jim Halpert');
+    await page.getByRole('button', { name: 'Track Game' }).click();
+    await expect(page.getByRole('button', { name: 'Throw', exact: true })).toBeVisible();
+
+    const hotkeys = page.locator('.sk-action-hotkeys');
+    await expect(hotkeys).toBeVisible();
+    await expect(hotkeys.locator('.sk-hotkey-badge').filter({ hasText: 'Z' })).toBeVisible();
+
+    await page.keyboard.press('BracketRight');
+    await expect(page.locator('.sk-youtube-player')).toBeVisible();
+    await expect(hotkeys).toBeVisible();
+    await expect(hotkeys.locator('.sk-hotkey-badge').filter({ hasText: 'Z' })).toBeVisible();
   });
 });
