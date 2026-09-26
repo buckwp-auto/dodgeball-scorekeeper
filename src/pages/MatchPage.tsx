@@ -9,6 +9,7 @@ import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { MatchScoreLine } from '../components/MatchScoreLine';
 import { PageHeader } from '../components/Ui';
 import { useDocumentHotkeys } from '../hooks/useDocumentHotkeys';
+import { buildMatchStatisticsClipboardTsv } from '../domain/matchNavigation';
 import { buildStatisticsCsvBytes } from '../domain/statisticsCsv';
 import { isStatsImportedMatch } from '../domain/importedMatch';
 import { getMatchName, getTeam } from '../domain/database';
@@ -250,17 +251,9 @@ export function MatchPage() {
   };
 
   const copyStatistics = async () => {
-    const text = new TextDecoder().decode(statisticsBytes());
-    const tsv = text
-      .split('\n')
-      .map((line) =>
-        line
-          .replace(/^"|"$/g, '')
-          .split('","')
-          .join('\t'),
-      )
-      .join('\n');
-    await navigator.clipboard.writeText(tsv);
+    await navigator.clipboard.writeText(
+      buildMatchStatisticsClipboardTsv(data, matchId),
+    );
   };
 
   const onImportFile = async (file: File) => {

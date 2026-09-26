@@ -1,6 +1,7 @@
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {
+  Alert,
   Box,
   Divider,
   Drawer,
@@ -8,10 +9,11 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  Snackbar,
   Toolbar,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router';
 import { HelpPage } from './pages/HelpPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -67,10 +69,18 @@ import { CloudSyncBar } from './components/CloudSyncBar';
 import { ColorModeToggle } from './components/ColorModeToggle';
 import { ImportedMatchStatsGuard } from './components/ImportedMatchStatsGuard';
 import { MadeByFooter } from './components/MadeByFooter';
+import { MatchNavSubmenu } from './components/MatchNavSubmenu';
 import { ResumeScoringNavItem } from './components/ResumeScoringButton';
+import { matchIdFromPath } from './domain/youtubePopout';
 import { useAppRole } from './state/AppRoleContext';
 
 const drawerWidth = 200;
+
+type AppToast = {
+  open: boolean;
+  message: string;
+  severity: 'success' | 'error';
+};
 
 const navItems: { to: string; label: string; onboarding?: OnboardingAnchor }[] = [
   { to: '/', label: 'Overview' },
@@ -93,8 +103,15 @@ const viewerNavItems: {
   { to: viewerPlayersHref(), label: 'Players', onboarding: 'viewer-nav-players' },
 ];
 
-function AppNav({ onNavigate }: { onNavigate?: () => void }) {
+function AppNav({
+  onNavigate,
+  onToast,
+}: {
+  onNavigate?: () => void;
+  onToast?: (toast: Omit<AppToast, 'open'>) => void;
+}) {
   const location = useLocation();
+  const activeMatchId = matchIdFromPath(location.pathname);
   const { isAppAdmin } = useAppRole();
   const { isViewer } = useViewerMode();
 
@@ -147,23 +164,31 @@ function AppNav({ onNavigate }: { onNavigate?: () => void }) {
             ? location.pathname === '/'
             : location.pathname.startsWith(item.to);
         return (
-          <ListItemButton
-            key={item.to}
-            component={Link}
-            to={item.to}
-            selected={selected}
-            onClick={onNavigate}
-            data-onboarding={item.onboarding}
-            className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}${item.to === '/admin' ? ' sk-app-admin-nav' : ''}`}
-            sx={{ py: 0.75 }}
-          >
-            <ListItemText
-              primary={item.label}
-              slotProps={{
-                primary: { sx: { fontWeight: selected ? 600 : 400 } },
-              }}
-            />
-          </ListItemButton>
+          <Fragment key={item.to}>
+            <ListItemButton
+              component={Link}
+              to={item.to}
+              selected={selected}
+              onClick={onNavigate}
+              data-onboarding={item.onboarding}
+              className={`sk-menu-link sk-menu-link--root${item.to === '/stats' ? ' sk-stats-nav' : ''}${item.to === '/admin' ? ' sk-app-admin-nav' : ''}`}
+              sx={{ py: 0.75 }}
+            >
+              <ListItemText
+                primary={item.label}
+                slotProps={{
+                  primary: { sx: { fontWeight: selected ? 600 : 400 } },
+                }}
+              />
+            </ListItemButton>
+            {item.to === '/matches' && activeMatchId ? (
+              <MatchNavSubmenu
+                matchId={activeMatchId}
+                onNavigate={onNavigate}
+                onToast={onToast}
+              />
+            ) : null}
+          </Fragment>
         );
       })}
     </List>
@@ -174,8 +199,14 @@ function AppShell() {
   const immersive = useTrackGameImmersive();
   const { isViewer } = useViewerMode();
   const [navOpen, setNavOpen] = useState(false);
+  const [toast, setToast] = useState<AppToast>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
   const closeNav = () => setNavOpen(false);
   const toggleNav = () => setNavOpen((open) => !open);
+  const closeToast = () => setToast((prev) => ({ ...prev, open: false }));
   const showImmersiveNav = immersive && !isViewer;
 
   return (
@@ -243,7 +274,10 @@ function AppShell() {
           }}
         >
           <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-            <AppNav onNavigate={showImmersiveNav ? closeNav : undefined} />
+            <AppNav
+              onNavigate={showImmersiveNav ? closeNav : undefined}
+              onToast={(next) => setToast({ ...next, open: true })}
+            />
             {isViewer ? null : <ResumeScoringNavItem />}
           </Box>
           <CloudSyncBar />
@@ -324,6 +358,22 @@ function AppShell() {
           />
         </Routes>
       </Box>
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={3000}
+        onClose={closeToast}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
+      >
+        <Alert
+          severity={toast.severity}
+          variant="filled"
+          className="sk-match-nav-copy-stats-toast"
+          onClose={closeToast}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
       {isViewer ? (
         <ViewerOnboardingTour />
       ) : (
