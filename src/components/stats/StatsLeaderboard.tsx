@@ -16,6 +16,7 @@ import { getPlayer } from '../../domain/database';
 import type { ImageRef } from '../../domain/imageRef';
 import type { HighlightQualifierSettings } from '../../domain/leagueSettings';
 import { playerHref } from '../../domain/playerProfile';
+import { useViewerMode } from '../../state/ViewerModeContext';
 import {
   displayedDeaths,
   displayedKills,
@@ -55,6 +56,7 @@ export function StatsLeaderboard({
   leagueLogo?: ImageRef | null;
   data: DatabaseDto;
 }) {
+  const { isViewer, routeBase } = useViewerMode();
   const [metric, setMetric] = useState<HighlightMetric>('elusivenessRate');
   const meta = HIGHLIGHT_METRICS.find((item) => item.id === metric)!;
   const top5 = useMemo(
@@ -97,10 +99,16 @@ export function StatsLeaderboard({
           color="text.secondary"
           className="sk-stats-leaderboard-qualifiers"
         >
-          Minimums: {formatHighlightQualifiers(qualifiers)} ·{' '}
-          <MuiLink component={Link} to="/settings" underline="hover">
-            League Stat Settings
-          </MuiLink>
+          Minimums: {formatHighlightQualifiers(qualifiers)}
+          {isViewer ? null : (
+            <>
+              {' '}
+              ·{' '}
+              <MuiLink component={Link} to="/settings" underline="hover">
+                League Stat Settings
+              </MuiLink>
+            </>
+          )}
         </Typography>
       </Box>
 
@@ -243,7 +251,7 @@ export function StatsLeaderboard({
                     <TableCell sx={cellSx}>
                       <Box
                         component={Link}
-                        to={playerHref(row.playerId)}
+                        to={playerHref(row.playerId, { base: routeBase })}
                         sx={{ textDecoration: 'none' }}
                       >
                         <SplitName name={row.playerName} />
@@ -300,6 +308,7 @@ function PodiumSlot({
   data: DatabaseDto;
   featured: boolean;
 }) {
+  const { routeBase } = useViewerMode();
   if (!row) {
     return <Box sx={{ width: size, flexShrink: 0 }} />;
   }
@@ -317,7 +326,7 @@ function PodiumSlot({
     >
       <Box
         component={Link}
-        to={playerHref(row.playerId)}
+        to={playerHref(row.playerId, { base: routeBase })}
         sx={{
           textDecoration: 'none',
           borderRadius: '50%',

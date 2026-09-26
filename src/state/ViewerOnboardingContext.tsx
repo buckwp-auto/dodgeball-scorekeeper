@@ -8,19 +8,19 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import {
-  ONBOARDING_STEPS,
-  clearOnboardingComplete,
-  isOnboardingComplete,
-  markOnboardingComplete,
-  type OnboardingStep,
-} from '../domain/onboarding';
 import { isViewerPath } from '../domain/viewerRoutes';
+import {
+  VIEWER_ONBOARDING_STEPS,
+  clearViewerOnboardingComplete,
+  isViewerOnboardingComplete,
+  markViewerOnboardingComplete,
+  type ViewerOnboardingStep,
+} from '../domain/viewerOnboarding';
 
-type OnboardingContextValue = {
+type ViewerOnboardingContextValue = {
   active: boolean;
   stepIndex: number;
-  step: OnboardingStep;
+  step: ViewerOnboardingStep;
   stepCount: number;
   startTour: () => void;
   next: () => void;
@@ -28,27 +28,28 @@ type OnboardingContextValue = {
   skip: () => void;
 };
 
-const OnboardingContext = createContext<OnboardingContextValue | null>(null);
+const ViewerOnboardingContext =
+  createContext<ViewerOnboardingContextValue | null>(null);
 
-export function OnboardingProvider({ children }: { children: ReactNode }) {
+export function ViewerOnboardingProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const inViewer = isViewerPath(location.pathname);
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
 
-  const step = ONBOARDING_STEPS[stepIndex] ?? ONBOARDING_STEPS[0]!;
-  const stepCount = ONBOARDING_STEPS.length;
+  const step = VIEWER_ONBOARDING_STEPS[stepIndex] ?? VIEWER_ONBOARDING_STEPS[0]!;
+  const stepCount = VIEWER_ONBOARDING_STEPS.length;
 
   const finish = useCallback(() => {
-    markOnboardingComplete();
+    markViewerOnboardingComplete();
     setActive(false);
     setStepIndex(0);
   }, []);
 
   const goToStep = useCallback(
     (index: number) => {
-      const nextStep = ONBOARDING_STEPS[index];
+      const nextStep = VIEWER_ONBOARDING_STEPS[index];
       if (!nextStep) return;
       if (nextStep.route) navigate(nextStep.route);
       setStepIndex(index);
@@ -57,10 +58,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   );
 
   const startTour = useCallback(() => {
-    clearOnboardingComplete();
+    clearViewerOnboardingComplete();
     setStepIndex(0);
     setActive(true);
-    const first = ONBOARDING_STEPS[0];
+    const first = VIEWER_ONBOARDING_STEPS[0];
     if (first?.route) navigate(first.route);
   }, [navigate]);
 
@@ -81,33 +82,32 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     finish();
   }, [finish]);
 
-  // Never drive scorekeeper routes while the user is in the read-only viewer.
-  // Do not mark complete — the scorekeeper tour can still run later on `/`.
+  // Pause if the user leaves the viewer shell mid-tour (do not mark complete).
   useEffect(() => {
-    if (inViewer && active) {
+    if (!inViewer && active) {
       setActive(false);
       setStepIndex(0);
     }
   }, [inViewer, active]);
 
+  // First visit on the viewer shell only — never steal control of scorekeeper routes.
   useEffect(() => {
-    if (isOnboardingComplete()) return;
-    if (isViewerPath(window.location.pathname)) return;
+    if (!inViewer) return;
+    if (isViewerOnboardingComplete()) return;
     const timer = window.setTimeout(() => {
-      // Re-check in case the user navigated into the viewer during the delay.
-      if (isViewerPath(window.location.pathname)) return;
+      if (!isViewerPath(window.location.pathname)) return;
       setActive(true);
-      const first = ONBOARDING_STEPS[0];
+      const first = VIEWER_ONBOARDING_STEPS[0];
       if (first?.route) navigate(first.route);
     }, 400);
     return () => window.clearTimeout(timer);
-    // First visit only — do not restart when routes change.
+    // First viewer visit only — do not restart when routes change inside the shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [inViewer]);
 
   const value = useMemo(
     () => ({
-      active: active && !inViewer,
+      active: active && inViewer,
       stepIndex,
       step,
       stepCount,
@@ -120,12 +120,16 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>
+    <ViewerOnboardingContext.Provider value={value}>
+      {children}
+    </ViewerOnboardingContext.Provider>
   );
 }
 
-export function useOnboarding(): OnboardingContextValue {
-  const ctx = useContext(OnboardingContext);
-  if (!ctx) throw new Error('useOnboarding requires OnboardingProvider');
+export function useViewerOnboarding(): ViewerOnboardingContextValue {
+  const ctx = useContext(ViewerOnboardingContext);
+  if (!ctx) {
+    throw new Error('useViewerOnboarding requires ViewerOnboardingProvider');
+  }
   return ctx;
 }

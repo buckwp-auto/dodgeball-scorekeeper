@@ -17,13 +17,16 @@ export function CloudSyncBar() {
     saveNow,
   } = useCloudSyncStatus();
   const { isAppAdmin } = useAppRole();
-  const { activeLeagueId, memberships } = useLeague();
-  const showOperatorChip = isOperatingAsAppAdmin({
-    isAppAdmin,
-    membershipStatus: activeLeagueId
-      ? memberships[activeLeagueId]?.status
-      : null,
-  });
+  const { activeLeagueId, memberships, accessMode } = useLeague();
+  const viewOnly = accessMode === 'view';
+  const showOperatorChip =
+    !viewOnly &&
+    isOperatingAsAppAdmin({
+      isAppAdmin,
+      membershipStatus: activeLeagueId
+        ? memberships[activeLeagueId]?.status
+        : null,
+    });
 
   const isCloudPill = leaguePillKind === 'cloud';
 

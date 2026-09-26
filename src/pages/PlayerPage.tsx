@@ -42,12 +42,15 @@ import {
   type StatsCountingMode,
 } from '../domain/statistics/displayStats';
 import { attachVorWar } from '../domain/statistics/highlightStats';
+import { viewerGameStatsHref, viewerPlayersHref } from '../domain/viewerRoutes';
 import { useDatabase } from '../state/DatabaseContext';
+import { useViewerMode } from '../state/ViewerModeContext';
 
 export function PlayerPage() {
   const { playerId = '' } = useParams();
   const navigate = useNavigate();
-  const { data, mutate } = useDatabase();
+  const { data, mutate, readOnly } = useDatabase();
+  const { isViewer, routeBase } = useViewerMode();
   const [counting, setCounting] = useState<StatsCountingMode>(() =>
     loadStatsCountingMode(),
   );
@@ -57,9 +60,11 @@ export function PlayerPage() {
 
   useEffect(() => {
     if (player?.LinkedPlayerId) {
-      navigate(playerHref(player.LinkedPlayerId), { replace: true });
+      navigate(playerHref(player.LinkedPlayerId, { base: routeBase }), {
+        replace: true,
+      });
     }
-  }, [navigate, player?.LinkedPlayerId]);
+  }, [navigate, player?.LinkedPlayerId, routeBase]);
 
   const team = player ? getTeamForPlayer(data, player.Id) : undefined;
   const photoSrc = imageSrc(player?.Image);
@@ -145,7 +150,11 @@ export function PlayerPage() {
     <>
       <PageHeader>{player.Name}</PageHeader>
       <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
-        {team ? (
+        {isViewer ? (
+          <TextButton onClick={() => navigate(viewerPlayersHref())}>
+            Back to players
+          </TextButton>
+        ) : team ? (
           <TextButton onClick={() => navigate(`/teams/${team.Id}`)}>
             {`Back to ${team.Name}`}
           </TextButton>
@@ -188,9 +197,13 @@ export function PlayerPage() {
           <Typography variant="h5">{player.Name}</Typography>
           {team ? (
             <Typography color="text.secondary">
-              <MuiLink component={Link} to={`/teams/${team.Id}`} underline="hover">
-                {team.Name}
-              </MuiLink>
+              {isViewer ? (
+                team.Name
+              ) : (
+                <MuiLink component={Link} to={`/teams/${team.Id}`} underline="hover">
+                  {team.Name}
+                </MuiLink>
+              )}
             </Typography>
           ) : null}
           {player.AddedFromMatch && !player.LinkedPlayerId ? (
@@ -285,7 +298,11 @@ export function PlayerPage() {
             <Typography key={game.gameId} component="li">
               <MuiLink
                 component={Link}
-                to={`/matches/${game.matchId}/games/${game.gameId}`}
+                to={
+                  isViewer
+                    ? viewerGameStatsHref(game.matchId, game.gameId)
+                    : `/matches/${game.matchId}/games/${game.gameId}`
+                }
                 underline="hover"
               >
                 {game.matchName} · {game.gameName}
@@ -297,7 +314,7 @@ export function PlayerPage() {
         </Stack>
       )}
 
-      {guests.length > 0 ? (
+      {!readOnly && guests.length > 0 ? (
         <>
           <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
             Subbed for
@@ -334,7 +351,7 @@ export function PlayerPage() {
         </>
       ) : null}
 
-      {linkSuggestions.length > 0 ? (
+      {!readOnly && linkSuggestions.length > 0 ? (
         <>
           <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
             Link to a league player
@@ -351,7 +368,9 @@ export function PlayerPage() {
                     linkPlayer(draft, player.Id, candidate.playerId);
                     return null;
                   }, `Linked ${player.Name} to ${candidate.playerName}.`);
-                  navigate(playerHref(candidate.playerId), { replace: true });
+                  navigate(playerHref(candidate.playerId, { base: routeBase }), {
+                    replace: true,
+                  });
                 }}
               >
                 {candidate.playerName} · {candidate.teamName}
@@ -389,16 +408,31 @@ export function PlayerPage() {
                         showEndInsertMarker={false}
                         fillHeight={false}
                         onSelectEvent={(eventId) =>
-                          navigate(highlightEventHref(match.matchId, game.gameId, eventId))
+                          navigate(
+                            isViewer
+                              ? viewerGameStatsHref(match.matchId, game.gameId)
+                              : highlightEventHref(
+                                  match.matchId,
+                                  game.gameId,
+                                  eventId,
+                                ),
+                          )
                         }
                         onDeselectEvent={() => {}}
                         onCommitVideoOffset={() => {}}
-                        onToggleHighlight={(eventId) => {
-                          const highlight = game.highlights.find(
-                            (row) => row.eventId === eventId,
-                          );
-                          toggleHighlight(eventId, highlight?.entry.isHighlight ?? true);
-                        }}
+                        onToggleHighlight={
+                          readOnly
+                            ? undefined
+                            : (eventId) => {
+                                const highlight = game.highlights.find(
+                                  (row) => row.eventId === eventId,
+                                );
+                                toggleHighlight(
+                                  eventId,
+                                  highlight?.entry.isHighlight ?? true,
+                                );
+                              }
+                        }
                       />
                     </Box>
                   </Box>

@@ -18,6 +18,7 @@ export function useCloudSyncStatus(): CloudSyncStatus {
   const {
     leagues,
     activeLeagueId,
+    accessMode,
     syncStatus,
     lastSavedAt,
     syncError,
@@ -30,6 +31,7 @@ export function useCloudSyncStatus(): CloudSyncStatus {
     : null;
   const activeLeagueName =
     leagues.find((row) => row.id === activeLeagueId)?.name ?? null;
+  const viewOnly = accessMode === 'view';
 
   const presentation = useMemo(
     () =>
@@ -38,10 +40,10 @@ export function useCloudSyncStatus(): CloudSyncStatus {
         userDisplayName,
         activeLeagueId,
         activeLeagueName,
-        localLeagueLabel,
-        syncStatus,
-        lastSavedAt,
-        isDirty,
+        localLeagueLabel: viewOnly ? null : localLeagueLabel,
+        syncStatus: viewOnly ? 'saved' : syncStatus,
+        lastSavedAt: viewOnly ? null : lastSavedAt,
+        isDirty: viewOnly ? false : isDirty,
       }),
     [
       configured,
@@ -52,16 +54,29 @@ export function useCloudSyncStatus(): CloudSyncStatus {
       syncStatus,
       lastSavedAt,
       isDirty,
+      viewOnly,
     ],
   );
 
   const handleSaveNow = useCallback(async () => {
+    if (viewOnly) return;
     await saveNow();
-  }, [saveNow]);
+  }, [saveNow, viewOnly]);
 
   return {
     ...presentation,
-    syncError,
+    connectionLabel: viewOnly
+      ? configured
+        ? userDisplayName
+          ? `Viewing as ${userDisplayName}`
+          : 'Viewing (signed in)'
+        : 'Local only'
+      : presentation.connectionLabel,
+    saveCaption: viewOnly ? null : presentation.saveCaption,
+    saveLabel: viewOnly ? 'Read-only' : presentation.saveLabel,
+    saveTone: viewOnly ? 'default' : presentation.saveTone,
+    canSaveNow: viewOnly ? false : presentation.canSaveNow,
+    syncError: viewOnly ? null : syncError,
     saveNow: handleSaveNow,
   };
 }

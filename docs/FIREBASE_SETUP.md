@@ -92,6 +92,7 @@ leagues/{leagueId}/members/{uid}            # pending | active | rejected; role 
 rateLimits/{uid}/hours/{yyyyMMddHH}         # write quota counter
 users/{uid}                                 # signed-in profile (self-write; app admins can list)
 appAdmins/{uid}                             # role: superAdmin (console) | appAdmin (super admin)
+viewerRestrictions/{uid}                    # banned + optional allowedLeagueIds (app admin)
 ```
 
 Optional: in **Firestore → Rules**, paste a temporary deny-all until the app’s `firestore.rules` is deployed:
@@ -162,7 +163,9 @@ Confirm the deployed rules match the plan before inviting real users:
 - [ ] **No unauthenticated writes** (and no public writes to league data)
 - [ ] **League metadata** readable by any signed-in user (directory)
 - [ ] **League logo/banner** updatable only by a league admin (`logo` / `banner` ImageRef or null; identity fields unchanged)
-- [ ] **Roster + matches** read/write only if `members/{uid}.status == 'active'` **or** the caller is an app admin
+- [ ] **Roster + matches reads** for any signed-in user who is not banned and passes the viewer allowlist (or app admin)
+- [ ] **Roster + matches writes** only if `members/{uid}.status == 'active'` **or** the caller is an app admin
+- [ ] **`viewerRestrictions/{uid}`**: self or app admin may read; only app admin may create/update/delete (`banned`, `allowedLeagueIds`)
 - [ ] Users can create **only their own** member doc as `pending` (cannot set `active` / `admin` themselves)
 - [ ] League admin (`adminUid`, active `members.role == 'admin'`, or app admin) can approve/reject members and change `role`
 - [ ] App admin may transfer league `adminUid` / owner display fields
@@ -172,7 +175,7 @@ Confirm the deployed rules match the plan before inviting real users:
 - [ ] Payload / array sanity checks on roster & match docs
 - [ ] Each mutating batch increments `rateLimits/{uid}/hours/{yyyyMMddHH}` and rejects when `count >= 100`
 
-After deploy, use the **Rules playground** in the console to try: unsigned write (deny), pending member match write (deny), active member write (allow).
+After deploy, use the **Rules playground** in the console to try: unsigned write (deny), pending member match write (deny), active member write (allow), signed-in non-member roster read (allow unless banned).
 
 Optional but recommended: Firebase Emulator Suite + rules unit tests in CI later.
 

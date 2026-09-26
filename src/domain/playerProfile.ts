@@ -7,8 +7,12 @@ import {
 import { getPlayerIdsForProfile } from './playerMatch';
 import type { DatabaseDto, Guid } from './types';
 
-export function playerHref(playerId: Guid): string {
-  return `/players/${playerId}`;
+export function playerHref(
+  playerId: Guid,
+  options?: { base?: string },
+): string {
+  const base = (options?.base ?? '').replace(/\/$/, '');
+  return `${base}/players/${playerId}`;
 }
 
 export type PlayerDirectoryRow = {

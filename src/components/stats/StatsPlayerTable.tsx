@@ -15,6 +15,7 @@ import {
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { playerHref } from '../../domain/playerProfile';
+import { useViewerMode } from '../../state/ViewerModeContext';
 import {
   LEADERBOARD_METRICS,
   displayedDeaths,
@@ -166,6 +167,7 @@ export function StatsPlayerTable({
   showDeflectionCatches: boolean;
   hideFilters?: boolean;
 }) {
+  const { routeBase } = useViewerMode();
   const [sortKey, setSortKey] = useState<SortKey>(metricSortKey[metric]);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
@@ -291,7 +293,9 @@ export function StatsPlayerTable({
                   <TableCell>
                     <MuiLink
                       component={Link}
-                      to={playerHref(row.canonicalPlayerId ?? row.playerId)}
+                      to={playerHref(row.canonicalPlayerId ?? row.playerId, {
+                        base: routeBase,
+                      })}
                       underline="hover"
                       className={
                         row.hasSubStats || row.isSubstitute ? 'sk-stats-player-sub' : undefined
