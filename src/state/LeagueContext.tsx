@@ -31,16 +31,24 @@ import {
 } from '../domain/limits';
 import type { DatabaseDto } from '../domain/types';
 import { canDeleteMatchGame } from '../domain/matchPermissions';
+import { canViewLeague } from '../domain/viewerAccess';
 import { useAuth } from './AuthContext';
 import { useAppRole } from './AppRoleContext';
 
 const ACTIVE_LEAGUE_KEY = 'SCOREKEEPER_ACTIVE_LEAGUE';
+const VIEW_LEAGUE_KEY = 'SCOREKEEPER_VIEW_LEAGUE';
+
+export type LeagueAccessMode = 'operate' | 'view';
 
 type LeagueContextValue = {
   leagues: LeagueMeta[];
   memberships: Record<string, LeagueMember | null>;
   membersByLeague: Record<string, LeagueMember[]>;
   activeLeagueId: string | null;
+  /** `operate` = scorekeeper membership open; `view` = read-only viewer open. */
+  accessMode: LeagueAccessMode;
+  /** True when the open league must not accept local mutations or cloud flushes. */
+  readOnly: boolean;
   /** True when the signed-in user may replace the open cloud league from a file. */
   canOverrideActiveLeague: boolean;
   /** True for local-only data, or when the signed-in user is admin of the open league. */
@@ -69,6 +77,8 @@ type LeagueContextValue = {
     banner?: ImageRef | null;
   }) => Promise<void>;
   openLeague: (leagueId: string) => Promise<DatabaseDto>;
+  /** Open any readable league without membership; never writes. */
+  openLeagueForView: (leagueId: string) => Promise<DatabaseDto>;
   leaveLeague: () => Promise<void>;
   /** Called by DatabaseProvider after local mutations. */
   notifyLocalChange: (prev: DatabaseDto, next: DatabaseDto) => void;
@@ -121,6 +131,30 @@ function clearStoredActiveLeagueId(): void {
   }
 }
 
+function loadStoredViewLeagueId(): string | null {
+  try {
+    return localStorage.getItem(VIEW_LEAGUE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeViewLeagueId(leagueId: string): void {
+  try {
+    localStorage.setItem(VIEW_LEAGUE_KEY, leagueId);
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearStoredViewLeagueId(): void {
+  try {
+    localStorage.removeItem(VIEW_LEAGUE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 type LeagueApi = typeof import('../cloud/leagueApi');
 
 /**
@@ -146,7 +180,11 @@ function hasDirtyChanges(plan: FlushPlan): boolean {
 
 export function LeagueProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { isAppAdmin, loading: appRoleLoading } = useAppRole();
+  const {
+    isAppAdmin,
+    loading: appRoleLoading,
+    getMyViewerRestriction,
+  } = useAppRole();
   const [leagues, setLeagues] = useState<LeagueMeta[]>([]);
   const [memberships, setMemberships] = useState<
     Record<string, LeagueMember | null>
@@ -155,6 +193,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     Record<string, LeagueMember[]>
   >({});
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
+  const [accessMode, setAccessMode] = useState<LeagueAccessMode>('operate');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -175,7 +214,11 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushingRef = useRef(false);
   const autoOpenAttemptedRef = useRef(false);
+  const accessModeRef = useRef<LeagueAccessMode>('operate');
+  accessModeRef.current = accessMode;
   const [isDirty, setIsDirty] = useState(false);
+
+  const readOnly = Boolean(activeLeagueId) && accessMode === 'view';
 
   const clearFlushTimer = () => {
     if (flushTimerRef.current) {
@@ -340,6 +383,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const flushNow = useCallback(
     async (data: DatabaseDto) => {
+      if (accessModeRef.current === 'view') return;
       const leagueId = activeLeagueId;
       if (!user || !leagueId) return;
 
@@ -409,6 +453,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   const notifyLocalChange = useCallback(
     (prev: DatabaseDto, next: DatabaseDto) => {
       if (!activeLeagueId || !user) return;
+      if (accessModeRef.current === 'view') return;
       const diff = diffDirty(syncedDataRef.current ?? prev, next);
       const dirty = dirtyRef.current;
       if (diff.roster) dirty.roster = true;
@@ -433,6 +478,9 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
 
   const queueImportOverrideFlush = useCallback(
     (prev: DatabaseDto, next: DatabaseDto) => {
+      if (accessModeRef.current === 'view') {
+        throw new Error('Cannot override a league in view-only mode');
+      }
       if (!activeLeagueId || !user) {
         throw new Error('Open a cloud league before overriding it');
       }
@@ -454,6 +502,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   );
 
   const canOverrideActiveLeague = useMemo(() => {
+    if (accessMode === 'view') return false;
     if (!user || !activeLeagueId) return false;
     if (isAppAdmin) return true;
     const league = leagues.find((row) => row.id === activeLeagueId);
@@ -462,19 +511,22 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       league?.adminUid === user.uid ||
       (membership?.status === 'active' && membership.role === 'admin')
     );
-  }, [user, activeLeagueId, leagues, memberships, isAppAdmin]);
+  }, [user, activeLeagueId, leagues, memberships, isAppAdmin, accessMode]);
 
-  const canDeleteMatchesAndGames = !activeLeagueId || canOverrideActiveLeague;
+  const canDeleteMatchesAndGames =
+    !activeLeagueId || (accessMode === 'operate' && canOverrideActiveLeague);
 
   const canDeleteGame = useCallback(
-    (createdByUid?: string | null) =>
-      canDeleteMatchGame({
+    (createdByUid?: string | null) => {
+      if (accessMode === 'view') return false;
+      return canDeleteMatchGame({
         hasActiveLeague: Boolean(activeLeagueId),
         isLeagueAdmin: canOverrideActiveLeague,
         userUid: user?.uid,
         createdByUid,
-      }),
-    [activeLeagueId, canOverrideActiveLeague, user?.uid],
+      });
+    },
+    [activeLeagueId, canOverrideActiveLeague, user?.uid, accessMode],
   );
 
   const openLeague = useCallback(
@@ -501,8 +553,10 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       );
       revisionsRef.current = revisions;
       markClean(data);
+      setAccessMode('operate');
       setActiveLeagueId(leagueId);
       storeActiveLeagueId(leagueId);
+      clearStoredViewLeagueId();
       setSyncStatus('saved');
       setLastSavedAt(new Date().toISOString());
       setSyncError(null);
@@ -514,14 +568,57 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     [user, markClean, isAppAdmin],
   );
 
+  const openLeagueForView = useCallback(
+    async (leagueId: string) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      if (!isAppAdmin) {
+        const restriction = await getMyViewerRestriction();
+        if (!canViewLeague(leagueId, restriction)) {
+          throw new Error(
+            restriction?.banned
+              ? 'Your account is blocked from viewing league stats'
+              : 'You are not allowed to view this league',
+          );
+        }
+      }
+      clearFlushTimer();
+      dirtyRef.current = { roster: false, matchIds: [], removedMatchIds: [] };
+      setIsDirty(false);
+      const { data, revisions } = await cloud.api.loadLeagueDatabase(
+        cloud.db,
+        leagueId,
+      );
+      revisionsRef.current = revisions;
+      markClean(data);
+      setAccessMode('view');
+      setActiveLeagueId(leagueId);
+      storeViewLeagueId(leagueId);
+      setSyncStatus('saved');
+      setLastSavedAt(new Date().toISOString());
+      setSyncError(null);
+      window.dispatchEvent(
+        new CustomEvent('scorekeeper-cloud-refresh', { detail: data }),
+      );
+      return data;
+    },
+    [user, markClean, isAppAdmin, getMyViewerRestriction],
+  );
+
   const leaveLeague = useCallback(async () => {
     const latest = latestDataRef.current;
-    if (latest && isDirty) {
+    if (latest && isDirty && accessModeRef.current === 'operate') {
       await flushNow(latest);
     }
     clearFlushTimer();
+    const wasView = accessModeRef.current === 'view';
     setActiveLeagueId(null);
-    clearStoredActiveLeagueId();
+    setAccessMode('operate');
+    if (wasView) {
+      clearStoredViewLeagueId();
+    } else {
+      clearStoredActiveLeagueId();
+    }
     syncedDataRef.current = null;
     latestDataRef.current = null;
     dirtyRef.current = { roster: false, matchIds: [], removedMatchIds: [] };
@@ -574,6 +671,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   // Flush on unload
   useEffect(() => {
     const onHide = () => {
+      if (accessModeRef.current === 'view') return;
       const latest = latestDataRef.current;
       if (!latest || !activeLeagueId) return;
       if (!hasDirtyChanges(dirtyRef.current)) return;
@@ -595,6 +693,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     if (!user && activeLeagueId) {
       clearFlushTimer();
       setActiveLeagueId(null);
+      setAccessMode('operate');
       setSyncStatus('local');
       setIsDirty(false);
       autoOpenAttemptedRef.current = false;
@@ -602,10 +701,18 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
   }, [user, activeLeagueId]);
 
   // Auto-open the last league after sign-in when membership is still active
-  // (or the signed-in user is an app admin).
+  // (or the signed-in user is an app admin). Skip on the view-stats shell.
   useEffect(() => {
     if (!user || activeLeagueId || autoOpenAttemptedRef.current) return;
     if (!directoryReady || refreshing || appRoleLoading) return;
+    if (
+      typeof window !== 'undefined' &&
+      (window.location.pathname.includes('/view-stats') ||
+        window.location.pathname.endsWith('/view-stats'))
+    ) {
+      autoOpenAttemptedRef.current = true;
+      return;
+    }
     const storedId = loadStoredLeagueId();
     autoOpenAttemptedRef.current = true;
     if (!storedId) return;
@@ -640,6 +747,8 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       memberships,
       membersByLeague,
       activeLeagueId,
+      accessMode,
+      readOnly,
       canOverrideActiveLeague,
       canDeleteMatchesAndGames,
       canDeleteGame,
@@ -658,6 +767,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       loadLeagueMembers,
       updateLeagueImages,
       openLeague,
+      openLeagueForView,
       leaveLeague,
       notifyLocalChange,
       queueImportOverrideFlush,
@@ -670,6 +780,8 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       memberships,
       membersByLeague,
       activeLeagueId,
+      accessMode,
+      readOnly,
       canOverrideActiveLeague,
       canDeleteMatchesAndGames,
       canDeleteGame,
@@ -688,6 +800,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       loadLeagueMembers,
       updateLeagueImages,
       openLeague,
+      openLeagueForView,
       leaveLeague,
       notifyLocalChange,
       queueImportOverrideFlush,
@@ -710,4 +823,8 @@ export function useLeague(): LeagueContextValue {
 
 export function getStoredActiveLeagueId(): string | null {
   return loadStoredLeagueId();
+}
+
+export function getStoredViewLeagueId(): string | null {
+  return loadStoredViewLeagueId();
 }

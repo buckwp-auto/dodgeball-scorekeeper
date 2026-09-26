@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Firestore } from 'firebase/firestore';
 import type { AppAdminRecord, AppRole, AppUserProfile } from '../cloud/appRoleTypes';
+import type { ViewerRestriction } from '../cloud/viewerRestrictionTypes';
 import { isAppAdminRole, isSuperAdminRole } from '../domain/appRoles';
 import { useAuth } from './AuthContext';
 
@@ -26,19 +27,33 @@ type AppRoleContextValue = {
     displayName: string;
   }) => Promise<void>;
   revokeAppAdmin: (uid: string) => Promise<void>;
+  getMyViewerRestriction: () => Promise<ViewerRestriction | null>;
+  listViewerRestrictions: () => Promise<ViewerRestriction[]>;
+  setViewerBanned: (uid: string, banned: boolean) => Promise<void>;
+  setViewerAllowedLeagueIds: (
+    uid: string,
+    allowedLeagueIds: string[],
+  ) => Promise<void>;
+  clearViewerRestriction: (uid: string) => Promise<void>;
 };
 
 const AppRoleContext = createContext<AppRoleContextValue | null>(null);
 
 type AppRoleApi = typeof import('../cloud/appRoleApi');
+type ViewerRestrictionApi = typeof import('../cloud/viewerRestrictionApi');
 
-async function loadCloud(): Promise<{ db: Firestore; api: AppRoleApi } | null> {
-  const [{ getDb }, api] = await Promise.all([
+async function loadCloud(): Promise<{
+  db: Firestore;
+  api: AppRoleApi;
+  viewerApi: ViewerRestrictionApi;
+} | null> {
+  const [{ getDb }, api, viewerApi] = await Promise.all([
     import('../cloud/firestoreDb'),
     import('../cloud/appRoleApi'),
+    import('../cloud/viewerRestrictionApi'),
   ]);
   const db = getDb();
-  return db ? { db, api } : null;
+  return db ? { db, api, viewerApi } : null;
 }
 
 export function AppRoleProvider({ children }: { children: ReactNode }) {
@@ -108,6 +123,51 @@ export function AppRoleProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const getMyViewerRestriction = useCallback(async () => {
+    if (!user) return null;
+    const cloud = await loadCloud();
+    if (!cloud) return null;
+    return cloud.viewerApi.getViewerRestriction(cloud.db, user.uid);
+  }, [user]);
+
+  const listViewerRestrictions = useCallback(async () => {
+    const cloud = await loadCloud();
+    if (!cloud) return [];
+    return cloud.viewerApi.listViewerRestrictions(cloud.db);
+  }, []);
+
+  const setViewerBanned = useCallback(
+    async (uid: string, banned: boolean) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.viewerApi.setViewerBanned(cloud.db, user, uid, banned);
+    },
+    [user],
+  );
+
+  const setViewerAllowedLeagueIds = useCallback(
+    async (uid: string, allowedLeagueIds: string[]) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.viewerApi.setViewerAllowedLeagueIds(
+        cloud.db,
+        user,
+        uid,
+        allowedLeagueIds,
+      );
+    },
+    [user],
+  );
+
+  const clearViewerRestriction = useCallback(
+    async (uid: string) => {
+      const cloud = await loadCloud();
+      if (!cloud || !user) throw new Error('Sign in required');
+      await cloud.viewerApi.clearViewerRestriction(cloud.db, user, uid);
+    },
+    [user],
+  );
+
   const loading = Boolean(user) && loadedUid !== user?.uid;
 
   const value = useMemo(
@@ -121,6 +181,11 @@ export function AppRoleProvider({ children }: { children: ReactNode }) {
       listUsers,
       grantAppAdmin,
       revokeAppAdmin,
+      getMyViewerRestriction,
+      listViewerRestrictions,
+      setViewerBanned,
+      setViewerAllowedLeagueIds,
+      clearViewerRestriction,
     }),
     [
       role,
@@ -130,6 +195,11 @@ export function AppRoleProvider({ children }: { children: ReactNode }) {
       listUsers,
       grantAppAdmin,
       revokeAppAdmin,
+      getMyViewerRestriction,
+      listViewerRestrictions,
+      setViewerBanned,
+      setViewerAllowedLeagueIds,
+      clearViewerRestriction,
     ],
   );
 

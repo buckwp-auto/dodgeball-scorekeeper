@@ -52,6 +52,8 @@ type DatabaseContextValue = {
   data: DatabaseDto;
   /** Label for a loaded local file/sample league; null when none or cloud-backed. */
   localLeagueLabel: string | null;
+  /** True when the open cloud league is view-only (no mutations / flushes). */
+  readOnly: boolean;
   commits: HistoryCommit[];
   addTeam: (name: string) => void;
   addPlayer: (teamId: Guid, name: string) => void;
@@ -95,7 +97,10 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     canOverrideActiveLeague,
     queueImportOverrideFlush,
     isDirty,
+    readOnly,
   } = useLeague();
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
   const [data, setData] = useState<DatabaseDto>(initialData);
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -161,6 +166,9 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       fn: (draft: DatabaseDto) => T,
       commitMessage: string | ((result: T) => string),
     ) => {
+      if (readOnlyRef.current) {
+        throw new Error('This league is open read-only');
+      }
       const prev = dataRef.current;
       const next = structuredClone(prev);
       const result = fn(next);
@@ -356,6 +364,9 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
 
   const replaceDatabase = useCallback(
     (raw: unknown, options?: ReplaceDatabaseOptions) => {
+      if (readOnlyRef.current) {
+        throw new Error('This league is open read-only');
+      }
       const prev = dataRef.current;
       const next = normalizeDatabase(raw);
 
@@ -406,6 +417,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     () => ({
       data,
       localLeagueLabel,
+      readOnly,
       commits,
       addTeam,
       addPlayer,
@@ -427,6 +439,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     [
       data,
       localLeagueLabel,
+      readOnly,
       commits,
       addTeam,
       addPlayer,

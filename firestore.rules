@@ -59,8 +59,51 @@ service cloud.firestore {
         && get(memberPath(leagueId, request.auth.uid)).data.status == 'active';
     }
 
-    function canAccessLeagueData(leagueId) {
+    function viewerRestrictionPath(uid) {
+      return /databases/$(database)/documents/viewerRestrictions/$(uid);
+    }
+
+    function isViewerBanned() {
+      return exists(viewerRestrictionPath(request.auth.uid))
+        && get(viewerRestrictionPath(request.auth.uid)).data.banned == true;
+    }
+
+    function leagueAllowedForViewer(leagueId) {
+      return !exists(viewerRestrictionPath(request.auth.uid))
+        || !('allowedLeagueIds' in get(viewerRestrictionPath(request.auth.uid)).data)
+        || get(viewerRestrictionPath(request.auth.uid)).data.allowedLeagueIds.size() == 0
+        || leagueId in get(viewerRestrictionPath(request.auth.uid)).data.allowedLeagueIds;
+    }
+
+    // Any signed-in user may read roster/matches unless banned or allowlisted away.
+    function canReadLeagueData(leagueId) {
+      return isAppAdmin()
+        || (
+          signedIn()
+          && !isViewerBanned()
+          && leagueAllowedForViewer(leagueId)
+        );
+    }
+
+    // Writes stay membership-gated (or app admin).
+    function canWriteLeagueData(leagueId) {
       return activeMember(leagueId) || isAppAdmin();
+    }
+
+    function validViewerRestriction(data) {
+      return data.keys().hasOnly(['banned', 'allowedLeagueIds', 'updatedAt', 'updatedBy'])
+        && data.keys().hasAll(['banned', 'updatedAt', 'updatedBy'])
+        && data.banned is bool
+        && stringLen(data.updatedAt, 40)
+        && stringLen(data.updatedBy, 128)
+        && data.updatedBy == request.auth.uid
+        && (
+          !('allowedLeagueIds' in data)
+          || (
+            data.allowedLeagueIds is list
+            && data.allowedLeagueIds.size() <= 50
+          )
+        );
     }
 
     function stringLen(value, max) {
@@ -133,6 +176,13 @@ service cloud.firestore {
         && resource.data.role == 'appAdmin';
     }
 
+    match /viewerRestrictions/{uid} {
+      allow read: if isSelf(uid) || isAppAdmin();
+      allow create, update: if isAppAdmin()
+        && validViewerRestriction(request.resource.data);
+      allow delete: if isAppAdmin();
+    }
+
     match /leagues/{leagueId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -195,7 +245,7 @@ service cloud.firestore {
       }
 
       match /roster/{docId} {
-        allow read: if canAccessLeagueData(leagueId);
+        allow read: if canReadLeagueData(leagueId);
         // Allow create during league bootstrap (creator is admin after batch).
         allow create, update: if docId == 'current'
           && request.resource.data.keys().hasOnly(['tables', 'updatedAt', 'revision'])
@@ -203,7 +253,7 @@ service cloud.firestore {
           && request.resource.data.revision >= 0
           && stringLen(request.resource.data.updatedAt, 40)
           && (
-            canAccessLeagueData(leagueId)
+            canWriteLeagueData(leagueId)
             || (
               signedIn()
               && leagueDocAfter(leagueId).adminUid == request.auth.uid
@@ -213,8 +263,8 @@ service cloud.firestore {
       }
 
       match /matches/{matchId} {
-        allow read: if canAccessLeagueData(leagueId);
-        allow create, update: if canAccessLeagueData(leagueId)
+        allow read: if canReadLeagueData(leagueId);
+        allow create, update: if canWriteLeagueData(leagueId)
           && request.resource.data.keys().hasOnly([
             'tables', 'updatedAt', 'revision', 'updatedByUid'
           ])
@@ -223,7 +273,7 @@ service cloud.firestore {
           && request.resource.data.revision >= 0
           && stringLen(request.resource.data.updatedAt, 40)
           && stringLen(matchId, 80);
-        allow delete: if canAccessLeagueData(leagueId);
+        allow delete: if canWriteLeagueData(leagueId);
       }
     }
   }

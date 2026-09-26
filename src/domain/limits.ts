@@ -15,6 +15,8 @@ export const MAX_AUTH_UID = 128;
 export const MAX_IMAGE_URL = 2048;
 export const MAX_STORAGE_PATH = 512;
 export const MAX_IMAGE_CONTENT_TYPE = 100;
+/** Cap on viewer allowlist size — keep in sync with firestore.rules. */
+export const MAX_VIEWER_ALLOWED_LEAGUES = 50;
 
 export const WRITES_PER_HOUR = 100;
 export const CLOUD_FLUSH_IDLE_MS = 30_000;

@@ -1,6 +1,6 @@
-import { Button, Stack, Tab, Tabs, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Alert, Button, Stack, Tab, Tabs, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { MatchSeriesScoreboard } from '../components/stats/MatchSeriesScoreboard';
 import { StatsCharts } from '../components/stats/StatsCharts';
 import { StatsHeatmap } from '../components/stats/StatsHeatmap';
@@ -32,15 +32,18 @@ import {
   buildMatchSeries,
   buildTeamStandingsForScope,
 } from '../domain/statistics/teamStandings';
+import { viewerLeaguesHref } from '../domain/viewerRoutes';
 import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
+import { useViewerMode } from '../state/ViewerModeContext';
 
 type StatsTab = 'standings' | 'players' | 'charts' | 'leaderboards';
 
 export function StatsPage() {
   const { matchId, gameId } = useParams();
   const { data } = useDatabase();
-  const { activeLeagueId, leagues } = useLeague();
+  const { activeLeagueId, accessMode, leagues } = useLeague();
+  const { isViewer } = useViewerMode();
   const [tab, setTab] = useState<StatsTab>(matchId && gameId ? 'players' : 'standings');
   const [metric, setMetric] = useState<LeaderboardMetric>('kills');
   const [minGames, setMinGames] = useState(1);
@@ -148,6 +151,26 @@ export function StatsPage() {
     anchor.click();
     URL.revokeObjectURL(url);
   };
+
+  if (isViewer && (accessMode !== 'view' || !activeLeagueId)) {
+    return (
+      <Stack spacing={2} className="sk-viewer-stats-empty">
+        <PageHeader>Stats</PageHeader>
+        <Alert severity="info">
+          Open a league from{' '}
+          <Button
+            component={Link}
+            to={viewerLeaguesHref()}
+            size="small"
+            className="sk-viewer-stats-goto-leagues"
+          >
+            Leagues
+          </Button>{' '}
+          to view stats.
+        </Alert>
+      </Stack>
+    );
+  }
 
   if (!valid) {
     return (

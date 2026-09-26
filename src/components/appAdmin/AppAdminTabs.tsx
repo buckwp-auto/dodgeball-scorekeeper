@@ -7,7 +7,9 @@ export function AppAdminTabs() {
   const { isSuperAdmin } = useAppRole();
   const value = location.pathname.startsWith('/admin/operators')
     ? 'operators'
-    : 'leagues';
+    : location.pathname.startsWith('/admin/viewers')
+      ? 'viewers'
+      : 'leagues';
 
   return (
     <Tabs
@@ -21,6 +23,13 @@ export function AppAdminTabs() {
         component={Link}
         to="/admin"
         className="sk-app-admin-tab-leagues"
+      />
+      <Tab
+        label="Viewers"
+        value="viewers"
+        component={Link}
+        to="/admin/viewers"
+        className="sk-app-admin-tab-viewers"
       />
       {isSuperAdmin ? (
         <Tab

@@ -6,6 +6,9 @@ import { getPlayerGamesPlayed, listPlayersForDirectory, playerHref } from './pla
 describe('player profile', () => {
   it('builds a player href', () => {
     expect(playerHref('abc')).toBe('/players/abc');
+    expect(playerHref('abc', { base: '/view-stats' })).toBe(
+      '/view-stats/players/abc',
+    );
   });
 
   it('lists rostered players with team names', () => {
