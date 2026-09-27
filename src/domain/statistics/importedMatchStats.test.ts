@@ -4,21 +4,37 @@ import { describe, expect, it } from 'vitest';
 import { addMatch, addPlayer, addTeam, createEmptyDatabase } from '../database';
 import {
   addGame,
+  getMatchById,
   toggleGamePlayer,
   toggleMatchPlayer,
 } from '../matchGame';
 import { persistThrowGameEvent, persistFinishGameEvent } from '../gameEvents';
+import type { DatabaseDto } from '../types';
 import { ThrowResult, GameEventFinishResult } from './constants';
 import { buildDisplayStats, displayedDeaths } from './displayStats';
 import { getStatisticsSummaryCsvText } from './statisticsFormatService';
-import {
-  createMatchFromStatisticsCsv,
-  importMatchStatistics,
-} from './importedMatchStats';
+import type { ImportMatchSeriesInput } from './importedMatchStats';
+import { parseStatsCsv } from './statsCsvImport';
+import { applyStatsCsvImport, suggestStatsImportSelection } from './statsCsvImportPlan';
 import { createStatisticsSummary } from './statisticsService';
 import { buildMatchSeries } from './teamStandings';
 
 const fixturesDir = path.resolve(__dirname, '../../../tests/fixtures');
+
+function importMatchStatistics(
+  data: DatabaseDto,
+  matchId: string,
+  csv: string,
+  series: ImportMatchSeriesInput,
+) {
+  const match = getMatchById(data, matchId)!;
+  const { rows } = parseStatsCsv(csv);
+  const selection = suggestStatsImportSelection(data, rows, {
+    homeTeamId: match.TeamIdHome,
+    awayTeamId: match.TeamIdAway,
+  });
+  return applyStatsCsvImport(data, { rows, selection, series, matchId });
+}
 
 function loadFixture(name: string) {
   const raw = readFileSync(path.join(fixturesDir, name), 'utf-8');
@@ -66,16 +82,17 @@ describe('importedMatchStats', () => {
 
   it('creates a match from CSV', () => {
     const data = createEmptyDatabase();
-    const home = addTeam(data, 'Home Hawks');
-    const away = addTeam(data, 'Away Owls');
+    addTeam(data, 'Home Hawks');
+    addTeam(data, 'Away Owls');
     const csv = readFileSync(
       path.join(fixturesDir, 'interop-basic.golden.csv'),
       'utf-8',
     );
-    const matchId = createMatchFromStatisticsCsv(data, home.Id, away.Id, csv, {
-      homeGameWins: 0,
-      awayGameWins: 1,
-      matchFinished: true,
+    const { rows } = parseStatsCsv(csv);
+    const { matchId } = applyStatsCsvImport(data, {
+      rows,
+      selection: suggestStatsImportSelection(data, rows),
+      series: { homeGameWins: 0, awayGameWins: 1, matchFinished: true },
     });
     const stats = createStatisticsSummary(data, [matchId]);
     expect(stats).toHaveLength(2);

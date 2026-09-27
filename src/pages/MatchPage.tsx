@@ -2,7 +2,10 @@ import { Alert, Button, Stack, TextField } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { MatchLabelsEditor } from '../components/MatchLabels';
-import { MatchStatsImportDialog } from '../components/MatchStatsImportDialog';
+import {
+  MatchStatsImportDialog,
+  type MatchStatsImportConfirm,
+} from '../components/MatchStatsImportDialog';
 import { PlayerRoster } from '../components/MatchRoster';
 import { RosterYoutubePlayer } from '../components/RosterYoutubePlayer';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
@@ -43,10 +46,7 @@ import {
   suggestLinkedPlayers,
   type PlayerMatchCandidate,
 } from '../domain/playerMatch';
-import {
-  importMatchStatistics,
-  type ImportMatchSeriesInput,
-} from '../domain/statistics/importedMatchStats';
+import { applyStatsCsvImport } from '../domain/statistics/statsCsvImportPlan';
 import { useDatabase } from '../state/DatabaseContext';
 import { useLeague } from '../state/LeagueContext';
 
@@ -266,14 +266,13 @@ export function MatchPage() {
     }
   };
 
-  const onConfirmImport = (series: ImportMatchSeriesInput) => {
-    if (!importCsvText) return;
+  const onConfirmImport = ({ parsed, selection, series }: MatchStatsImportConfirm) => {
     setImportBusy(true);
     setImportError(null);
     try {
       mutate(
         (draft) => {
-          importMatchStatistics(draft, matchId, importCsvText, series);
+          applyStatsCsvImport(draft, { rows: parsed.rows, selection, series, matchId });
           return null;
         },
         'Imported match statistics from CSV.',
@@ -453,9 +452,10 @@ export function MatchPage() {
       />
       <MatchStatsImportDialog
         open={importCsvText != null}
-        homeTeamName={homeTeam?.Name ?? 'Home'}
-        awayTeamName={awayTeam?.Name ?? 'Away'}
         csvText={importCsvText ?? ''}
+        fixedTeams={
+          match ? { homeTeamId: match.TeamIdHome, awayTeamId: match.TeamIdAway } : null
+        }
         busy={importBusy}
         error={importError}
         onClose={() => {

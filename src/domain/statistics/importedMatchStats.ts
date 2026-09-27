@@ -1,19 +1,11 @@
-import { addMatch, getPlayersForTeam, getTeam } from '../database';
-import { matchHasGameEvents } from '../importedMatch';
 import { newIdTimestamp } from '../id';
-import {
-  addPlayerToMatchSide,
-  getMatchById,
-  isPlayerInMatch,
-  toggleMatchPlayer,
-} from '../matchGame';
-import type { DatabaseDto, Guid, ImportedPlayerStatsRow, PlayerRow } from '../types';
+import { getMatchById } from '../matchGame';
+import type { DatabaseDto, Guid, ImportedPlayerStatsRow } from '../types';
 import { CountsBuilder } from './statisticAggregates';
 import type { StatisticAggregates } from './statisticAggregates';
 import type { PlayerStatistics } from './statisticsService';
 import { buildPlayerOverviews } from './databaseViews';
 import { DeflectionResult, EDeathType, ThrowResult } from './constants';
-import { parseLegacyStatisticsCsv, type ParsedLegacyCsv } from './legacyCsvImport';
 
 export type AggregateMap = Record<string, number>;
 
@@ -55,11 +47,6 @@ export type ImportMatchSeriesInput = {
   awayGameWins: number;
   tiedGames?: number;
   matchFinished?: boolean;
-};
-
-export type ImportMatchStatisticsResult = {
-  playersImported: number;
-  playersCreated: number;
 };
 
 function table<T>(data: DatabaseDto, name: string): T[] {
@@ -169,90 +156,28 @@ export function getImportedPlayerStatsForMatch(
   );
 }
 
-function clearImportedStatsForMatch(data: DatabaseDto, matchId: Guid): void {
+export function clearImportedStatsForMatch(data: DatabaseDto, matchId: Guid): void {
   data.Tables.ImportedPlayerStats = table<ImportedPlayerStatsRow>(
     data,
     'ImportedPlayerStats',
   ).filter((row) => row.MatchId !== matchId);
 }
 
-function findPlayerByNameOnTeam(
-  data: DatabaseDto,
-  teamId: Guid,
-  name: string,
-): PlayerRow | undefined {
-  const norm = name.trim().toLowerCase();
-  return getPlayersForTeam(data, teamId).find(
-    (player) => player.Name.trim().toLowerCase() === norm,
-  );
-}
-
-function resolveTeamSide(
-  teamName: string,
-  homeTeamName: string,
-  awayTeamName: string,
-): boolean | null {
-  const norm = teamName.trim().toLowerCase();
-  const homeNorm = homeTeamName.trim().toLowerCase();
-  const awayNorm = awayTeamName.trim().toLowerCase();
-  if (norm === homeNorm) return true;
-  if (norm === awayNorm) return false;
-  return null;
-}
-
-function ensurePlayerOnMatch(
+export function addImportedPlayerStats(
   data: DatabaseDto,
   matchId: Guid,
-  teamHome: boolean,
-  playerName: string,
-): { player: PlayerRow; created: boolean } {
-  const match = getMatchById(data, matchId);
-  if (!match) throw new Error('Match not found');
-  const teamId = teamHome ? match.TeamIdHome : match.TeamIdAway;
-  const existing = findPlayerByNameOnTeam(data, teamId, playerName);
-  if (existing) {
-    if (!isPlayerInMatch(data, matchId, existing.Id)) {
-      toggleMatchPlayer(data, matchId, existing.Id, teamHome);
-    }
-    return { player: existing, created: false };
-  }
-  const player = addPlayerToMatchSide(data, matchId, teamHome, playerName);
-  return { player, created: true };
+  playerId: Guid,
+  payload: ImportedAggregatesPayload,
+): void {
+  pushRow(data, 'ImportedPlayerStats', {
+    Id: newIdTimestamp(),
+    MatchId: matchId,
+    PlayerId: playerId,
+    AggregatesJson: JSON.stringify(payload),
+  });
 }
 
-function applyImportedRows(
-  data: DatabaseDto,
-  matchId: Guid,
-  parsed: ParsedLegacyCsv,
-  homeTeamName: string,
-  awayTeamName: string,
-): { playersImported: number; playersCreated: number } {
-  let playersCreated = 0;
-  for (const row of parsed.rows) {
-    const teamHome = resolveTeamSide(row.teamName, homeTeamName, awayTeamName);
-    if (teamHome == null) {
-      throw new Error(
-        `Team "${row.teamName}" in CSV does not match home (${homeTeamName}) or away (${awayTeamName})`,
-      );
-    }
-    const { player, created } = ensurePlayerOnMatch(
-      data,
-      matchId,
-      teamHome,
-      row.playerName,
-    );
-    if (created) playersCreated += 1;
-    pushRow(data, 'ImportedPlayerStats', {
-      Id: newIdTimestamp(),
-      MatchId: matchId,
-      PlayerId: player.Id,
-      AggregatesJson: JSON.stringify(row.aggregates),
-    });
-  }
-  return { playersImported: parsed.rows.length, playersCreated };
-}
-
-function applySeriesToMatch(
+export function applySeriesToMatch(
   data: DatabaseDto,
   matchId: Guid,
   series: ImportMatchSeriesInput,
@@ -270,48 +195,6 @@ function applySeriesToMatch(
     delete match.Ended;
     delete match.EndedVideoOffsetSeconds;
   }
-}
-
-export function importMatchStatistics(
-  data: DatabaseDto,
-  matchId: Guid,
-  csvText: string,
-  series: ImportMatchSeriesInput,
-): ImportMatchStatisticsResult {
-  validateImportMatchSeriesInput(series);
-  const match = getMatchById(data, matchId);
-  if (!match) throw new Error('Match not found');
-  if (matchHasGameEvents(data, matchId)) {
-    throw new Error('Cannot import statistics into a match that already has tracked events');
-  }
-  const homeTeam = getTeam(data, match.TeamIdHome);
-  const awayTeam = getTeam(data, match.TeamIdAway);
-  if (!homeTeam || !awayTeam) throw new Error('Match teams not found');
-
-  const parsed = parseLegacyStatisticsCsv(csvText);
-  clearImportedStatsForMatch(data, matchId);
-  const counts = applyImportedRows(
-    data,
-    matchId,
-    parsed,
-    homeTeam.Name,
-    awayTeam.Name,
-  );
-  applySeriesToMatch(data, matchId, series);
-  return counts;
-}
-
-export function createMatchFromStatisticsCsv(
-  data: DatabaseDto,
-  teamIdHome: Guid,
-  teamIdAway: Guid,
-  csvText: string,
-  series: ImportMatchSeriesInput,
-  createdByUid?: string | null,
-): Guid {
-  const match = addMatch(data, teamIdHome, teamIdAway, createdByUid);
-  importMatchStatistics(data, match.Id, csvText, series);
-  return match.Id;
 }
 
 export function loadImportedPayload(row: ImportedPlayerStatsRow): ImportedAggregatesPayload {
