@@ -66,6 +66,41 @@ test.describe('In-app stats', () => {
     await expect(page.getByRole('heading', { name: 'Frodo Baggins', level: 1 })).toBeVisible();
   });
 
+  test('player page shows a stat card with league ranks and power graph', async ({
+    page,
+  }) => {
+    await loadSampleLeague(page);
+    await navigateMenu(page, 'Stats');
+    await page.getByLabel('Player').click();
+    await page.getByRole('option', { name: /Jim Halpert/ }).click();
+    await expect(page.getByRole('heading', { name: 'Jim Halpert', level: 1 })).toBeVisible();
+
+    const card = page.locator('.sk-player-card');
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('img', { name: /^Power graph: VOR #\d+ of \d+/ })).toBeVisible();
+    const statRow = (label: string) =>
+      card
+        .locator('.sk-player-card-row')
+        .filter({ has: page.getByRole('cell', { name: label, exact: true }) });
+    for (const label of [
+      'Elusiveness %',
+      'Catch %',
+      'Caught',
+      'Caught %',
+      'Efficiency %',
+      'Net score',
+      'VOR',
+      'WAR',
+    ]) {
+      await expect(statRow(label)).toHaveCount(1);
+    }
+    const elusiveness = statRow('Elusiveness %');
+    await expect(elusiveness.locator('.sk-player-card-rank')).toContainText('#1');
+    await expect(elusiveness.locator('.sk-player-card-rank')).toHaveAttribute('data-tier', 'top');
+    await expect(elusiveness.getByLabel('Gold medal')).toBeVisible();
+    await expect(card.locator('.sk-player-card-qualifiers')).toContainText('15 games');
+  });
+
   test('opens match stats from the matches list', async ({ page }) => {
     await loadSampleLeague(page);
     await navigateMenu(page, 'Matches');

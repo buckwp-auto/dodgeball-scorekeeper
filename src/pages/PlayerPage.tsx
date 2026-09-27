@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  Chip,
   Link as MuiLink,
   Stack,
   ToggleButton,
@@ -10,7 +9,7 @@ import {
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { EntityAvatar } from '../components/EntityAvatar';
+import { PlayerStatCard, type PlayerCardBasic } from '../components/stats/PlayerStatCard';
 import { StatsPlayerTable } from '../components/stats/StatsPlayerTable';
 import { ThrowTagsSummary } from '../components/stats/ThrowTagsSummary';
 import { GameEventsTimeline } from '../components/trackGame/GameEventsTimeline';
@@ -32,6 +31,7 @@ import {
 import { getPlayerGamesPlayed, playerHref } from '../domain/playerProfile';
 import {
   buildDisplayStats,
+  displayedKills,
   formatCountValue,
   formatPct,
   leaderboardRank,
@@ -41,9 +41,14 @@ import {
   saveStatsCountingMode,
   type StatsCountingMode,
 } from '../domain/statistics/displayStats';
-import { attachVorWar } from '../domain/statistics/highlightStats';
+import {
+  attachVorWar,
+  formatHighlightQualifiers,
+} from '../domain/statistics/highlightStats';
+import { buildPlayerCard, describeRank } from '../domain/statistics/playerCard';
 import { viewerGameStatsHref, viewerPlayersHref } from '../domain/viewerRoutes';
 import { useDatabase } from '../state/DatabaseContext';
+import { useLeague } from '../state/LeagueContext';
 import { useViewerMode } from '../state/ViewerModeContext';
 
 export function PlayerPage() {
@@ -51,6 +56,8 @@ export function PlayerPage() {
   const navigate = useNavigate();
   const { data, mutate, readOnly } = useDatabase();
   const { isViewer, routeBase } = useViewerMode();
+  const { activeLeagueId, leagues } = useLeague();
+  const league = leagues.find((entry) => entry.id === activeLeagueId);
   const [counting, setCounting] = useState<StatsCountingMode>(() =>
     loadStatsCountingMode(),
   );
@@ -107,13 +114,22 @@ export function PlayerPage() {
     [data, player],
   );
 
-  const ranks = useMemo(() => {
-    if (!stats) return null;
-    return {
-      kills: leaderboardRank(leagueRows, stats.playerId, 'kills', counting),
-      catches: leaderboardRank(leagueRows, stats.playerId, 'catches', counting),
-      hitRate: leaderboardRank(leagueRows, stats.playerId, 'hitRate', counting),
+  const card = useMemo(
+    () => buildPlayerCard(leagueRows, playerId, { counting, qualifiers }),
+    [leagueRows, playerId, counting, qualifiers],
+  );
+  const basics = useMemo((): PlayerCardBasic[] => {
+    if (!stats) return [];
+    const rankOf = (metric: 'kills' | 'catches' | 'hitRate') => {
+      const found = leaderboardRank(leagueRows, stats.playerId, metric, counting);
+      return found ? describeRank(found.rank, found.total) : null;
     };
+    return [
+      { label: 'Games', value: String(stats.gamesPlayed), rank: null },
+      { label: 'Kills', value: formatCountValue(displayedKills(stats, counting)), rank: rankOf('kills') },
+      { label: 'Catches', value: String(stats.catches), rank: rankOf('catches') },
+      { label: 'Hit %', value: formatPct(stats.hitRate), rank: rankOf('hitRate') },
+    ];
   }, [leagueRows, stats, counting]);
 
   const showAssists =
@@ -163,80 +179,22 @@ export function PlayerPage() {
         )}
       </Stack>
 
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={3}
-        sx={{ alignItems: { sm: 'flex-start' }, mb: 3 }}
-      >
-        {photoSrc ? (
-          <Box
-            component="a"
-            href={photoSrc}
-            target="_blank"
-            rel="noreferrer"
-            sx={{ display: 'inline-block', flexShrink: 0 }}
-          >
-            <Box
-              component="img"
-              src={photoSrc}
-              alt=""
-              referrerPolicy="no-referrer"
-              sx={{
-                width: 200,
-                height: 200,
-                objectFit: 'cover',
-                borderRadius: 2,
-                display: 'block',
-              }}
-            />
-          </Box>
-        ) : (
-          <EntityAvatar name={player.Name} image={player.Image} size={160} />
-        )}
-        <Stack spacing={1}>
-          <Typography variant="h5">{player.Name}</Typography>
-          {team ? (
-            <Typography color="text.secondary">
-              {isViewer ? (
-                team.Name
-              ) : (
-                <MuiLink component={Link} to={`/teams/${team.Id}`} underline="hover">
-                  {team.Name}
-                </MuiLink>
-              )}
-            </Typography>
-          ) : null}
-          {player.AddedFromMatch && !player.LinkedPlayerId ? (
-            <Chip size="small" label="Added from match" className="sk-player-added-from-match" />
-          ) : null}
-          {ranks ? (
-            <Stack spacing={0.5} sx={{ mt: 1 }}>
-              <Typography>
-                Kills {formatCountValue(ranks.kills?.value ?? 0)}
-                {ranks.kills
-                  ? ` · #${ranks.kills.rank} of ${ranks.kills.total}`
-                  : ''}
-              </Typography>
-              <Typography>
-                Catches {formatCountValue(ranks.catches?.value ?? 0)}
-                {ranks.catches
-                  ? ` · #${ranks.catches.rank} of ${ranks.catches.total}`
-                  : ''}
-              </Typography>
-              <Typography>
-                Hit% {formatPct(ranks.hitRate?.value ?? null)}
-                {ranks.hitRate
-                  ? ` · #${ranks.hitRate.rank} of ${ranks.hitRate.total}`
-                  : ''}
-              </Typography>
-            </Stack>
-          ) : (
-            <Typography color="text.secondary">
-              No scored games yet for this player.
-            </Typography>
-          )}
-        </Stack>
-      </Stack>
+      <PlayerStatCard
+        playerName={player.Name}
+        image={player.Image}
+        photoSrc={photoSrc}
+        team={
+          team
+            ? { name: team.Name, href: isViewer ? undefined : `/teams/${team.Id}` }
+            : undefined
+        }
+        addedFromMatch={Boolean(player.AddedFromMatch && !player.LinkedPlayerId)}
+        leagueName={league?.name}
+        leagueLogo={league?.logo}
+        card={card}
+        basics={basics}
+        qualifierText={formatHighlightQualifiers(qualifiers)}
+      />
 
       {stats ? (
         <>
