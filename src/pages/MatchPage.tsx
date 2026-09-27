@@ -266,13 +266,13 @@ export function MatchPage() {
     }
   };
 
-  const onConfirmImport = ({ parsed, selection, series }: MatchStatsImportConfirm) => {
+  const onConfirmImport = ({ parsed, selection, series, labels }: MatchStatsImportConfirm) => {
     setImportBusy(true);
     setImportError(null);
     try {
       mutate(
         (draft) => {
-          applyStatsCsvImport(draft, { rows: parsed.rows, selection, series, matchId });
+          applyStatsCsvImport(draft, { rows: parsed.rows, selection, series, labels, matchId });
           return null;
         },
         'Imported match statistics from CSV.',
@@ -456,6 +456,7 @@ export function MatchPage() {
         fixedTeams={
           match ? { homeTeamId: match.TeamIdHome, awayTeamId: match.TeamIdAway } : null
         }
+        initialLabels={matchLabels}
         busy={importBusy}
         error={importError}
         onClose={() => {

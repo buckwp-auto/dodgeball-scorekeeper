@@ -61,7 +61,7 @@ export function MatchesPage() {
     }
   };
 
-  const onConfirmImport = ({ parsed, selection, series }: MatchStatsImportConfirm) => {
+  const onConfirmImport = ({ parsed, selection, series, labels }: MatchStatsImportConfirm) => {
     setImportBusy(true);
     setImportError(null);
     try {
@@ -71,6 +71,7 @@ export function MatchesPage() {
             rows: parsed.rows,
             selection,
             series,
+            labels,
             createdByUid: user?.uid ?? null,
           }).matchId,
         'Imported match from statistics CSV.',

@@ -8,7 +8,7 @@ import {
   getPlayersForTeam,
   getTeams,
 } from '../database';
-import { getMatchPlayers } from '../matchGame';
+import { getMatchById, getMatchPlayers } from '../matchGame';
 import { parseStatsCsv } from './statsCsvImport';
 import {
   applyStatsCsvImport,
@@ -204,6 +204,34 @@ describe('stats CSV import matching', () => {
 
     applyStatsCsvImport(data, { rows, selection, series: SERIES, matchId: match.Id });
     expect(match.StatsImported).toBe(true);
+  });
+
+  it('sets match labels on import and leaves them alone when omitted', () => {
+    const { data } = league();
+    const { rows } = parseStatsCsv(CSV);
+    const selection = suggestStatsImportSelection(data, rows);
+    const { matchId } = applyStatsCsvImport(data, {
+      rows,
+      selection,
+      series: SERIES,
+      labels: ['Week 3', ' week 3 ', 'Playoffs'],
+    });
+    const match = getMatchById(data, matchId)!;
+    expect(match.Labels).toEqual(['Week 3', 'Playoffs']);
+
+    const fixed = { homeTeamId: match.TeamIdHome, awayTeamId: match.TeamIdAway };
+    const reSelection = suggestStatsImportSelection(data, rows, fixed);
+    applyStatsCsvImport(data, { rows, selection: reSelection, series: SERIES, matchId });
+    expect(match.Labels).toEqual(['Week 3', 'Playoffs']);
+
+    applyStatsCsvImport(data, {
+      rows,
+      selection: reSelection,
+      series: SERIES,
+      matchId,
+      labels: [],
+    });
+    expect(match.Labels).toBeUndefined();
   });
 
   it('requires exactly two teams', () => {

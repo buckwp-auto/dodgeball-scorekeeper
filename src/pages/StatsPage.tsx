@@ -11,6 +11,7 @@ import { StatsStandingsTable } from '../components/stats/StatsStandingsTable';
 import { PageHeader } from '../components/Ui';
 import { getMatchName } from '../domain/database';
 import { buildEliminationTimeline } from '../domain/gameElimination';
+import { isStatsImportedMatchId } from '../domain/importedMatch';
 import { getMatchById, getMatchGames } from '../domain/matchGame';
 import { resolveHighlightQualifiers, resolveLeagueStatPolicy } from '../domain/leagueSettings';
 import {
@@ -42,7 +43,7 @@ type StatsTab = 'standings' | 'players' | 'charts' | 'leaderboards';
 export function StatsPage() {
   const { matchId, gameId } = useParams();
   const { data } = useDatabase();
-  const { activeLeagueId, accessMode, leagues } = useLeague();
+  const { activeLeagueId, accessMode, leagues, readOnly } = useLeague();
   const { isViewer } = useViewerMode();
   const [tab, setTab] = useState<StatsTab>(matchId && gameId ? 'players' : 'standings');
   const [metric, setMetric] = useState<LeaderboardMetric>('kills');
@@ -132,6 +133,14 @@ export function StatsPage() {
       ? 'players'
       : tab;
   const canDownloadCsv = Boolean(scope && valid && scope.kind !== 'game' && rows.length > 0);
+  const matchDetailsHref =
+    scope?.kind === 'match' &&
+    valid &&
+    !isViewer &&
+    !readOnly &&
+    isStatsImportedMatchId(data, scope.matchId)
+      ? `/matches/${scope.matchId}`
+      : null;
 
   const downloadCsv = () => {
     if (!scope) return;
@@ -185,16 +194,28 @@ export function StatsPage() {
     <>
       <PageHeader>{title}</PageHeader>
       {scope ? <StatsScopeNav data={data} scope={scope} /> : null}
-      {canDownloadCsv ? (
+      {canDownloadCsv || matchDetailsHref ? (
         <Stack direction="row" spacing={1} className="button-row" sx={{ flexWrap: 'wrap', mb: 2, rowGap: 1 }}>
-          <Button
-            type="button"
-            variant="outlined"
-            className="bw-button bw-button--text"
-            onClick={downloadCsv}
-          >
-            Download Statistics CSV
-          </Button>
+          {canDownloadCsv ? (
+            <Button
+              type="button"
+              variant="outlined"
+              className="bw-button bw-button--text"
+              onClick={downloadCsv}
+            >
+              Download Statistics CSV
+            </Button>
+          ) : null}
+          {matchDetailsHref ? (
+            <Button
+              component={Link}
+              to={matchDetailsHref}
+              variant="outlined"
+              className="bw-button bw-button--text sk-imported-match-details"
+            >
+              Match details
+            </Button>
+          ) : null}
         </Stack>
       ) : null}
       {series ? <MatchSeriesScoreboard series={series} /> : null}

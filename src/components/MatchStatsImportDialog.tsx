@@ -23,6 +23,7 @@ import SwapVertIcon from '@mui/icons-material/SwapVert';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useEffect, useMemo, useState } from 'react';
 import { getPlayersForTeam, getTeam, getTeams } from '../domain/database';
+import { listMatchLabelSuggestions } from '../domain/matchLabels';
 import type { ImportMatchSeriesInput } from '../domain/statistics/importedMatchStats';
 import {
   parseStatsCsv,
@@ -44,11 +45,13 @@ import {
   type StatsImportSelection,
 } from '../domain/statistics/statsCsvImportPlan';
 import { useDatabase } from '../state/DatabaseContext';
+import { MatchLabelsEditor } from './MatchLabels';
 
 export type MatchStatsImportConfirm = {
   parsed: StatsCsvParseResult;
   selection: StatsImportSelection;
   series: ImportMatchSeriesInput;
+  labels: string[];
 };
 
 type MatchStatsImportDialogProps = {
@@ -56,6 +59,8 @@ type MatchStatsImportDialogProps = {
   csvText: string;
   /** Importing into an existing match: its teams are locked. */
   fixedTeams?: FixedImportTeams | null;
+  /** Labels to start from (the existing match's labels when re-importing). */
+  initialLabels?: string[];
   busy?: boolean;
   error?: string | null;
   onClose: () => void;
@@ -99,6 +104,7 @@ export function MatchStatsImportDialog({
   open,
   csvText,
   fixedTeams = null,
+  initialLabels,
   busy = false,
   error = null,
   onClose,
@@ -122,6 +128,13 @@ export function MatchStatsImportDialog({
   const [awayWins, setAwayWins] = useState('0');
   const [ties, setTies] = useState('0');
   const [matchFinished, setMatchFinished] = useState(true);
+  const [labels, setLabels] = useState<string[]>([]);
+  const labelSuggestions = useMemo(() => listMatchLabelSuggestions(data), [data]);
+
+  useEffect(() => {
+    if (open) setLabels(initialLabels ?? []);
+    // Seed only when the dialog opens so live sync does not reset the uploader's edits.
+  }, [open]);
 
   const fixedHome = fixedTeams?.homeTeamId;
   const fixedAway = fixedTeams?.awayTeamId;
@@ -481,6 +494,11 @@ export function MatchStatsImportDialog({
                 }
                 label="Match finished"
               />
+              <MatchLabelsEditor
+                value={labels}
+                suggestions={labelSuggestions}
+                onChange={setLabels}
+              />
               {importSummary ? (
                 <Typography variant="body2" color="text.secondary">
                   {importSummary}
@@ -500,7 +518,7 @@ export function MatchStatsImportDialog({
           disabled={!canSubmit}
           onClick={() => {
             if (!parsed.result || !selection || !series) return;
-            onConfirm({ parsed: parsed.result, selection, series });
+            onConfirm({ parsed: parsed.result, selection, series, labels });
           }}
         >
           {warningCount > 0 ? 'Import anyway' : 'Import statistics'}
