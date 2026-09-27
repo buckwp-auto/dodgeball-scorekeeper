@@ -36,10 +36,7 @@ import {
 } from '../../domain/statistics/highlightStats';
 import type { DatabaseDto } from '../../domain/types';
 import { EntityAvatar } from '../EntityAvatar';
-
-const NAVY = '#0b1f3a';
-const NAVY_DEEP = '#071526';
-const GOLD = '#f0c14b';
+import { GOLD, NAVY, NAVY_DEEP, SplitName } from './leaderboardStyle';
 
 export function StatsLeaderboard({
   rows,
@@ -352,28 +349,6 @@ function PodiumSlot({
       >
         #{place}
       </Typography>
-    </Box>
-  );
-}
-
-function SplitName({ name }: { name: string }) {
-  const trimmed = name.trim();
-  const index = trimmed.indexOf(' ');
-  const first = index < 0 ? trimmed : trimmed.slice(0, index);
-  const last = index < 0 ? '' : trimmed.slice(index + 1);
-  return (
-    <Box component="span" sx={{ fontWeight: 800, letterSpacing: 0.5 }}>
-      <Box component="span" sx={{ color: '#fff' }}>
-        {first.toUpperCase()}
-      </Box>
-      {last ? (
-        <>
-          {' '}
-          <Box component="span" sx={{ color: GOLD }}>
-            {last.toUpperCase()}
-          </Box>
-        </>
-      ) : null}
     </Box>
   );
 }
