@@ -4,6 +4,7 @@ import {
   addPlayer,
   addTeam,
   createEmptyDatabase,
+  getPlayer,
   getPlayersForTeam,
   getTeams,
 } from '../database';
@@ -15,6 +16,7 @@ import {
   setImportPlayerChoice,
   setImportSideTeam,
   suggestStatsImportSelection,
+  suggestSubstituteLinks,
   swapImportSides,
 } from './statsCsvImportPlan';
 
@@ -107,6 +109,58 @@ describe('stats CSV import matching', () => {
     const duplicate = setImportPlayerChoice(selection, 1, { kind: 'existing', playerId: bj.Id });
     expect(reviewStatsImport(data, rows, duplicate).errors).toEqual([
       '"BJ Suarez" and "Ellie Bawek" are both mapped to bj suarez',
+    ]);
+  });
+
+  it('imports an unrecognized player as a match substitute', () => {
+    const { data } = league();
+    const { rows } = parseStatsCsv(CSV);
+    const selection = setImportPlayerChoice(suggestStatsImportSelection(data, rows), 1, {
+      kind: 'substitute',
+    });
+    const review = reviewStatsImport(data, rows, selection);
+    expect(review.newPlayerNames).toEqual([]);
+    expect(review.substitutePlayerNames).toEqual(['Ellie Bawek']);
+
+    const { matchId, playersCreated } = applyStatsCsvImport(data, {
+      rows,
+      selection,
+      series: SERIES,
+    });
+    expect(playersCreated).toBe(1);
+    const sub = getMatchPlayers(data, matchId).find((row) => row.IsSubstitute)!;
+    const player = getPlayer(data, sub.PlayerId)!;
+    expect(player.Name).toBe('Ellie Bawek');
+    expect(player.AddedFromMatch).toBe(true);
+    expect(player.LinkedPlayerId).toBeUndefined();
+    expect(sub.TeamHome).toBe(true);
+  });
+
+  it('suggests a cross-team sub when the name matches a player on another team', () => {
+    const { data, vortex, time } = league();
+    const other = addTeam(data, 'Night Owls');
+    const ellie = addPlayer(data, other.Id, 'Ellie Bawek');
+    const { rows } = parseStatsCsv(CSV);
+    const selection = suggestStatsImportSelection(data, rows);
+    expect(selection.players[1]).toEqual({ kind: 'substitute', linkedPlayerId: ellie.Id });
+    expect(suggestSubstituteLinks(data, selection, 'Ellie').map((c) => c.playerId)).toEqual([
+      ellie.Id,
+    ]);
+    expect(suggestSubstituteLinks(data, selection, 'Tom Duffy')).toEqual([]);
+
+    const { matchId } = applyStatsCsvImport(data, { rows, selection, series: SERIES });
+    const sub = getMatchPlayers(data, matchId).find((row) => row.IsSubstitute)!;
+    const guest = getPlayer(data, sub.PlayerId)!;
+    expect(guest.LinkedPlayerId).toBe(ellie.Id);
+    expect(getPlayersForTeam(data, vortex.Id).map((p) => p.Id)).toContain(guest.Id);
+    expect(getPlayersForTeam(data, time.Id)).toHaveLength(2);
+
+    const twice = setImportPlayerChoice(selection, 0, {
+      kind: 'substitute',
+      linkedPlayerId: ellie.Id,
+    });
+    expect(reviewStatsImport(data, rows, twice).errors).toEqual([
+      '"BJ Suarez" and "Ellie Bawek" are both mapped to Ellie Bawek',
     ]);
   });
 

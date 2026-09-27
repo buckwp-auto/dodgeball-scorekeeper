@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  ListSubheader,
   MenuItem,
   Stack,
   Table,
@@ -34,6 +35,7 @@ import {
   setImportPlayerChoice,
   setImportSideTeam,
   suggestStatsImportSelection,
+  suggestSubstituteLinks,
   swapImportSides,
   type FixedImportTeams,
   type ImportPlayerChoice,
@@ -63,6 +65,8 @@ type MatchStatsImportDialogProps = {
 const CREATE_TEAM = '__create__';
 const CREATE_PLAYER = '__create__';
 const SKIP_PLAYER = '__skip__';
+const SUB_PLAYER = '__sub__';
+const SUB_LINK_PREFIX = 'sub:';
 
 function teamChoiceValue(choice: ImportTeamChoice): string {
   return choice.kind === 'existing' ? choice.teamId : CREATE_TEAM;
@@ -71,12 +75,19 @@ function teamChoiceValue(choice: ImportTeamChoice): string {
 function playerChoiceValue(choice: ImportPlayerChoice | undefined): string {
   if (!choice || choice.kind === 'create') return CREATE_PLAYER;
   if (choice.kind === 'skip') return SKIP_PLAYER;
+  if (choice.kind === 'substitute') {
+    return choice.linkedPlayerId ? `${SUB_LINK_PREFIX}${choice.linkedPlayerId}` : SUB_PLAYER;
+  }
   return choice.playerId;
 }
 
 function playerChoiceFromValue(value: string): ImportPlayerChoice {
   if (value === CREATE_PLAYER) return { kind: 'create' };
   if (value === SKIP_PLAYER) return { kind: 'skip' };
+  if (value === SUB_PLAYER) return { kind: 'substitute' };
+  if (value.startsWith(SUB_LINK_PREFIX)) {
+    return { kind: 'substitute', linkedPlayerId: value.slice(SUB_LINK_PREFIX.length) };
+  }
   return { kind: 'existing', playerId: value };
 }
 
@@ -154,6 +165,18 @@ export function MatchStatsImportDialog({
     [data, rows, selection],
   );
 
+  const homeSide = selection?.home;
+  const awaySide = selection?.away;
+  const subLinks = useMemo(
+    () =>
+      rows.map((row) =>
+        homeSide && awaySide
+          ? suggestSubstituteLinks(data, { home: homeSide, away: awaySide }, row.playerName)
+          : [],
+      ),
+    [data, rows, homeSide, awaySide],
+  );
+
   const teams = getTeams(data);
   const sideTeamName = (side: ImportSideKey): string => {
     const choice = selection?.[side].team;
@@ -188,6 +211,9 @@ export function MatchStatsImportDialog({
         review.newTeamNames.length ? `${plural(review.newTeamNames.length, 'new team')}` : null,
         review.newPlayerNames.length
           ? `${plural(review.newPlayerNames.length, 'new player')}`
+          : null,
+        review.substitutePlayerNames.length
+          ? `${plural(review.substitutePlayerNames.length, 'substitute')}`
           : null,
         review.skippedPlayerNames.length
           ? `${plural(review.skippedPlayerNames.length, 'skipped row')}`
@@ -299,8 +325,8 @@ export function MatchStatsImportDialog({
               {review && review.unmatchedPlayerRows.length > 0 ? (
                 <Alert severity="warning">
                   {plural(review.unmatchedPlayerRows.length, 'player')} didn't match anyone on
-                  their team. They'll be created as new players unless you map them to an
-                  existing player or skip them.
+                  their team. Choose whether each one is a new player, a substitute (optionally
+                  subbing for a player on another team), an existing player, or skipped.
                 </Alert>
               ) : null}
               <Box sx={{ maxHeight: 320, overflowY: 'auto' }}>
@@ -355,9 +381,26 @@ export function MatchStatsImportDialog({
                               <MenuItem value={CREATE_PLAYER}>
                                 Create new player “{row.playerName}”
                               </MenuItem>
+                              <MenuItem value={SUB_PLAYER}>
+                                Add “{row.playerName}” as a substitute
+                              </MenuItem>
+                              {options.length > 0 ? (
+                                <ListSubheader>{sideTeamName(side)} players</ListSubheader>
+                              ) : null}
                               {options.map((player) => (
                                 <MenuItem key={player.Id} value={player.Id}>
                                   {player.Name}
+                                </MenuItem>
+                              ))}
+                              {subLinks[index].length > 0 ? (
+                                <ListSubheader>Substitute for a player on another team</ListSubheader>
+                              ) : null}
+                              {subLinks[index].map((candidate) => (
+                                <MenuItem
+                                  key={candidate.playerId}
+                                  value={`${SUB_LINK_PREFIX}${candidate.playerId}`}
+                                >
+                                  Sub for {candidate.playerName} ({candidate.teamName})
                                 </MenuItem>
                               ))}
                               <MenuItem value={SKIP_PLAYER}>Skip this row</MenuItem>

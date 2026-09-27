@@ -6,6 +6,7 @@ import {
   isPlayerInMatch,
   toggleMatchPlayer,
 } from '../matchGame';
+import { suggestLinkedPlayers, type PlayerMatchCandidate } from '../playerMatch';
 import type { DatabaseDto, Guid, PlayerRow, TeamRow } from '../types';
 import {
   addImportedPlayerStats,
@@ -24,6 +25,8 @@ export type ImportTeamChoice =
 export type ImportPlayerChoice =
   | { kind: 'existing'; playerId: Guid }
   | { kind: 'create' }
+  /** New match sub; `linkedPlayerId` makes them a cross-team sub for that league player. */
+  | { kind: 'substitute'; linkedPlayerId?: Guid }
   | { kind: 'skip' };
 
 export type ImportSideKey = 'home' | 'away';
@@ -68,14 +71,44 @@ export function rowImportSide(
     : 'away';
 }
 
+function selectionTeamIds(selection: Omit<StatsImportSelection, 'players'>): Set<Guid> {
+  const ids = new Set<Guid>();
+  for (const side of [selection.home, selection.away]) {
+    if (side.team.kind === 'existing') ids.add(side.team.teamId);
+  }
+  return ids;
+}
+
+/** Players on other league teams this CSV name could be subbing for, best match first. */
+export function suggestSubstituteLinks(
+  data: DatabaseDto,
+  selection: Omit<StatsImportSelection, 'players'>,
+  playerName: string,
+): PlayerMatchCandidate[] {
+  const matchTeamIds = selectionTeamIds(selection);
+  return suggestLinkedPlayers(data, { query: playerName }).filter(
+    (candidate) => !matchTeamIds.has(candidate.teamId),
+  );
+}
+
 function suggestPlayerChoice(
   data: DatabaseDto,
-  team: ImportTeamChoice,
+  selection: Omit<StatsImportSelection, 'players'>,
+  side: ImportSideKey,
   playerName: string,
 ): ImportPlayerChoice {
-  if (team.kind !== 'existing') return { kind: 'create' };
-  const player = findPlayerByImportName(data, team.teamId, playerName);
-  return player ? { kind: 'existing', playerId: player.Id } : { kind: 'create' };
+  const team = selection[side].team;
+  if (team.kind === 'existing') {
+    const player = findPlayerByImportName(data, team.teamId, playerName);
+    if (player) return { kind: 'existing', playerId: player.Id };
+  }
+  const key = normalizeImportName(playerName);
+  const sameName = suggestSubstituteLinks(data, selection, playerName).find(
+    (candidate) => normalizeImportName(candidate.playerName) === key,
+  );
+  return sameName
+    ? { kind: 'substitute', linkedPlayerId: sameName.playerId }
+    : { kind: 'create' };
 }
 
 function resuggestPlayers(
@@ -89,7 +122,7 @@ function resuggestPlayers(
   return rows.map((row, index) => {
     const side = rowImportSide(withSides, row);
     if (onlySide && side !== onlySide && previous) return previous.players[index];
-    return suggestPlayerChoice(data, selection[side].team, row.playerName);
+    return suggestPlayerChoice(data, selection, side, row.playerName);
   });
 }
 
@@ -180,6 +213,7 @@ export type StatsImportReview = {
   unmatchedPlayerRows: number[];
   newTeamNames: string[];
   newPlayerNames: string[];
+  substitutePlayerNames: string[];
   skippedPlayerNames: string[];
 };
 
@@ -219,8 +253,17 @@ export function reviewStatsImport(
 
   const unmatchedPlayerRows: number[] = [];
   const newPlayerNames: string[] = [];
+  const substitutePlayerNames: string[] = [];
   const skippedPlayerNames: string[] = [];
   const usedPlayers = new Map<Guid, string>();
+  const claimPlayer = (playerId: Guid, csvName: string) => {
+    const earlier = usedPlayers.get(playerId);
+    if (earlier) {
+      const name = getPlayer(data, playerId)?.Name ?? 'the same player';
+      errors.push(`"${earlier}" and "${csvName}" are both mapped to ${name}`);
+    }
+    usedPlayers.set(playerId, csvName);
+  };
   rows.forEach((row, index) => {
     const team = selection[rowImportSide(selection, row)].team;
     const autoMatch =
@@ -228,15 +271,12 @@ export function reviewStatsImport(
     if (!autoMatch) unmatchedPlayerRows.push(index);
     const choice = selection.players[index] ?? { kind: 'create' };
     if (choice.kind === 'create') newPlayerNames.push(row.playerName);
-    if (choice.kind === 'skip') skippedPlayerNames.push(row.playerName);
-    if (choice.kind === 'existing') {
-      const earlier = usedPlayers.get(choice.playerId);
-      if (earlier) {
-        const name = getPlayer(data, choice.playerId)?.Name ?? 'the same player';
-        errors.push(`"${earlier}" and "${row.playerName}" are both mapped to ${name}`);
-      }
-      usedPlayers.set(choice.playerId, row.playerName);
+    if (choice.kind === 'substitute') {
+      substitutePlayerNames.push(row.playerName);
+      if (choice.linkedPlayerId) claimPlayer(choice.linkedPlayerId, row.playerName);
     }
+    if (choice.kind === 'skip') skippedPlayerNames.push(row.playerName);
+    if (choice.kind === 'existing') claimPlayer(choice.playerId, row.playerName);
   });
   if (skippedPlayerNames.length === rows.length) {
     errors.push('Every player row is skipped');
@@ -248,6 +288,7 @@ export function reviewStatsImport(
     unmatchedPlayerRows,
     newTeamNames,
     newPlayerNames,
+    substitutePlayerNames,
     skippedPlayerNames,
   };
 }
@@ -318,6 +359,16 @@ export function applyStatsCsvImport(
       if (!isPlayerInMatch(data, matchId, playerId)) {
         toggleMatchPlayer(data, matchId, playerId, teamHome);
       }
+    } else if (choice.kind === 'substitute') {
+      playerId = addPlayerToMatchSide(
+        data,
+        matchId,
+        teamHome,
+        row.playerName,
+        true,
+        choice.linkedPlayerId,
+      ).Id;
+      playersCreated += 1;
     } else {
       playerId = addPlayerToMatchSide(data, matchId, teamHome, row.playerName).Id;
       playersCreated += 1;

@@ -112,6 +112,10 @@ test.describe('Match statistics CSV import', () => {
     await expect(dialog.locator('.sk-import-missing-stats')).toContainText('Deaths');
     await expect(dialog.getByLabel('Away team')).toHaveText('Create new team “Night Owls”');
 
+    await dialog.getByRole('combobox', { name: 'Import Newbie as' }).click();
+    await page.getByRole('option', { name: 'Add “Newbie” as a substitute' }).click();
+    await expect(dialog.getByText('This import adds 1 new team, 1 substitute.')).toBeVisible();
+
     await dialog.getByRole('button', { name: 'Import anyway' }).click();
     await expect(page).toHaveURL(/\/matches\/[^/]+\/stats$/);
     await expect(
