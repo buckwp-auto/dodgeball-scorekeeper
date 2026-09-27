@@ -1,11 +1,11 @@
 import path from 'path';
 import { test, expect } from '@playwright/test';
+import { ONBOARDING_COMPLETE_KEY } from '../src/domain/onboarding';
 import {
   clearScorekeeperStorage,
   fileInputForExtension,
   gotoScorekeeper,
   navigateMenu,
-  selectMatchTeam,
 } from './helpers/scorekeeper-page';
 
 const fixturesDir = path.join(process.cwd(), 'tests', 'fixtures');
@@ -26,6 +26,9 @@ async function loadInteropBasic(page: import('@playwright/test').Page) {
 test.describe('Match statistics CSV import', () => {
   test.beforeEach(async ({ page }) => {
     await clearScorekeeperStorage(page);
+    await page.addInitScript((key) => {
+      localStorage.setItem(key, '1');
+    }, ONBOARDING_COMPLETE_KEY);
   });
 
   test('imports CSV with game score form and opens stats page', async ({ page }) => {
@@ -69,21 +72,50 @@ test.describe('Match statistics CSV import', () => {
     await expect(page).toHaveURL(new RegExp(`/matches/${matchId}/stats$`));
   });
 
-  test('creates match from CSV on Matches page', async ({ page }) => {
+  test('creates match from CSV on Matches page without picking teams', async ({ page }) => {
     await loadInteropBasic(page);
-    await selectMatchTeam(page, 'Home Team', 'Home Hawks');
-    await selectMatchTeam(page, 'Away Team', 'Away Owls');
 
     await page.getByRole('button', { name: 'Import from statistics CSV' }).click();
     await fileInputForExtension(page, '.csv').setInputFiles(
       path.join(fixturesDir, 'interop-basic.golden.csv'),
     );
+    const dialog = page.getByRole('dialog', { name: 'Import match statistics' });
+    await expect(dialog.getByLabel('Home team')).toHaveText('Away Owls');
+    await dialog.getByRole('button', { name: 'Swap home / away' }).click();
+    await expect(dialog.getByLabel('Home team')).toHaveText('Home Hawks');
     await page.getByLabel('Home Hawks game wins').fill('1');
     await page.getByLabel('Away Owls game wins').fill('0');
-    await page.getByRole('button', { name: 'Import statistics' }).click();
+    await dialog.getByRole('button', { name: 'Import statistics' }).click();
 
     await expect(page).toHaveURL(/\/matches\/[^/]+\/stats$/);
     await navigateMenu(page, 'Matches');
     await expect(page.locator('.sk-match-progress').filter({ hasText: 'Finished' })).toBeVisible();
+  });
+
+  test('flags unknown teams, players, and missing stats in a spreadsheet CSV', async ({ page }) => {
+    await loadInteropBasic(page);
+
+    await page.getByRole('button', { name: 'Import from statistics CSV' }).click();
+    await fileInputForExtension(page, '.csv').setInputFiles({
+      name: 'spreadsheet.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        ['Team,Player,GP,W-L,Kills', 'Home Hawks,H1,3,2-1,4', 'Night Owls,Newbie,3,1-2,1'].join(
+          '\n',
+        ),
+      ),
+    });
+
+    const dialog = page.getByRole('dialog', { name: 'Import match statistics' });
+    await expect(dialog.getByText('“Night Owls” doesn\'t match a league team')).toBeVisible();
+    await expect(dialog.getByText("1 player didn't match anyone on their team")).toBeVisible();
+    await expect(dialog.locator('.sk-import-missing-stats')).toContainText('Deaths');
+    await expect(dialog.getByLabel('Away team')).toHaveText('Create new team “Night Owls”');
+
+    await dialog.getByRole('button', { name: 'Import anyway' }).click();
+    await expect(page).toHaveURL(/\/matches\/[^/]+\/stats$/);
+    await expect(
+      page.getByRole('heading', { name: /^Match stats — Home Hawks vs\. Night Owls/ }),
+    ).toBeVisible();
   });
 });

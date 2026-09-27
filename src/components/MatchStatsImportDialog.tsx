@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -7,154 +8,443 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  MenuItem,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
+import SwapVertIcon from '@mui/icons-material/SwapVert';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useEffect, useMemo, useState } from 'react';
+import { getPlayersForTeam, getTeam, getTeams } from '../domain/database';
 import type { ImportMatchSeriesInput } from '../domain/statistics/importedMatchStats';
 import {
-  parseLegacyStatisticsCsv,
-  suggestSeriesFromLegacyCsv,
-} from '../domain/statistics/legacyCsvImport';
+  parseStatsCsv,
+  suggestSeriesFromCsv,
+  type StatsCsvParseResult,
+} from '../domain/statistics/statsCsvImport';
+import {
+  reviewStatsImport,
+  rowImportSide,
+  setImportPlayerChoice,
+  setImportSideTeam,
+  suggestStatsImportSelection,
+  swapImportSides,
+  type FixedImportTeams,
+  type ImportPlayerChoice,
+  type ImportSideKey,
+  type ImportTeamChoice,
+  type StatsImportSelection,
+} from '../domain/statistics/statsCsvImportPlan';
+import { useDatabase } from '../state/DatabaseContext';
+
+export type MatchStatsImportConfirm = {
+  parsed: StatsCsvParseResult;
+  selection: StatsImportSelection;
+  series: ImportMatchSeriesInput;
+};
 
 type MatchStatsImportDialogProps = {
   open: boolean;
-  homeTeamName: string;
-  awayTeamName: string;
   csvText: string;
+  /** Importing into an existing match: its teams are locked. */
+  fixedTeams?: FixedImportTeams | null;
   busy?: boolean;
   error?: string | null;
   onClose: () => void;
-  onConfirm: (series: ImportMatchSeriesInput) => void;
+  onConfirm: (input: MatchStatsImportConfirm) => void;
 };
+
+const CREATE_TEAM = '__create__';
+const CREATE_PLAYER = '__create__';
+const SKIP_PLAYER = '__skip__';
+
+function teamChoiceValue(choice: ImportTeamChoice): string {
+  return choice.kind === 'existing' ? choice.teamId : CREATE_TEAM;
+}
+
+function playerChoiceValue(choice: ImportPlayerChoice | undefined): string {
+  if (!choice || choice.kind === 'create') return CREATE_PLAYER;
+  if (choice.kind === 'skip') return SKIP_PLAYER;
+  return choice.playerId;
+}
+
+function playerChoiceFromValue(value: string): ImportPlayerChoice {
+  if (value === CREATE_PLAYER) return { kind: 'create' };
+  if (value === SKIP_PLAYER) return { kind: 'skip' };
+  return { kind: 'existing', playerId: value };
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
 
 export function MatchStatsImportDialog({
   open,
-  homeTeamName,
-  awayTeamName,
   csvText,
+  fixedTeams = null,
   busy = false,
   error = null,
   onClose,
   onConfirm,
 }: MatchStatsImportDialogProps) {
+  const { data } = useDatabase();
+
   const parsed = useMemo(() => {
     try {
-      return { rows: parseLegacyStatisticsCsv(csvText).rows, error: null as string | null };
+      return { result: parseStatsCsv(csvText), error: null as string | null };
     } catch (parseError) {
       const message = parseError instanceof Error ? parseError.message : 'Could not parse CSV';
-      return { rows: [], error: message };
+      return { result: null, error: message };
     }
   }, [csvText]);
+  const rows = parsed.result?.rows ?? [];
 
-  const hint = useMemo(() => {
-    if (parsed.error || parsed.rows.length === 0) return null;
-    try {
-      return suggestSeriesFromLegacyCsv(
-        { rows: parsed.rows },
-        homeTeamName,
-        awayTeamName,
-      );
-    } catch {
-      return null;
-    }
-  }, [parsed.error, parsed.rows, homeTeamName, awayTeamName]);
-
+  const [selection, setSelection] = useState<StatsImportSelection | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [homeWins, setHomeWins] = useState('0');
   const [awayWins, setAwayWins] = useState('0');
   const [ties, setTies] = useState('0');
   const [matchFinished, setMatchFinished] = useState(true);
 
+  const fixedHome = fixedTeams?.homeTeamId;
+  const fixedAway = fixedTeams?.awayTeamId;
   useEffect(() => {
-    if (!open) return;
-    setHomeWins(String(hint?.homeGameWins ?? 0));
-    setAwayWins(String(hint?.awayGameWins ?? 0));
-    setTies(String(hint?.tiedGames ?? 0));
-    setMatchFinished(true);
-  }, [open, hint?.awayGameWins, hint?.homeGameWins, hint?.tiedGames]);
+    if (!open || !parsed.result) {
+      setSelection(null);
+      setSelectionError(null);
+      return;
+    }
+    try {
+      setSelection(
+        suggestStatsImportSelection(
+          data,
+          parsed.result.rows,
+          fixedHome && fixedAway ? { homeTeamId: fixedHome, awayTeamId: fixedAway } : null,
+        ),
+      );
+      setSelectionError(null);
+    } catch (suggestError) {
+      setSelection(null);
+      setSelectionError(
+        suggestError instanceof Error ? suggestError.message : 'Could not match teams',
+      );
+    }
+    // Re-suggest only when a file is opened so live sync does not reset the uploader's choices.
+  }, [open, parsed.result, fixedHome, fixedAway]);
 
-  const parseSeries = (): ImportMatchSeriesInput | null => {
+  const homeCsv = selection?.home.csvTeamName;
+  const awayCsv = selection?.away.csvTeamName;
+  useEffect(() => {
+    if (!open || !homeCsv || !awayCsv) return;
+    const hint = suggestSeriesFromCsv(rows, homeCsv, awayCsv);
+    setHomeWins(String(hint.homeGameWins));
+    setAwayWins(String(hint.awayGameWins));
+    setTies(String(hint.tiedGames));
+    setMatchFinished(true);
+  }, [open, homeCsv, awayCsv]);
+
+  const review = useMemo(
+    () => (selection ? reviewStatsImport(data, rows, selection) : null),
+    [data, rows, selection],
+  );
+
+  const teams = getTeams(data);
+  const sideTeamName = (side: ImportSideKey): string => {
+    const choice = selection?.[side].team;
+    if (!choice) return side === 'home' ? 'Home' : 'Away';
+    return choice.kind === 'existing'
+      ? (getTeam(data, choice.teamId)?.Name ?? 'Unknown team')
+      : choice.name;
+  };
+
+  const series = ((): ImportMatchSeriesInput | null => {
     const homeGameWins = Number(homeWins);
     const awayGameWins = Number(awayWins);
     const tiedGames = Number(ties);
-    if (
-      !Number.isInteger(homeGameWins) ||
-      !Number.isInteger(awayGameWins) ||
-      !Number.isInteger(tiedGames) ||
-      homeGameWins < 0 ||
-      awayGameWins < 0 ||
-      tiedGames < 0
-    ) {
-      return null;
-    }
-    return {
-      homeGameWins,
-      awayGameWins,
-      tiedGames,
-      matchFinished,
-    };
+    const valid = [homeGameWins, awayGameWins, tiedGames].every(
+      (value) => Number.isInteger(value) && value >= 0,
+    );
+    if (!valid || homeGameWins + awayGameWins + tiedGames < 1) return null;
+    return { homeGameWins, awayGameWins, tiedGames, matchFinished };
+  })();
+
+  const fatalError = parsed.error ?? selectionError;
+  const warningCount =
+    (review?.unmatchedTeams.length ?? 0) +
+    (review?.unmatchedPlayerRows.length ?? 0) +
+    (parsed.result?.missingStats.length ?? 0);
+  const canSubmit =
+    !fatalError && selection && review && review.errors.length === 0 && series && !busy;
+
+  const unmatchedRows = new Set(review?.unmatchedPlayerRows ?? []);
+  const summaryParts = review
+    ? [
+        review.newTeamNames.length ? `${plural(review.newTeamNames.length, 'new team')}` : null,
+        review.newPlayerNames.length
+          ? `${plural(review.newPlayerNames.length, 'new player')}`
+          : null,
+        review.skippedPlayerNames.length
+          ? `${plural(review.skippedPlayerNames.length, 'skipped row')}`
+          : null,
+      ].filter(Boolean)
+    : [];
+  const importSummary = summaryParts.length ? `This import adds ${summaryParts.join(', ')}.` : null;
+
+  const renderSide = (side: ImportSideKey) => {
+    if (!selection) return null;
+    const current = selection[side];
+    const unmatched = review?.unmatchedTeams.includes(current.csvTeamName) ?? false;
+    return (
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Typography variant="body2" sx={{ width: 48, fontWeight: 600 }}>
+          {side === 'home' ? 'Home' : 'Away'}
+        </Typography>
+        <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap title={current.csvTeamName}>
+          CSV: “{current.csvTeamName}”
+        </Typography>
+        <TextField
+          select
+          size="small"
+          label={`${side === 'home' ? 'Home' : 'Away'} team`}
+          value={teamChoiceValue(current.team)}
+          disabled={Boolean(fixedTeams) || busy}
+          onChange={(event) => {
+            const value = event.target.value;
+            const team: ImportTeamChoice =
+              value === CREATE_TEAM
+                ? { kind: 'create', name: current.csvTeamName }
+                : { kind: 'existing', teamId: value };
+            setSelection(setImportSideTeam(data, rows, selection, side, team));
+          }}
+          sx={{ flex: 1, minWidth: 200 }}
+        >
+          {teams.map((team) => (
+            <MenuItem key={team.Id} value={team.Id}>
+              {team.Name}
+            </MenuItem>
+          ))}
+          {!fixedTeams ? (
+            <MenuItem value={CREATE_TEAM}>Create new team “{current.csvTeamName}”</MenuItem>
+          ) : null}
+        </TextField>
+        {unmatched ? (
+          <WarningAmberIcon color="warning" fontSize="small" titleAccess="Name does not match a league team" />
+        ) : null}
+      </Stack>
+    );
   };
 
-  const series = parseSeries();
-  const canSubmit = Boolean(series) && !parsed.error && parsed.rows.length > 0 && !busy;
+  const playerOptions = (teamChoice: ImportTeamChoice) =>
+    teamChoice.kind === 'existing' ? getPlayersForTeam(data, teamChoice.teamId) : [];
 
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
+    <Dialog open={open} onClose={busy ? undefined : onClose} fullWidth maxWidth="md">
       <DialogTitle>Import match statistics</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          {parsed.error ? <Alert severity="error">{parsed.error}</Alert> : null}
+          {fatalError ? <Alert severity="error">{fatalError}</Alert> : null}
           {error ? <Alert severity="error">{error}</Alert> : null}
-          {!parsed.error ? (
+          {review?.errors.map((message) => (
+            <Alert key={message} severity="error">
+              {message}
+            </Alert>
+          ))}
+          {parsed.result ? (
             <Typography variant="body2" color="text.secondary">
-              {parsed.rows.length} player row{parsed.rows.length === 1 ? '' : 's'} from CSV.
-              Team names must match {homeTeamName} (home) and {awayTeamName} (away).
+              Read {plural(rows.length, 'player row')} (
+              {parsed.result.format === 'sectioned'
+                ? 'scorekeeper statistics export'
+                : 'spreadsheet columns'}
+              ).
             </Typography>
           ) : null}
-          <Typography variant="subtitle2">Match game score</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Legacy CSV does not include the team series score. Enter the home/away game wins
-            {hint ? ' (suggested from player game rows — confirm or edit)' : ''}.
-          </Typography>
-          <Stack direction="row" spacing={1}>
-            <TextField
-              label={`${homeTeamName} game wins`}
-              type="number"
-              size="small"
-              value={homeWins}
-              onChange={(event) => setHomeWins(event.target.value)}
-              slotProps={{ htmlInput: { min: 0, step: 1 } }}
-              fullWidth
-            />
-            <TextField
-              label={`${awayTeamName} game wins`}
-              type="number"
-              size="small"
-              value={awayWins}
-              onChange={(event) => setAwayWins(event.target.value)}
-              slotProps={{ htmlInput: { min: 0, step: 1 } }}
-              fullWidth
-            />
-            <TextField
-              label="Ties"
-              type="number"
-              size="small"
-              value={ties}
-              onChange={(event) => setTies(event.target.value)}
-              slotProps={{ htmlInput: { min: 0, step: 1 } }}
-              sx={{ width: 96 }}
-            />
-          </Stack>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={matchFinished}
-                onChange={(event) => setMatchFinished(event.target.checked)}
+
+          {selection ? (
+            <>
+              <Typography variant="subtitle2">Teams</Typography>
+              {review && review.unmatchedTeams.length > 0 ? (
+                <Alert severity="warning">
+                  {review.unmatchedTeams.map((name) => `“${name}”`).join(' and ')}{' '}
+                  {review.unmatchedTeams.length === 1 ? "doesn't" : "don't"} match a league team
+                  by name.{' '}
+                  {fixedTeams
+                    ? 'Check that the CSV is for this match, or swap sides.'
+                    : 'Pick the right team or create a new one.'}
+                </Alert>
+              ) : null}
+              <Stack spacing={1}>
+                {renderSide('home')}
+                <Box>
+                  <Button
+                    size="small"
+                    startIcon={<SwapVertIcon />}
+                    disabled={busy}
+                    onClick={() =>
+                      setSelection(swapImportSides(data, rows, selection, fixedTeams))
+                    }
+                  >
+                    Swap home / away
+                  </Button>
+                </Box>
+                {renderSide('away')}
+              </Stack>
+
+              <Typography variant="subtitle2">Players</Typography>
+              {review && review.unmatchedPlayerRows.length > 0 ? (
+                <Alert severity="warning">
+                  {plural(review.unmatchedPlayerRows.length, 'player')} didn't match anyone on
+                  their team. They'll be created as new players unless you map them to an
+                  existing player or skip them.
+                </Alert>
+              ) : null}
+              <Box sx={{ maxHeight: 320, overflowY: 'auto' }}>
+                <Table size="small" stickyHeader className="sk-import-players">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Team</TableCell>
+                      <TableCell>CSV player</TableCell>
+                      <TableCell>Import as</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row, index) => {
+                      const side = rowImportSide(selection, row);
+                      const options = playerOptions(selection[side].team);
+                      const unmatched = unmatchedRows.has(index);
+                      return (
+                        <TableRow key={`${row.teamName}-${row.playerName}-${index}`}>
+                          <TableCell>{sideTeamName(side)}</TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                              {unmatched ? (
+                                <WarningAmberIcon
+                                  color="warning"
+                                  fontSize="small"
+                                  titleAccess="No matching player"
+                                />
+                              ) : null}
+                              <span>{row.playerName}</span>
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              select
+                              size="small"
+                              value={playerChoiceValue(selection.players[index])}
+                              disabled={busy}
+                              onChange={(event) =>
+                                setSelection(
+                                  setImportPlayerChoice(
+                                    selection,
+                                    index,
+                                    playerChoiceFromValue(event.target.value),
+                                  ),
+                                )
+                              }
+                              slotProps={{
+                                htmlInput: { 'aria-label': `Import ${row.playerName} as` },
+                              }}
+                              sx={{ minWidth: 220 }}
+                            >
+                              <MenuItem value={CREATE_PLAYER}>
+                                Create new player “{row.playerName}”
+                              </MenuItem>
+                              {options.map((player) => (
+                                <MenuItem key={player.Id} value={player.Id}>
+                                  {player.Name}
+                                </MenuItem>
+                              ))}
+                              <MenuItem value={SKIP_PLAYER}>Skip this row</MenuItem>
+                            </TextField>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </Box>
+            </>
+          ) : null}
+
+          {parsed.result && parsed.result.missingStats.length > 0 ? (
+            <Alert severity="warning" className="sk-import-missing-stats">
+              These expected stats aren't in the CSV and will be imported as zero:
+              <Box component="ul" sx={{ my: 0.5, pl: 2.5 }}>
+                {parsed.result.missingStats.map((label) => (
+                  <li key={label}>{label}</li>
+                ))}
+              </Box>
+            </Alert>
+          ) : null}
+          {parsed.result?.notes.map((note) => (
+            <Alert key={note} severity="info">
+              {note}
+            </Alert>
+          ))}
+          {parsed.result && parsed.result.ignoredColumns.length > 0 ? (
+            <Typography variant="caption" color="text.secondary">
+              Ignored columns: {parsed.result.ignoredColumns.join(', ')}
+            </Typography>
+          ) : null}
+
+          {selection ? (
+            <>
+              <Typography variant="subtitle2">Match game score</Typography>
+              <Typography variant="body2" color="text.secondary">
+                The CSV doesn't include the series score. Enter the home/away game wins
+                (suggested from player game records; confirm or edit).
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  label={`${sideTeamName('home')} game wins`}
+                  type="number"
+                  size="small"
+                  value={homeWins}
+                  onChange={(event) => setHomeWins(event.target.value)}
+                  slotProps={{ htmlInput: { min: 0, step: 1 } }}
+                  fullWidth
+                />
+                <TextField
+                  label={`${sideTeamName('away')} game wins`}
+                  type="number"
+                  size="small"
+                  value={awayWins}
+                  onChange={(event) => setAwayWins(event.target.value)}
+                  slotProps={{ htmlInput: { min: 0, step: 1 } }}
+                  fullWidth
+                />
+                <TextField
+                  label="Ties"
+                  type="number"
+                  size="small"
+                  value={ties}
+                  onChange={(event) => setTies(event.target.value)}
+                  slotProps={{ htmlInput: { min: 0, step: 1 } }}
+                  sx={{ width: 96 }}
+                />
+              </Stack>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={matchFinished}
+                    onChange={(event) => setMatchFinished(event.target.checked)}
+                  />
+                }
+                label="Match finished"
               />
-            }
-            label="Match finished"
-          />
+              {importSummary ? (
+                <Typography variant="body2" color="text.secondary">
+                  {importSummary}
+                </Typography>
+              ) : null}
+            </>
+          ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -163,13 +453,14 @@ export function MatchStatsImportDialog({
         </Button>
         <Button
           variant="contained"
+          color={warningCount > 0 ? 'warning' : 'primary'}
           disabled={!canSubmit}
           onClick={() => {
-            if (!series) return;
-            onConfirm(series);
+            if (!parsed.result || !selection || !series) return;
+            onConfirm({ parsed: parsed.result, selection, series });
           }}
         >
-          Import statistics
+          {warningCount > 0 ? 'Import anyway' : 'Import statistics'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -2,18 +2,18 @@ import { Button, Stack, TextField } from '@mui/material';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { MatchLabelChips } from '../components/MatchLabels';
-import { MatchStatsImportDialog } from '../components/MatchStatsImportDialog';
+import {
+  MatchStatsImportDialog,
+  type MatchStatsImportConfirm,
+} from '../components/MatchStatsImportDialog';
 import { MatchScoreSpoiler } from '../components/MatchScoreSpoiler';
 import { SeeStatsButton } from '../components/stats/SeeStatsButton';
 import { PageHeader, TeamSearch, TextButton } from '../components/Ui';
-import { getMatchName, getMatches, getTeam, getTeams } from '../domain/database';
+import { getMatchName, getMatches, getTeams } from '../domain/database';
 import { isStatsImportedMatchId } from '../domain/importedMatch';
 import { matchPassesListSearch } from '../domain/matchLabels';
 import { buildMatchListSpoiler } from '../domain/matchListSpoiler';
-import {
-  createMatchFromStatisticsCsv,
-  type ImportMatchSeriesInput,
-} from '../domain/statistics/importedMatchStats';
+import { applyStatsCsvImport } from '../domain/statistics/statsCsvImportPlan';
 import { useDatabase } from '../state/DatabaseContext';
 import { useAuth } from '../state/AuthContext';
 import { useLeague } from '../state/LeagueContext';
@@ -39,8 +39,6 @@ export function MatchesPage() {
   );
 
   const canAdd = homeId !== null && awayId !== null;
-  const homeTeam = homeId ? getTeam(data, homeId) : undefined;
-  const awayTeam = awayId ? getTeam(data, awayId) : undefined;
 
   const onAddMatch = () => {
     if (!homeId || !awayId) return;
@@ -54,7 +52,6 @@ export function MatchesPage() {
   };
 
   const onImportFile = async (file: File) => {
-    if (!canAdd) return;
     setImportError(null);
     try {
       const text = await file.text();
@@ -64,21 +61,18 @@ export function MatchesPage() {
     }
   };
 
-  const onConfirmImport = (series: ImportMatchSeriesInput) => {
-    if (!importCsvText || !homeId || !awayId) return;
+  const onConfirmImport = ({ parsed, selection, series }: MatchStatsImportConfirm) => {
     setImportBusy(true);
     setImportError(null);
     try {
       const matchId = mutate(
         (draft) =>
-          createMatchFromStatisticsCsv(
-            draft,
-            homeId,
-            awayId,
-            importCsvText,
+          applyStatsCsvImport(draft, {
+            rows: parsed.rows,
+            selection,
             series,
-            user?.uid ?? null,
-          ),
+            createdByUid: user?.uid ?? null,
+          }).matchId,
         'Imported match from statistics CSV.',
       );
       setImportCsvText(null);
@@ -134,7 +128,6 @@ export function MatchesPage() {
               type="button"
               className="bw-button bw-button--text sk-import-match-from-csv"
               variant="outlined"
-              disabled={!canAdd}
               onClick={() => importInputRef.current?.click()}
             >
               Import from statistics CSV
@@ -212,8 +205,6 @@ export function MatchesPage() {
       />
       <MatchStatsImportDialog
         open={importCsvText != null}
-        homeTeamName={homeTeam?.Name ?? 'Home'}
-        awayTeamName={awayTeam?.Name ?? 'Away'}
         csvText={importCsvText ?? ''}
         busy={importBusy}
         error={importError}

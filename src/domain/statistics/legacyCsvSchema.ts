@@ -66,8 +66,19 @@ function deflectionEnumObject(): Record<string, number> {
   };
 }
 
+export type LegacyCsvLayoutOptions = {
+  /** Original scorekeeper2 exports have no Dodge column in the deflection sections. */
+  deflectionDodge?: boolean;
+};
+
 /** Column layout shared by legacy CSV export and import. */
-export function getLegacyStatisticsColumnSpecs(): LegacyCsvColumnSpec[] {
+export function getLegacyStatisticsColumnSpecs(
+  options: LegacyCsvLayoutOptions = {},
+): LegacyCsvColumnSpec[] {
+  const deflectionKeys =
+    options.deflectionDodge === false
+      ? LEGACY_DEFLECTION_RESULT_COLUMNS.filter((key) => key !== DeflectionResult.Dodge)
+      : LEGACY_DEFLECTION_RESULT_COLUMNS;
   const sections: {
     title: string;
     keys: readonly number[];
@@ -151,13 +162,13 @@ export function getLegacyStatisticsColumnSpecs(): LegacyCsvColumnSpec[] {
     },
     {
       title: 'Throws (Deflection) (Individual)',
-      keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
+      keys: deflectionKeys,
       enumObject: deflectionEnumObject(),
       legacyRemap: true,
     },
     {
       title: 'Throws (Deflection) (Group)',
-      keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
+      keys: deflectionKeys,
       enumObject: deflectionEnumObject(),
       legacyRemap: true,
     },
@@ -174,7 +185,7 @@ export function getLegacyStatisticsColumnSpecs(): LegacyCsvColumnSpec[] {
     },
     {
       title: 'Targeted (Deflection)',
-      keys: LEGACY_DEFLECTION_RESULT_COLUMNS,
+      keys: deflectionKeys,
       enumObject: deflectionEnumObject(),
       legacyRemap: true,
     },
@@ -205,6 +216,8 @@ export function getLegacyStatisticsColumnSpecs(): LegacyCsvColumnSpec[] {
   return columns;
 }
 
-export function getLegacyStatisticsHeaderNames(): string[] {
-  return getLegacyStatisticsColumnSpecs().map((column) => column.header);
+export function getLegacyStatisticsHeaderNames(
+  options: LegacyCsvLayoutOptions = {},
+): string[] {
+  return getLegacyStatisticsColumnSpecs(options).map((column) => column.header);
 }

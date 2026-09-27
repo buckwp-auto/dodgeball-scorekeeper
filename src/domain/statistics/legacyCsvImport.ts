@@ -1,102 +1,12 @@
-import { ECompetitionOutcome } from './constants';
+import type { ImportedAggregatesPayload } from './importedMatchStats';
+import { getLegacyStatisticsColumnSpecs, type LegacyCsvColumnSpec } from './legacyCsvSchema';
 import {
-  finalizeImportedAggregates,
-  type ImportedAggregatesPayload,
-} from './importedMatchStats';
-import {
-  getLegacyStatisticsColumnSpecs,
-  getLegacyStatisticsHeaderNames,
-  type LegacyCsvColumnSpec,
-} from './legacyCsvSchema';
-
-export type ParsedLegacyCsvRow = {
-  teamName: string;
-  playerName: string;
-  aggregates: ImportedAggregatesPayload;
-};
-
-export type ParsedLegacyCsv = {
-  rows: ParsedLegacyCsvRow[];
-};
-
-function parseCsvRows(text: string): string[][] {
-  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  const rows: string[][] = [];
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    rows.push(parseCsvLine(line));
-  }
-  return rows;
-}
-
-function parseCsvLine(line: string): string[] {
-  const cells: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (line[i + 1] === '"') {
-          current += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += char;
-      }
-      continue;
-    }
-    if (char === '"') {
-      inQuotes = true;
-      continue;
-    }
-    if (char === ',') {
-      cells.push(current);
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  cells.push(current);
-  return cells;
-}
-
-function emptyPayload(): ImportedAggregatesPayload {
-  return {
-    matches: {},
-    games: {},
-    offenseThrowsIndividual: {},
-    offenseThrowsGroup: {},
-    offenseDeflectionsIndividual: {},
-    offenseDeflectionsGroup: {},
-    offenseErrors: {},
-    defenseTargets: {},
-    defenseDeflections: {},
-    killsDirectIndividual: {},
-    killsDirectGroup: {},
-    killsDirectCredit: {},
-    killsDeflectionsIndividual: {},
-    killsDeflectionsGroup: {},
-    killsDeflectionsCredit: {},
-    killsSupportCredit: {},
-    deathsDirect: {},
-    deathsDeflections: {},
-    deathsErrors: {},
-    deathsCredit: 0,
-    deathsCatchThrownCredit: 0,
-    teamThrowAssists: 0,
-    doubleKills: 0,
-    tripleKills: 0,
-    quadKills: 0,
-    doubleCatches: 0,
-    tripleCatches: 0,
-    quadCatches: 0,
-    catchesDirect: 0,
-    catchesDeflection: 0,
-  };
-}
+  emptyPayload,
+  finalizeRow,
+  parseCount,
+  type StatsCsvParseResult,
+  type StatsCsvRow,
+} from './statsCsvCommon';
 
 type SectionField = keyof Omit<
   ImportedAggregatesPayload,
@@ -134,112 +44,127 @@ const SECTION_TO_FIELD: Record<string, SectionField> = {
   'Targeted (Deflection)': 'defenseDeflections',
 };
 
-function parseCount(value: string): number {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error(`Invalid stat count: ${value}`);
-  }
-  return parsed;
+const SECTION_MARKER = /^\*{3,}\s*(.+)$/;
+
+export function isSectionedStatsHeader(header: string[]): boolean {
+  return header.some((cell) => SECTION_MARKER.test(cell.trim()));
 }
 
-function applyLegacyImportValue(
+function specKey(sectionTitle: string, header: string): string {
+  return `${sectionTitle.toLowerCase()}|${header.toLowerCase()}`;
+}
+
+function applySectionValue(
   payload: ImportedAggregatesPayload,
   column: LegacyCsvColumnSpec,
-  rawValue: string,
+  count: number,
 ): void {
-  if (!column.sectionTitle || column.enumKey == null) return;
+  if (!column.sectionTitle || column.enumKey == null || count === 0) return;
   const field = SECTION_TO_FIELD[column.sectionTitle];
   if (!field) return;
-  const count = parseCount(rawValue);
-  if (count === 0) return;
   const map = payload[field];
   const key = String(column.enumKey);
-  if (column.legacyRemap) {
-    map[key] = (map[key] ?? 0) + count;
-    return;
-  }
-  map[key] = count;
+  map[key] = column.legacyRemap ? (map[key] ?? 0) + count : count;
 }
 
-function rowFromCells(cells: string[], specs: LegacyCsvColumnSpec[]): ParsedLegacyCsvRow {
-  if (cells.length < specs.length) {
-    throw new Error('Statistics CSV row has too few columns');
+function describeMissing(missing: LegacyCsvColumnSpec[]): string[] {
+  const baseline = getLegacyStatisticsColumnSpecs({ deflectionDodge: false }).filter(
+    (spec) => spec.kind === 'enumValue',
+  );
+  const bySection = new Map<string, string[]>();
+  for (const spec of missing) {
+    const list = bySection.get(spec.sectionTitle!) ?? [];
+    list.push(spec.header);
+    bySection.set(spec.sectionTitle!, list);
   }
-  let teamName = '';
-  let playerName = '';
-  const aggregates = emptyPayload();
-  for (let i = 0; i < specs.length; i += 1) {
-    const spec = specs[i];
-    const value = cells[i] ?? '';
-    if (spec.kind === 'team') teamName = value.trim();
-    else if (spec.kind === 'player') playerName = value.trim();
-    else if (spec.kind === 'enumValue') applyLegacyImportValue(aggregates, spec, value);
-  }
-  if (!teamName || !playerName) {
-    throw new Error('Statistics CSV row is missing Team or Player');
-  }
-  finalizeImportedAggregates(aggregates);
-  return { teamName, playerName, aggregates };
+  return [...bySection].map(([section, headers]) => {
+    const sectionSize = baseline.filter((spec) => spec.sectionTitle === section).length;
+    return headers.length === sectionSize ? section : `${section}: ${headers.join(', ')}`;
+  });
 }
 
-export function parseLegacyStatisticsCsv(text: string): ParsedLegacyCsv {
-  const rows = parseCsvRows(text);
-  if (rows.length < 2) {
-    throw new Error('Statistics CSV must include a header row and at least one player row');
+/** Scorekeeper-style export: `********** Section` markers followed by result columns. */
+export function parseSectionedStatsCsv(
+  header: string[],
+  body: string[][],
+): StatsCsvParseResult {
+  const known = new Map<string, LegacyCsvColumnSpec>();
+  for (const spec of getLegacyStatisticsColumnSpecs()) {
+    if (spec.kind === 'enumValue') known.set(specKey(spec.sectionTitle!, spec.header), spec);
   }
-  const expected = getLegacyStatisticsHeaderNames();
-  const header = rows[0];
-  if (header.length < expected.length) {
-    throw new Error('Statistics CSV header does not match the legacy format');
+
+  let teamCol = -1;
+  let playerCol = -1;
+  let section: string | null = null;
+  const columns = new Map<number, LegacyCsvColumnSpec>();
+  const ignoredColumns: string[] = [];
+  const seen = new Set<string>();
+
+  header.forEach((raw, index) => {
+    const cell = raw.trim();
+    if (!cell) return;
+    const marker = SECTION_MARKER.exec(cell);
+    if (marker) {
+      const title = marker[1].trim();
+      section = Object.keys(SECTION_TO_FIELD).find(
+        (candidate) => candidate.toLowerCase() === title.toLowerCase(),
+      ) ?? null;
+      if (!section) ignoredColumns.push(cell);
+      return;
+    }
+    const lower = cell.toLowerCase();
+    if (lower === 'team' && teamCol < 0) {
+      teamCol = index;
+      return;
+    }
+    if (lower === 'player' && playerCol < 0) {
+      playerCol = index;
+      return;
+    }
+    const spec = section ? known.get(specKey(section, cell)) : undefined;
+    if (!spec) {
+      ignoredColumns.push(section ? `${section}: ${cell}` : cell);
+      return;
+    }
+    columns.set(index, spec);
+    seen.add(specKey(spec.sectionTitle!, spec.header));
+  });
+
+  if (teamCol < 0 || playerCol < 0) {
+    throw new Error('Statistics CSV needs a Team and a Player column');
   }
-  for (let i = 0; i < expected.length; i += 1) {
-    if ((header[i] ?? '').trim() !== expected[i]) {
-      throw new Error(
-        `Statistics CSV header mismatch at column ${i + 1}: expected "${expected[i]}", got "${header[i] ?? ''}"`,
+
+  const missing = getLegacyStatisticsColumnSpecs({ deflectionDodge: false }).filter(
+    (spec) => spec.kind === 'enumValue' && !seen.has(specKey(spec.sectionTitle!, spec.header)),
+  );
+
+  const rows: StatsCsvRow[] = [];
+  let skipped = 0;
+  for (const cells of body) {
+    const teamName = (cells[teamCol] ?? '').trim();
+    const playerName = (cells[playerCol] ?? '').trim();
+    if (!teamName || !playerName) {
+      skipped += 1;
+      continue;
+    }
+    const aggregates = emptyPayload();
+    for (const [index, spec] of columns) {
+      const count = parseCount(
+        cells[index] ?? '',
+        () => `${playerName} (${spec.sectionTitle} ${spec.header})`,
       );
+      applySectionValue(aggregates, spec, count);
     }
+    rows.push(finalizeRow(teamName, playerName, aggregates));
   }
-  const specs = getLegacyStatisticsColumnSpecs();
-  const parsedRows = rows.slice(1).map((cells) => rowFromCells(cells, specs));
-  if (parsedRows.length === 0) {
-    throw new Error('Statistics CSV has no player rows');
-  }
-  return { rows: parsedRows };
-}
 
-/** Optional hint for the import game-score form (not authoritative). */
-export type LegacyCsvSeriesHint = {
-  homeGameWins: number;
-  awayGameWins: number;
-  tiedGames: number;
-};
-
-export function suggestSeriesFromLegacyCsv(
-  parsed: ParsedLegacyCsv,
-  homeTeamName: string,
-  awayTeamName: string,
-): LegacyCsvSeriesHint {
-  const homeNorm = homeTeamName.trim().toLowerCase();
-  const awayNorm = awayTeamName.trim().toLowerCase();
-  let homeGameWins = 0;
-  let awayGameWins = 0;
-  let tiedGames = 0;
-  for (const row of parsed.rows) {
-    const teamNorm = row.teamName.trim().toLowerCase();
-    const wins = row.aggregates.games[String(ECompetitionOutcome.Win)] ?? 0;
-    const losses = row.aggregates.games[String(ECompetitionOutcome.Loss)] ?? 0;
-    const ties = row.aggregates.games[String(ECompetitionOutcome.Tie)] ?? 0;
-    if (teamNorm === homeNorm) {
-      homeGameWins = Math.max(homeGameWins, wins);
-      awayGameWins = Math.max(awayGameWins, losses);
-      tiedGames = Math.max(tiedGames, ties);
-    } else if (teamNorm === awayNorm) {
-      awayGameWins = Math.max(awayGameWins, wins);
-      homeGameWins = Math.max(homeGameWins, losses);
-      tiedGames = Math.max(tiedGames, ties);
-    }
-  }
-  return { homeGameWins, awayGameWins, tiedGames };
+  return {
+    format: 'sectioned',
+    rows,
+    missingStats: describeMissing(missing),
+    ignoredColumns,
+    notes: skipped
+      ? [`Skipped ${skipped} row${skipped === 1 ? '' : 's'} without a team or player name`]
+      : [],
+  };
 }
