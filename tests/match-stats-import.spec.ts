@@ -92,6 +92,37 @@ test.describe('Match statistics CSV import', () => {
     await expect(page.locator('.sk-match-progress').filter({ hasText: 'Finished' })).toBeVisible();
   });
 
+  test('labels an imported match and edits labels from its stats page', async ({ page }) => {
+    await loadInteropBasic(page);
+
+    await page.getByRole('button', { name: 'Import from statistics CSV' }).click();
+    await fileInputForExtension(page, '.csv').setInputFiles(
+      path.join(fixturesDir, 'interop-basic.golden.csv'),
+    );
+    const dialog = page.getByRole('dialog', { name: 'Import match statistics' });
+    await dialog.getByRole('button', { name: 'Swap home / away' }).click();
+    await page.getByLabel('Home Hawks game wins').fill('1');
+    await page.getByLabel('Away Owls game wins').fill('0');
+    const importLabels = dialog.locator('.sk-match-labels-field input');
+    await importLabels.fill('Week 3');
+    await page.getByRole('option', { name: 'Week 3' }).click();
+    await importLabels.fill('Charity Night');
+    await importLabels.press('Enter');
+    await dialog.getByRole('button', { name: 'Import statistics' }).click();
+
+    await expect(page).toHaveURL(/\/matches\/[^/]+\/stats$/);
+    await page.getByRole('link', { name: 'Match details' }).click();
+    await expect(page.getByRole('heading', { name: 'Match', exact: true })).toBeVisible();
+    await expect(page.locator('.sk-match-label').filter({ hasText: 'Week 3' })).toBeVisible();
+    const matchLabels = page.locator('.sk-match-labels-field input');
+    await matchLabels.fill('Playoffs');
+    await matchLabels.press('Enter');
+
+    await navigateMenu(page, 'Matches');
+    const row = page.locator('.sk-match-row').filter({ hasText: 'Charity Night' });
+    await expect(row.locator('.sk-match-label')).toHaveText(['Week 3', 'Charity Night', 'Playoffs']);
+  });
+
   test('flags unknown teams, players, and missing stats in a spreadsheet CSV', async ({ page }) => {
     await loadInteropBasic(page);
 

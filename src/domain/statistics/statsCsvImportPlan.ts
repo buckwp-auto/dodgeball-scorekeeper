@@ -1,5 +1,6 @@
 import { addMatch, addTeam, getPlayer, getPlayersForTeam, getTeam, getTeams } from '../database';
 import { matchHasGameEvents } from '../importedMatch';
+import { setMatchLabels } from '../matchLabels';
 import {
   addPlayerToMatchSide,
   getMatchById,
@@ -300,6 +301,8 @@ export type ApplyStatsImportInput = {
   /** Import into this match; omit to create a new match. */
   matchId?: Guid;
   createdByUid?: string | null;
+  /** Match labels to set; omit to leave an existing match's labels untouched. */
+  labels?: string[];
 };
 
 export type ApplyStatsImportResult = {
@@ -377,6 +380,7 @@ export function applyStatsCsvImport(
     playersImported += 1;
   });
   applySeriesToMatch(data, matchId, series);
+  if (input.labels) setMatchLabels(data, matchId, input.labels);
 
   return {
     matchId,
