@@ -60,6 +60,7 @@ export function HighlightsPage() {
                         }
                         onDeselectEvent={() => {}}
                         onCommitVideoOffset={() => {}}
+                        confirmRemoveHighlight
                         onToggleHighlight={(eventId) => {
                           const highlight = game.highlights.find(
                             (row) => row.eventId === eventId,

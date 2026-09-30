@@ -3,8 +3,18 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
-import { Box, Button, IconButton, Typography } from '@mui/material';
-import { useMemo, type ReactNode } from 'react';
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
+  Typography,
+} from '@mui/material';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   timelineRowVideoTimeLabel,
   type TimelineAction,
@@ -368,6 +378,7 @@ export function GameEventsTimeline({
   onSelectEvent,
   onDeselectEvent,
   onToggleHighlight,
+  confirmRemoveHighlight = false,
   onCommitVideoOffset,
   onSetVideoOffsetFromPlayer,
 }: {
@@ -385,15 +396,28 @@ export function GameEventsTimeline({
   onSelectEvent: (eventId: string) => void;
   onDeselectEvent: () => void;
   onToggleHighlight?: (eventId: string) => void;
+  /** Highlights lists ask before unstarring. Track Game leaves this off. */
+  confirmRemoveHighlight?: boolean;
   onCommitVideoOffset: (eventId: string, seconds: number | null) => void;
   onSetVideoOffsetFromPlayer?: (eventId: string) => void;
 }) {
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const flatItems = useMemo(
     () => flattenTimeline(entries, showEndInsertMarker, insertBeforeEventId),
     [entries, showEndInsertMarker, insertBeforeEventId],
   );
 
+  const requestToggleHighlight = (eventId: string, highlighted: boolean) => {
+    if (!onToggleHighlight) return;
+    if (confirmRemoveHighlight && highlighted) {
+      setPendingRemoveId(eventId);
+      return;
+    }
+    onToggleHighlight(eventId);
+  };
+
   return (
+    <>
     <Box
       className="sk-game-timeline"
       data-tour="timeline"
@@ -450,7 +474,9 @@ export function GameEventsTimeline({
               selected ? onDeselectEvent() : onSelectEvent(item.entry.id)
             }
             onToggleHighlight={
-              onToggleHighlight ? () => onToggleHighlight(item.entry.id) : undefined
+              onToggleHighlight
+                ? () => requestToggleHighlight(item.entry.id, item.entry.isHighlight)
+                : undefined
             }
             onCommitOffset={(seconds) => onCommitVideoOffset(item.entry.id, seconds)}
             onSetFromPlayer={
@@ -462,5 +488,34 @@ export function GameEventsTimeline({
         );
       })}
     </Box>
+      {confirmRemoveHighlight ? (
+        <Dialog
+          className="sk-remove-highlight-dialog"
+          open={pendingRemoveId !== null}
+          onClose={() => setPendingRemoveId(null)}
+        >
+          <DialogTitle>Remove this highlight?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Are you sure? This event will leave the highlights list. You can star it
+              again from the game timeline.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setPendingRemoveId(null)}>Cancel</Button>
+            <Button
+              color="error"
+              variant="contained"
+              onClick={() => {
+                if (pendingRemoveId) onToggleHighlight?.(pendingRemoveId);
+                setPendingRemoveId(null);
+              }}
+            >
+              Remove
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
+    </>
   );
 }

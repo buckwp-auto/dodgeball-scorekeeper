@@ -378,6 +378,7 @@ export function PlayerPage() {
                         }
                         onDeselectEvent={() => {}}
                         onCommitVideoOffset={() => {}}
+                        confirmRemoveHighlight={!readOnly}
                         onToggleHighlight={
                           readOnly
                             ? undefined
